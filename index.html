@@ -274,6 +274,10 @@ button.secondary:hover{background:#f0ede8}
         <div class="fin-top">Guardar</div>
         <div class="fin-val neutral">💾</div>
       </div>
+      <div class="fin-cell" style="cursor:default;opacity:0.55" title="Versión del juego">
+        <div class="fin-top">Versión</div>
+        <div class="fin-val neutral" style="font-size:11px" id="fb-version"></div>
+      </div>
     </div>
   </div>
   <div id="main"></div>
@@ -304,6 +308,11 @@ button.secondary:hover{background:#f0ede8}
 </nav>
 
 <script>
+// ══════════════════════════════════════
+//  VERSIÓN
+// ══════════════════════════════════════
+const GAME_VERSION = 'v29-1';
+
 // ══════════════════════════════════════
 //  CONSTANTES
 // ══════════════════════════════════════
@@ -553,10 +562,21 @@ const SPONSORS_DB=[
 ];
 
 const CLUBS=[
-  {id:'none',name:'Sin club',desc:'Independiente. Sin costes ni beneficios.',cost:0,statBonus:{},hasFisio:false},
-  {id:'local',name:'Club Local Trail',desc:'Buen ambiente. Entrenas mejor.',cost:20,statBonus:{mental:3},hasFisio:false},
-  {id:'montana',name:'Club de Alta Montaña',desc:'Acceso a altitud. Fisio incluido.',cost:60,statBonus:{subida:4},hasFisio:true},
+  {id:'none',   name:'Sin club',              desc:'Independiente. Sin costes ni beneficios.',                                      cost:0,   statBonus:{},                        hasFisio:false, hasEntrenador:false, minYear:1,
+   companions:[]},
+  {id:'local',  name:'Club Local Trail',      desc:'Buen ambiente. Entrenas mejor en grupo.',                                       cost:20,  statBonus:{mental:3},               hasFisio:false, hasEntrenador:false, minYear:1,
+   companions:['Mikel','Ane','Josu','Leire','Gorka']},
+  {id:'montana',name:'Club de Alta Montaña',  desc:'Acceso a altitud. Fisio incluido. Rivales más duros.',                          cost:60,  statBonus:{subida:4},               hasFisio:true,  hasEntrenador:false, minYear:1,
+   companions:['Ibón','Nekane','Aitor','Miren','Txomin']},
+  {id:'elite',  name:'Club Élite Trail',      desc:'Lo mejor del circuito. Fisio + entrenador incluidos. Acceso a dorsales VIP.',   cost:120, statBonus:{subida:5,mental:3},      hasFisio:true,  hasEntrenador:true,  minYear:3,
+   companions:['Eneko','Amaia','Urtzi','Nerea','Beñat']},
 ];
+
+// Nombres de compañero aleatorio al unirse a un club
+function assignClubCompanion(club){
+  if(!club||club.id==='none'||!club.companions.length) return null;
+  return club.companions[Math.floor(Math.random()*club.companions.length)];
+}
 
 const BETWEEN_EVENTS=[
   {id:'injury',title:'Lesión leve',desc:'Tendinitis en la rodilla. Llevas días sin poder entrenar bien.',
@@ -753,6 +773,48 @@ const SPEC_STATS={
   todoterreno:{resistencia:52,velocidad:50,subida:52,bajada:52,nutricion:48,mental:52},
 };
 
+// Ajuste de stats según edad inicial
+// Joven (18): velocidad y bajada altas, poca base aeróbica, sin experiencia
+// 25: referencia neutra (= SPEC_STATS base)
+// Veterano (35): resistencia/mental/nutricion altos, velocidad y subida mermadas
+function applyAgeToStats(stats,age){
+  const s={...stats};
+  if(age<=18){
+    s.velocidad   =Math.min(100,s.velocidad+6);
+    s.bajada      =Math.min(100,s.bajada+4);   // sin miedo al descenso
+    s.resistencia =Math.max(10, s.resistencia-10); // base aeróbica inmadura
+    s.nutricion   =Math.max(10, s.nutricion-12);   // no sabe gestionar el esfuerzo
+    s.mental      =Math.max(10, s.mental-8);        // inexperiencia
+  } else if(age<=22){
+    s.velocidad   =Math.min(100,s.velocidad+4);
+    s.bajada      =Math.min(100,s.bajada+2);
+    s.resistencia =Math.max(10, s.resistencia-6);
+    s.nutricion   =Math.max(10, s.nutricion-7);
+    s.mental      =Math.max(10, s.mental-4);
+  } else if(age<=25){
+    // Referencia neutra — SPEC_STATS sin tocar
+  } else if(age<=28){
+    s.resistencia =Math.min(100,s.resistencia+4); // pico de forma física
+    s.mental      =Math.min(100,s.mental+3);
+    s.nutricion   =Math.min(100,s.nutricion+3);
+    s.velocidad   =Math.min(100,s.velocidad+1);
+  } else if(age<=30){
+    s.resistencia =Math.min(100,s.resistencia+5);
+    s.mental      =Math.min(100,s.mental+6);       // experiencia de carrera
+    s.nutricion   =Math.min(100,s.nutricion+5);
+    s.velocidad   =Math.max(10, s.velocidad-2);
+    s.subida      =Math.max(10, s.subida-1);
+  } else { // 35
+    s.resistencia =Math.min(100,s.resistencia+7);
+    s.mental      =Math.min(100,s.mental+10);      // veterano curtido
+    s.nutricion   =Math.min(100,s.nutricion+8);
+    s.velocidad   =Math.max(10, s.velocidad-5);
+    s.subida      =Math.max(10, s.subida-4);
+    s.bajada      =Math.max(10, s.bajada-2);
+  }
+  return s;
+}
+
 // ══════════════════════════════════════
 //  CONSTANTES COMPARTIDAS (C4+C5)
 // ══════════════════════════════════════
@@ -850,6 +912,14 @@ const COACH_NARRATIVES={
     'Se ve el esfuerzo, pero gestiona bien el ritmo.',
     'Cadencia corta, brazos activos. Sube bien.',
     'La pendiente máxima se acerca. Aguanta.',
+    'Zancada recortada, mirada al suelo. Modo supervivencia.',
+    'Se para dos segundos a regular la respiración. Luego sigue.',
+    'Alcanza a dos rivales en la parte empinada. Buen trabajo.',
+    'El último tramo de la subida lo hace en silencio total.',
+    'Brazos que acompañan, caderas bajas. Técnica de montaña.',
+    'La cabeza cae un momento. Luego vuelve a mirar arriba.',
+    'Coge un bastón imaginario de un compañero. Subida solidaria.',
+    'Marca diferencias en el empinado. Aquí es donde gana tiempo.',
   ],
   descent:[
     'Bajada técnica. Se mueve con confianza.',
@@ -858,6 +928,14 @@ const COACH_NARRATIVES={
     'Pierde algo de tiempo en el terreno más suelto.',
     'Bajada cautelosa — ahorra piernas para el final.',
     'Vuela en la bajada. El entrenamiento da frutos.',
+    'Piedras, raíces, barro. Se adapta a todo sin parar.',
+    'Deja ir los frenos mentales. Fluye en el descenso.',
+    'Un par de apoyos dudosos, pero nada grave.',
+    'Los cuádriceps están finos. Cada zancada, un segundo ganado.',
+    'Pasa a tres corredores en la bajada larga.',
+    'La confianza en el terreno se nota. Descenso limpio.',
+    'Ajusta la línea en el último momento. Buen instinto.',
+    'Frena antes de una curva ciega. Decisión correcta.',
   ],
   flat:[
     'Ritmo de crucero. Sin alarmas.',
@@ -866,6 +944,14 @@ const COACH_NARRATIVES={
     'Se nota algo de fatiga acumulada, pero sigue adelante.',
     'Aprovecha el llano para recuperarse antes del siguiente repecho.',
     'Ritmo regular. Economía de movimientos impecable.',
+    'Trote suave, respiración acompasada. Modo ahorro.',
+    'Se coloca en el grupo. Zona de confort por ahora.',
+    'El llano le pesa. Mejor en terreno vertical.',
+    'Saca los auriculares imaginarios. Desconecta y fluye.',
+    'Toma un sorbo de agua. Sin perder el paso.',
+    'Se cruza con espectadores — un gesto de cabeza y sigue.',
+    'El kilómetro más plano de la carrera. Lo gestiona bien.',
+    'Revisa el reloj. Sigue dentro del plan.',
   ],
 };
 
@@ -897,7 +983,88 @@ const COACH_POST_RACE_DIALOGUES={
   },
 };
 
-// ── Condiciones del día de carrera ──
+// ── Objetivos de temporada del atleta (por personalidad) ──
+const COACH_SEASON_OBJECTIVES={
+  rebelde:[
+    {id:'win_elite',  label:'Ganar una carrera élite o nacional',    reward:+12, penalty:-10,
+     desc:'"Quiero ganar algo importante. No carreras de barrio."',
+     check:r=>r.pos===1&&['elite','nacional'].includes(r.tier)},
+    {id:'no_abandon', label:'Terminar todas las carreras sin abandonar',reward:+8, penalty:-6,
+     desc:'"Puede que cambie el plan pero no me rindo."',
+     check:r=>!r.dnf},
+  ],
+  motivado:[
+    {id:'podio_x2',   label:'Dos podios esta temporada',             reward:+10, penalty:-8,
+     desc:'"Quiero al menos dos podios. No uno, dos."',
+     check:(r,all)=>all.filter(x=>x.pos<=3&&!x.dnf).length>=2},
+    {id:'top10_all',  label:'Top 10 en todas las carreras',          reward:+8, penalty:-5,
+     desc:'"Si no estoy en el top 10, algo ha salido mal."',
+     check:(r,all)=>all.every(x=>x.dnf||x.pos<=10)},
+  ],
+  obediente:[
+    {id:'finish_all', label:'Terminar todas las carreras del calendario', reward:+6, penalty:-4,
+     desc:'"Me has puesto un calendario. Lo cumplo."',
+     check:(r,all)=>all.filter(x=>!x.dnf).length>=(G.coachSelectedRaces||[]).length},
+    {id:'improve_pb', label:'Mejorar posición respecto a la temporada anterior', reward:+8, penalty:-3,
+     desc:'"Quiero mejorar. Cada año, un poco mejor."',
+     check:(r,all)=>{ const best=Math.min(...all.filter(x=>!x.dnf).map(x=>x.pos)||[999]); return best<=(G.coachAthleteHistory?.slice(-1)[0]?.bestPos||999);}},
+  ],
+  quemado:[
+    {id:'no_injury',  label:'Terminar la temporada sin lesiones graves', reward:+10, penalty:-2,
+     desc:'"Solo quiero llegar sano al final. Nada más."',
+     check:()=>!G.coachInjury||(G.coachInjury?.severity||0)<2},
+    {id:'two_races',  label:'Completar al menos 2 carreras',          reward:+6, penalty:-3,
+     desc:'"Que nadie diga que me rendí antes de empezar."',
+     check:(r,all)=>all.filter(x=>!x.dnf).length>=2},
+  ],
+};
+
+// ── Lesiones del atleta ──
+const COACH_INJURY_TYPES=[
+  {id:'sobrecarga',  label:'Sobrecarga muscular', severity:1, racesOut:1,
+   desc:'Contractura en el cuádriceps. Puede correr pero al 80% de capacidad.',
+   statPenalty:{resistencia:-8,velocidad:-5}, causeLoad:75},
+  {id:'tendinitis',  label:'Tendinitis de Aquiles',severity:1, racesOut:1,
+   desc:'El tendón protesta. Puede seguir entrenando con precaución.',
+   statPenalty:{bajada:-12,velocidad:-6}, causeLoad:80},
+  {id:'rotura',      label:'Rotura de fibras',    severity:2, racesOut:2,
+   desc:'Rotura parcial en el gemelo. Necesita reposo obligatorio.',
+   statPenalty:{resistencia:-15,velocidad:-12,subida:-8}, causeLoad:85},
+  {id:'esguince',    label:'Esguince de tobillo',  severity:1, racesOut:1,
+   desc:'Torcedura durante el entrenamiento. Dolor al bajar escalones.',
+   statPenalty:{bajada:-15,velocidad:-8}, causeLoad:70},
+  {id:'fractura_estres',label:'Fractura por estrés',severity:3,racesOut:3,
+   desc:'Fractura por estrés en el metatarso. Temporada comprometida.',
+   statPenalty:{resistencia:-20,velocidad:-15,subida:-10,bajada:-10}, causeLoad:90},
+];
+
+// ── Pool de sponsors para el atleta ──
+const COACH_SPONSORS_POOL=[
+  {id:'cs_trailbase',  name:'TrailBase',      cat:'zapatillas', tier:1,
+   salary:80, coachCut:0.15, duration:1,
+   objective:'Terminar 2 carreras', objKey:'finish2',
+   bonus:'Las mejores condiciones para el pie del atleta'},
+  {id:'cs_altitudo',   name:'AltitudoSport',  cat:'ropa',       tier:1,
+   salary:60, coachCut:0.15, duration:1,
+   objective:'Top 15 en alguna carrera', objKey:'top15',
+   bonus:'Material técnico de montaña'},
+  {id:'cs_protaltrail',name:'ProtalNutrition', cat:'nutricion',  tier:1,
+   salary:70, coachCut:0.20, duration:1,
+   objective:'Terminar 3 carreras', objKey:'finish3',
+   bonus:'Geles y sales para todo el año'},
+  {id:'cs_suunto',     name:'Suunto',         cat:'tecnologia', tier:2,
+   salary:120, coachCut:0.15, duration:1,
+   objective:'Top 10 en alguna carrera', objKey:'top10',
+   bonus:'GPS y métricas de entrenamiento'},
+  {id:'cs_salomon',    name:'Salomon',        cat:'zapatillas', tier:2,
+   salary:150, coachCut:0.10, duration:1,
+   objective:'Podio en alguna carrera', objKey:'podio',
+   bonus:'Modelo exclusivo para el atleta'},
+  {id:'cs_clif',       name:'Clif Bar',       cat:'nutricion',  tier:2,
+   salary:100, coachCut:0.20, duration:1,
+   objective:'Top 5 en alguna carrera', objKey:'top5',
+   bonus:'Protocolo nutricional personalizado'},
+];
 const COACH_DAY_CONDITIONS=[
   {text:'Dormiste mal — piernas al 90% de lo habitual.',energyMod:-3,legsMod:-8},
   {text:'Amanece con las piernas frescas. Buena señal.',energyMod:+4,legsMod:+5},
@@ -1002,6 +1169,43 @@ const COACH_MID_RACE_EVENTS=[
      {text:'"Busca a alguien que te ceda uno en el siguiente avituallamiento."',trust:+3,energyBoost:12},
      {text:'"Gestiona el ritmo. Llegarás."',trust:+2,timeMod:+40},
    ]},
+  {id:'cramp',icon:'⚡',title:'Calambre',
+   desc:'{{name}} para en seco. Calambre en el gemelo. Te mira para saber qué hacer.',
+   choices:[
+     {text:'Parar 2 minutos a estirar (−2 min pero sin secuelas)',trust:+3,timeMod:+120,legBoost:10},
+     {text:'Bajar ritmo y soltar la zancada',trust:+1,timeMod:+55,legBoost:5},
+     {text:'Aguantar y seguir — el calor lo deshará',trust:-1,timeMod:+20},
+   ]},
+  {id:'fallen_competitor',icon:'🏃',title:'Corredor caído',
+   desc:'Hay un corredor en el suelo a 10 metros. No parece grave pero tampoco se levanta.',
+   choices:[
+     {text:'Parar a ayudar (−3 min, +confianza, +reputación)',trust:+7,timeMod:+180,reputation:4},
+     {text:'Preguntar si está bien y seguir (−30s)',trust:+2,timeMod:+30},
+     {text:'"Hay avituallamiento cerca, alguien le ayudará."',trust:-3,timeMod:0},
+   ]},
+  {id:'nemesis_passes',icon:'🎯',title:'El rival pasa',
+   desc:'"{{rival}} me acaba de adelantar, coach. Va fuerte. ¿Lo sigo o gestiono?"',
+   choices:[
+     {text:'"Deja que se vaya. Tu carrera es tuya."',trust:+3,timeMod:+20},
+     {text:'"Aguanta su rueda. No le pierdas de vista."',trust:+1,timeMod:-15},
+     {text:'"Ataca ahora. Es tu momento."',trust:+1,timeMod:-30,energyCost:12},
+   ]},
+  {id:'wrong_path',icon:'🗺️',title:'¿Es por aquí?',
+   desc:'La baliza señala dos caminos. Otros corredores van por la izquierda. {{name}} duda.',
+   choices:[
+     {text:'"Izquierda con el grupo — riesgo mínimo."',trust:+1},
+     {text:'"Derecha — confía en el recorrido que estudiamos."',trust:+2,timeMod:-25},
+   ]},
+];
+
+// ── Mensajes de radio por tramo ──
+const COACH_RADIO_MESSAGES=[
+  {id:'push',     label:'⚡ Empuja',    desc:'Dale más intensidad',        timeMod:-20, energyCost:8},
+  {id:'conserve', label:'🛡 Conserva', desc:'Guarda energía para después', timeMod:+25, energySave:5},
+  {id:'attack',   label:'🗡 Ataca',    desc:'Supera posiciones ahora',     timeMod:-35, energyCost:14},
+  {id:'breathe',  label:'🌬 Respira',  desc:'Relaja, baja los hombros',    timeMod:+10, trustBoost:1},
+  {id:'focus',    label:'🎯 Enfoca',   desc:'Solo el siguiente km',        timeMod:-5,  trustBoost:2},
+  {id:'silent',   label:'📵 Silencio', desc:'Le dejas decidir solo',       timeMod:0},
 ];
 const SPEC_RACES={
   fondista:[
@@ -1113,7 +1317,7 @@ function freshState(){
     vacDaysTotal:15,
     vacByQuarter:{1:0,2:0,3:0,4:0},
     selectedRaces:[],sponsors:{zapatillas:null,ropa:null,nutricion:null,tecnologia:null},
-    club:CLUBS[0],trainingBlock:null,trainingEff:1.0,
+    club:CLUBS[0],clubReputation:0,clubCompanion:null,trainingBlock:null,trainingEff:1.0,
     spending:{fisio:false,entrenador:false,suplementos:false},
     currentRaceIdx:0,raceResults:[],careerHistory:[],
     time:0,seg:0,raceEvent:'',
@@ -1187,6 +1391,19 @@ function freshState(){
     coachDayCondition:null,      // condición del día de carrera {text,energyMod,legsMod}
     coachRaceEventPending:null,  // evento a mitad de carrera pendiente
     coachEventLog:[],            // historial de eventos resueltos esta temporada
+    // ── Coach v24 ──
+    coachGels:3,                 // geles asignados pre-carrera
+    coachGelsUsed:0,             // geles usados en carrera
+    coachRadioUsed:{},           // {segIdx: instrucción usada}
+    coachAidExtras:{},           // {aidNum: acción usada en avituallamiento}
+    coachPreRaceBlock:null,      // bloque de última hora pre-carrera
+    // ── Coach opciones A ──
+    coachSeasonObjective:null,
+    coachInjury:null,
+    coachSponsors:[],
+    coachSponsorPool:null,
+    coachRadioWindowOpen:false,  // ventana de radio abierta (sobrevive render)
+    coachTrainingSelected:null,  // bloque seleccionado pendiente de confirmar
   };
 }
 let G=freshState();
@@ -1204,6 +1421,27 @@ function curWorkOpt(){
 }
 function monthlySponsorIncome(){return Math.round(Object.values(G.sponsors).filter(Boolean).reduce((a,s)=>a+(s.salary||0),0)/12*(modeCfg().sponsorMult||1));}
 function monthlyClubCost(){return G.club?.cost||0;}
+
+// ── REPUTACIÓN DE CLUB ──────────────────
+function changeClubRep(delta){
+  if(!G.club||G.club.id==='none') return;
+  G.clubReputation=Math.max(0,Math.min(100,(G.clubReputation||0)+delta));
+}
+function clubRepLabel(){
+  const r=G.clubReputation||0;
+  if(r>=80) return {text:'Leyenda del club 🏆',color:'#c07a10'};
+  if(r>=60) return {text:'Referente del club',color:'#4a8a2a'};
+  if(r>=40) return {text:'Miembro activo',color:'#4a90d9'};
+  if(r>=20) return {text:'Miembro reciente',color:'#888'};
+  return {text:'Recién llegado',color:'#aaa'};
+}
+// Carrera exclusiva desbloqueada con rep ≥75
+const EXCLUSIVE_CLUB_RACE={
+  id:'copa_clubes',name:'Copa de Clubes Trail',dist:42,month:9,cost:0,
+  minYear:1,spec:'all',circuit:null,
+  desc:'Carrera exclusiva para miembros con alta reputación en su club. Rivales top, sin inscripción.',
+  prize:300,isExclusive:true
+};
 function monthlyNet(){
   if(G.gameMode==='expres')return monthlySponsorIncome();
   return monthlyWorkIncome()+monthlySponsorIncome()-FIXED_COSTS.total-monthlyClubCost();
@@ -1229,6 +1467,8 @@ function updateFinBar(){
   document.getElementById('fb-rank').textContent=G.ranking<900?'#'+G.ranking:'—';
   const sr=document.getElementById('fb-specrank');
   if(sr)sr.textContent=G.specRanking<900?'#'+G.specRanking:'—';
+  const vr=document.getElementById('fb-version');
+  if(vr)vr.textContent=GAME_VERSION;
 }
 
 // ══════════════════════════════════════
@@ -1516,6 +1756,7 @@ function hbar(val,max,col){const p=Math.round(val/max*100);return `<div class="b
 // ══════════════════════════════════════
 function getBodyLoad(){return Math.max(0,Math.min(100,Math.round(G.bodyLoad||0)));}
 function hasFisio(){return G.spending.fisio||G.club?.hasFisio;}
+function hasClubEntrenador(){return G.spending.entrenador||G.club?.hasEntrenador;}
 
 // Señales pasivas según nivel de carga
 function bodyLoadHint(){
@@ -1730,11 +1971,41 @@ const MONTHLY_EVENTS_POOL=[
     {text:'Aceptar el reto (+velocidad, +carga, +seguidores)',   value:0, statBonus:{velocidad:2}, loadAdd:10},
     {text:'Ignorarlo — no merece la pena cargar extra',          value:0},
   ]},
+  // ── Eventos de club con reputación ──
+  {id:'club_president',  title:'El presidente del club quiere que corras el campeonato regional', requiresClub:true, options:[
+    {text:'Aceptar — el club lo necesita (+reputación, carrera extra)',  value:0, statBonus:{mental:2}, clubRepDelta:12, addChampionship:true},
+    {text:'Declinar — no encaja en mi plan (-reputación)',               value:0, clubRepDelta:-8},
+  ]},
+  {id:'companion_advice', title:'Tu compañero de club te pide consejo antes de su primera ultra', requiresClub:true, options:[
+    {text:'Dedicarle una tarde entera — le sale bien (+mental, +reputación)', value:0, statBonus:{mental:4}, clubRepDelta:10},
+    {text:'Un consejo rápido por WhatsApp — algo es algo (+rep leve)',        value:0, statBonus:{mental:2}, clubRepDelta:4},
+    {text:'No tengo tiempo ahora mismo',                                      value:0, clubRepDelta:-3},
+  ]},
+  {id:'club_gear_discount', title:'El club negocia un descuento en material para sus miembros', requiresClub:true, options:[
+    {text:'Aprovechar el descuento — zapatillas nuevas (€25, +bajada, +rep)', value:-25, statBonus:{bajada:2}, clubRepDelta:5},
+    {text:'Pasar — el material que tengo va bien',                            value:0},
+  ]},
+  {id:'club_conflict', title:'Tensión en el club — dos miembros discuten y te piden que medie', requiresClub:true, options:[
+    {text:'Mediar con calma — se resuelve bien (+rep, +mental)',   value:0, statBonus:{mental:3}, clubRepDelta:12},
+    {text:'Mantenerse al margen — no es tu pelea',                value:0, clubRepDelta:-2},
+    {text:'Tomar partido — resuelves rápido pero hay bando perdedor', value:0, clubRepDelta:-6},
+  ]},
+  {id:'companion_race', title:'Tu compañero de club corre su primera carrera contigo este fin de semana', requiresClub:true, options:[
+    {text:'Correr a su ritmo los primeros km (+mental, +rep)',     value:0, statBonus:{mental:5}, clubRepDelta:8, loadAdd:4},
+    {text:'Salir a tu ritmo — cada uno a lo suyo',                value:0},
+  ]},
+  {id:'club_training_camp', title:'El club organiza un campo de entrenamiento en la sierra — plazas para todos', requiresClub:true, options:[
+    {text:'Apuntarse — una semana con el grupo (+subida, +mental, +rep, +carga)', value:-30, statBonus:{subida:3,mental:4}, clubRepDelta:10, loadAdd:12},
+    {text:'Unirse solo el fin de semana (+rep leve, menos carga)',                value:-10, statBonus:{mental:2}, clubRepDelta:5, loadAdd:5},
+    {text:'Esta vez no puedo',                                                    value:0, clubRepDelta:-2},
+  ]},
 ];
 
 function generateMonthlyEvents(){
   G.monthlyEvents=[];
-  if(Math.random()<0.6)G.monthlyEvents.push({...MONTHLY_EVENTS_POOL[Math.floor(Math.random()*MONTHLY_EVENTS_POOL.length)],resolved:false});
+  const hasClub=G.club&&G.club.id!=='none';
+  const pool=MONTHLY_EVENTS_POOL.filter(e=>!e.requiresClub||hasClub);
+  if(Math.random()<0.6)G.monthlyEvents.push({...pool[Math.floor(Math.random()*pool.length)],resolved:false});
 }
 
 // ══════════════════════════════════════
@@ -1756,7 +2027,7 @@ function getTerrainCondition(race){
 // ══════════════════════════════════════
 function getAltitudePenalty(race){
   if(!race.altitude)return 0;
-  const hasAltitudeTraining=G.club?.id==='montana'||G.spending.entrenador;
+  const hasAltitudeTraining=G.club?.id==='montana'||G.club?.id==='elite'||hasClubEntrenador();
   if(hasAltitudeTraining)return 0.03;
   return 0.10; // 10% slower without altitude training
 }
@@ -1894,7 +2165,7 @@ function getAbandonPenalty(){
   return {label:'Abandonos previos ('+abandoned+')',sponsorMult:0.95};
 }
 // ══════════════════════════════════════
-const SCREENS_WITH_TABS=['seasonStart','calendar','sponsors','training','betweenRace','seasonBalance','betweenManage','preRace','preRacePrep','segment','aid','raceResult','expresSeasonStart','expresCalendar','expresSponsors','expresPrep','expresPreRacePrep','expresSeasonBalance','coachHome','coachTraining','coachCalendar','coachTrainingReaction','coachEvent'];
+const SCREENS_WITH_TABS=['seasonStart','calendar','sponsors','training','betweenRace','seasonBalance','betweenManage','preRace','preRacePrep','segment','aid','raceResult','expresSeasonStart','expresCalendar','expresSponsors','expresPrep','expresPreRacePrep','expresSeasonBalance','coachHome','coachTraining','coachCalendar','coachTrainingReaction','coachEvent','coachPreRace','coachSponsors','clubSetup'];
 const RACE_SCREENS=['preRace','segment','aid','raceResult','midRaceEvent'];
 
 function updateTabNav(){
@@ -1978,6 +2249,7 @@ function render(){
     betweenRace:renderBetweenRace,seasonBalance:renderSeasonBalance,
     midSeasonCalendar:renderMidSeasonCalendar,circuits:renderCircuits,
     betweenManage:renderBetweenManage,preRacePrep:renderPreRacePrep,
+    clubSetup:renderClubSetup,
     midRaceEvent:renderMidRaceEvent,retirement:renderRetirement,
     startStrategy:renderStartStrategy,raceResult:renderRaceResult,
     expresSeasonStart:renderExpresSeasonStart,expresCalendar:renderExpresCalendar,
@@ -1987,7 +2259,8 @@ function render(){
     coachTraining:renderCoachTraining,coachCalendar:renderCoachCalendar,
     coachTrainingReaction:renderCoachTrainingReaction,
     coachRace:renderCoachRace,coachSeasonEnd:renderCoachSeasonEnd,
-    coachEvent:renderCoachEvent,
+    coachEvent:renderCoachEvent,coachPreRace:renderCoachPreRace,
+    coachSponsors:renderCoachSponsors,
   }[G.screen]||renderIntro)();
   triggerFade(el);
 }
@@ -2320,11 +2593,35 @@ function renderRunnerTab(){
       </div>`).join('')}
     </div>`:''}
 
-    ${G.club&&G.club.id!=='none'?`<div class="card">
-      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Club actual</div>
-      <div class="card-title">${G.club.name}</div>
-      <div class="card-sub">${G.club.desc}</div>
-    </div>`:''}
+    ${G.club&&G.club.id!=='none'?(()=>{
+      const rep=G.clubReputation||0;
+      const repInfo=clubRepLabel();
+      const companion=G.clubCompanion;
+      const bonuses=Object.entries(G.club.statBonus).map(([k,v])=>`+${v} ${k.charAt(0).toUpperCase()+k.slice(1)}`).join(', ');
+      return `<div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+          <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px">Tu club</div>
+          <span style="font-size:12px;color:#4a90d9;cursor:pointer" onclick="G._clubFromBetween=false;G.screen='clubSetup';render()">Cambiar →</span>
+        </div>
+        <div class="card-title">${G.club.name}</div>
+        <div class="card-sub">${G.club.desc}</div>
+        ${bonuses?`<div style="font-size:12px;color:#4a8a2a;margin-top:4px">${bonuses}</div>`:''}
+        ${companion?`<div style="font-size:12px;color:#888;margin-top:4px">Compañero: <strong>${companion}</strong></div>`:''}
+        <div style="margin-top:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:12px;color:#888">Reputación en el club</span>
+            <span style="font-size:13px;font-weight:700;color:${repInfo.color}">${repInfo.text}</span>
+          </div>
+          <div class="load-bar-track"><div class="bar-fill" style="width:${rep}%;background:${rep>=60?'#c07a10':rep>=30?'#4a90d9':'#bbb'}"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:#bbb;margin-top:3px">
+            <span>0</span><span style="color:#4a8a2a">75 → Copa Clubes 🏆</span><span>100</span>
+          </div>
+        </div>
+      </div>`;
+    })():`<div class="card" style="text-align:center;padding:16px">
+      <div style="font-size:13px;color:#aaa;margin-bottom:8px">Sin club — corriendo como independiente</div>
+      <span style="font-size:13px;color:#4a90d9;cursor:pointer" onclick="G._clubFromBetween=false;G.screen='clubSetup';render()">Unirse a un club →</span>
+    </div>`}
 
     ${G.careerHistory.length>0?`<div class="card">
       <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Historial de carreras</div>
@@ -2948,7 +3245,7 @@ function renderIntro(){
     <input id="rname" type="text" placeholder="Nombre del corredor" value="${esc(r.name)}" maxlength="22"/>
     <label class="field-label">Edad inicial</label>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">
-      ${[18,22,25,28,30,35].map(a=>`<div onclick="G.runner.age=${a};render()" style="padding:7px 14px;border-radius:8px;border:1px solid ${(r.age||25)===a?'#1a1a1a':'#ddd'};background:${(r.age||25)===a?'#f0ede8':'#fff'};cursor:pointer;font-size:14px;font-weight:${(r.age||25)===a?'600':'400'}">${a}</div>`).join('')}
+      ${[18,22,25,28,30,35].map(a=>`<div onclick="G.runner.age=${a};G.runner.stats=applyAgeToStats({...SPEC_STATS[G.runner.specialty]},${a});render()" style="padding:7px 14px;border-radius:8px;border:1px solid ${(r.age||25)===a?'#1a1a1a':'#ddd'};background:${(r.age||25)===a?'#f0ede8':'#fff'};cursor:pointer;font-size:14px;font-weight:${(r.age||25)===a?'600':'400'}">${a}</div>`).join('')}
     </div>
     <label class="field-label">Especialidad</label>
     <div class="grid2" style="margin-bottom:20px">
@@ -2959,8 +3256,19 @@ function renderIntro(){
         </div>`).join('')}
     </div>
     <div class="card" style="margin-bottom:18px">
-      <div class="sec-title-sm">Stats iniciales</div>
-      ${Object.entries(SPEC_STATS[r.specialty]).map(([k,v])=>srow(k.charAt(0).toUpperCase()+k.slice(1),v)).join('')}
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+        <div class="sec-title-sm" style="margin-bottom:0">Stats iniciales</div>
+        ${(r.age||25)!==25?`<div style="font-size:11px;color:#888">vs. base edad 25</div>`:''}
+      </div>
+      ${(()=>{
+        const _adj=applyAgeToStats(SPEC_STATS[r.specialty],r.age||25);
+        const _base=SPEC_STATS[r.specialty];
+        return Object.entries(_adj).map(([k,v])=>{
+          const d=v-_base[k];
+          const dHtml=d>0?`<span style="color:#4a8a2a;font-size:11px;font-weight:700;margin-left:3px">+${d}</span>`:d<0?`<span style="color:#c0392b;font-size:11px;font-weight:700;margin-left:3px">${d}</span>`:'';
+          return `<div class="bar-row"><span class="bar-label">${k.charAt(0).toUpperCase()+k.slice(1)}${dHtml}</span><div class="bar-track" style="flex:1"><div class="bar-fill" style="width:${v}%;background:${v>=62?'#4a8a2a':v>=45?'#4a90d9':'#c07a10'}"></div></div><span class="bar-pct">${v}</span></div>`;
+        }).join('');
+      })()}
     </div>
     <button class="main" onclick="doStart()">Empezar →</button>`;
   setTimeout(()=>{
@@ -3132,6 +3440,7 @@ function renderSeasonStart(){
       ${Object.entries(G.runner.stats).map(([k,v])=>srow(k.charAt(0).toUpperCase()+k.slice(1),v)).join('')}
     </div>
     <button class="main" onclick="G.currentQuarter=1;G.screen='workSetup';render()">Planificar jornada laboral →</button>
+    <button class="main" onclick="G.screen='clubSetup';render()" style="margin-top:6px">${G.club&&G.club.id!=='none'?'🏃 Club: '+G.club.name+' →':'🏃 Unirse a un club →'}</button>
     <button class="main" onclick="G.screen='circuits';render()" style="margin-top:6px">Unirse a circuitos / ligas →</button>
     <button class="main" onclick="G.screen='calendar';render()" style="margin-top:6px">Planificar calendario →</button>`;
 }
@@ -4167,6 +4476,84 @@ window.doFameAction=id=>{
   render();
 };
 // ── BETWEEN RACE MANAGEMENT ────────────
+// ── CLUB SETUP ─────────────────────────
+function renderClubSetup(){
+  const el=document.getElementById('main');
+  const currentClub=G.club||CLUBS[0];
+  const rep=G.clubReputation||0;
+  const repInfo=clubRepLabel();
+  const companion=G.clubCompanion;
+  const fromBetween=G._clubFromBetween||false;
+
+  el.innerHTML=`
+    <h2>Elige tu club</h2>
+    <p class="sub">El club define tu entorno de entrenamiento y red de apoyo.</p>
+
+    ${currentClub.id!=='none'?`
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Club actual — ${currentClub.name}</div>
+      ${companion?`<div style="font-size:13px;color:#555;margin-bottom:8px">Tu compañero: <strong>${companion}</strong></div>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:12px;color:#888">Reputación</span>
+        <span style="font-size:13px;font-weight:700;color:${repInfo.color}">${repInfo.text}</span>
+      </div>
+      <div class="load-bar-track"><div class="bar-fill" style="width:${rep}%;background:${rep>=60?'#c07a10':rep>=30?'#4a90d9':'#bbb'}"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#bbb;margin-top:3px">
+        <span>0</span><span style="color:#4a8a2a">75 → Copa de Clubes</span><span>100</span>
+      </div>
+      ${rep>=75?`<div style="font-size:12px;color:#4a8a2a;margin-top:6px">✓ Reputación suficiente para la Copa de Clubes</div>`:''}
+    </div>`:''}
+
+    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Opciones disponibles</div>
+    ${CLUBS.filter(c=>c.id==='none'||(c.minYear||1)<=G.year).map(c=>{
+      const isActive=currentClub.id===c.id;
+      const monthCost=c.cost;
+      const annualCost=monthCost*12;
+      const bonuses=Object.entries(c.statBonus).map(([k,v])=>`+${v} ${k.charAt(0).toUpperCase()+k.slice(1)}`).join(', ');
+      const perks=[];
+      if(c.hasFisio)perks.push('Fisio incluido');
+      if(c.hasEntrenador)perks.push('Entrenador incluido');
+      return `<div class="work-card ${isActive?'':''}${isActive?'border: 2px solid #4a90d9;':''}" style="margin-bottom:10px;${isActive?'border:2px solid #4a90d9;':''}" onclick="${isActive?'':'selectClub(\''+c.id+'\')'}">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span class="card-title">${c.name}</span>
+            ${isActive?`<span style="font-size:11px;background:#e8eef8;color:#2d4fa0;border-radius:4px;padding:1px 6px;font-weight:600">Actual</span>`:''}
+          </div>
+          <div class="card-sub">${c.desc}</div>
+          ${bonuses?`<div style="font-size:12px;color:#4a8a2a;margin-top:4px">${bonuses}</div>`:''}
+          ${perks.length?`<div style="font-size:12px;color:#4a90d9;margin-top:2px">${perks.join(' · ')}</div>`:''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:12px">
+          ${monthCost>0?`<div style="font-size:14px;font-weight:700;color:#c0392b">-€${monthCost}/mes</div>
+          <div style="font-size:11px;color:#aaa">€${annualCost}/año</div>`
+          :`<div style="font-size:13px;font-weight:600;color:#888">Gratis</div>`}
+        </div>
+      </div>`;
+    }).join('')}
+
+    <div style="margin-top:4px">
+      <button class="main" onclick="${fromBetween?`G._clubFromBetween=false;G.screen='betweenManage'`:`G.screen='seasonStart'`};render()">← Volver</button>
+    </div>`;
+}
+
+window.selectClub=id=>{
+  const club=CLUBS.find(c=>c.id===id);
+  if(!club)return;
+  if((club.minYear||1)>G.year){showToast('Disponible a partir del año '+club.minYear,'#c07a10');return;}
+  const prev=G.club||CLUBS[0];
+  if(prev.id!=='none'&&prev.id!==id&&id!=='none'){
+    G.clubReputation=Math.max(0,(G.clubReputation||0)-20);
+  } else if(id==='none'){
+    G.clubReputation=0;
+  }
+  G.club=club;
+  G.clubCompanion=assignClubCompanion(club);
+  const msg=id==='none'?'Sin club — independiente':
+    G.clubCompanion?`Te unes a ${club.name}. Tu compañero: ${G.clubCompanion}`:`Te unes a ${club.name}`;
+  showToast(msg,'#4a8a2a');
+  render();
+};
+
 function renderBetweenManage(){
   const el=document.getElementById('main');
   const load=getBodyLoad();
@@ -4219,6 +4606,10 @@ function renderBetweenManage(){
     <div class="work-card" onclick="G.screen='midSeasonCalendar';render()" style="margin-bottom:14px">
       <div class="card-title">📅 Modificar calendario pendiente</div>
       <div class="card-sub">Añade o quita carreras que aún no has corrido</div>
+    </div>
+    <div class="work-card" onclick="G._clubFromBetween=true;G.screen='clubSetup';render()" style="margin-bottom:14px">
+      <div class="card-title">🏃 ${G.club&&G.club.id!=='none'?'Club: '+G.club.name:'Unirse a un club'}</div>
+      <div class="card-sub">${G.club&&G.club.id!=='none'?'Ver reputación o cambiar de club':'Sin club actualmente — explorar opciones'}</div>
     </div>
     <button class="main" onclick="afterRace()">Siguiente carrera →</button>`;
 }
@@ -4358,7 +4749,7 @@ function renderSeasonBalance(){
 // ══════════════════════════════════════
 //  ACCIONES
 // ══════════════════════════════════════
-window.selSpec=id=>{G.runner.specialty=id;G.runner.stats={...SPEC_STATS[id]};render();};
+window.selSpec=id=>{G.runner.specialty=id;G.runner.stats=applyAgeToStats({...SPEC_STATS[id]},G.runner.age||25);render();};
 window.setWorkQ=(q,pct)=>{
   const wo=WORK_OPTIONS.find(o=>o.pct===pct);if(!wo)return;
   if(!G.workByQuarter)G.workByQuarter={1:100,2:100,3:100,4:100};
@@ -4385,7 +4776,7 @@ window.setWorkQ=(q,pct)=>{
 };
 window.doStart=()=>{
   if(!G.runner.name.trim())G.runner.name='Corredor';
-  G.runner.stats={...SPEC_STATS[G.runner.specialty]};
+  G.runner.stats=applyAgeToStats({...SPEC_STATS[G.runner.specialty]},G.runner.age||25);
   G.money=modeCfg().startMoney;
   G.activeTab='game';
   if(G.gameMode==='expres'){
@@ -5870,6 +6261,7 @@ window.doAbandonConfirmed=()=>{
   if(!G.careerRaceHistory)G.careerRaceHistory={};
   if(!G.careerRaceHistory[race.id])G.careerRaceHistory[race.id]={finished:0,abandoned:0};
   G.careerRaceHistory[race.id].abandoned++;
+  if(G.club&&G.club.id!=='none')changeClubRep(-10);
   // Small body load reduction (stopped early)
   G.bodyLoad=Math.max(0,G.bodyLoad-8);
   const el=document.getElementById('main');
@@ -6109,6 +6501,13 @@ function applyPostRaceTracking(race,res){
   G.careerRaceHistory[race.id].finished++;
   G.bodyLoad=bodyLoadAfterRace(race.km);
   G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;
+  // Reputación de club: sube si top10, baja si posición mala
+  if(G.club&&G.club.id!=='none'){
+    if(pos===1)changeClubRep(10);
+    else if(pos<=3)changeClubRep(6);
+    else if(pos<=10)changeClubRep(3);
+    else changeClubRep(-2);
+  }
 }
 
 function finishRace(){
@@ -6334,6 +6733,11 @@ window.resolveMonthlyEvent=(evIdx,optIdx)=>{
   if(opt.statBonus)Object.entries(opt.statBonus).forEach(([k,v])=>{G.runner.stats[k]=Math.min(100,(G.runner.stats[k]||0)+v);});
   if(opt.loadRedux)G.bodyLoad=Math.max(0,G.bodyLoad-opt.loadRedux);
   if(opt.loadAdd)G.bodyLoad=Math.min(100,G.bodyLoad+(opt.loadAdd||0));
+  if(opt.clubRepDelta)changeClubRep(opt.clubRepDelta);
+  if(opt.addChampionship&&G.selectedRaces.length<12){
+    const cr={...EXCLUSIVE_CLUB_RACE,id:'copa_clubes_'+G.year};
+    if(!G.selectedRaces.find(r=>r.id===cr.id))G.selectedRaces.push(cr);
+  }
   ev.resolved=true;
   // Toast feedback
   const parts=[];
@@ -6347,7 +6751,8 @@ window.resolveMonthlyEvent=(evIdx,optIdx)=>{
   }
   if(opt.loadRedux)parts.push(`Carga -${opt.loadRedux}`);
   if(opt.loadAdd)parts.push(`Carga +${opt.loadAdd}`);
-  if(parts.length)showToast(parts.join(' · '), opt.value<0||opt.loadAdd?'#c07a10':'#2d7a2d');
+  if(opt.clubRepDelta)parts.push(opt.clubRepDelta>0?`Rep +${opt.clubRepDelta}`:`Rep ${opt.clubRepDelta}`);
+  if(parts.length)showToast(parts.join(' · '), opt.value<0||opt.loadAdd||(opt.clubRepDelta&&opt.clubRepDelta<0)?'#c07a10':'#2d7a2d');
   render();
 };
 window.doNextYear=yearNet=>{
@@ -6678,6 +7083,10 @@ window.doCoachSelect=id=>{
   G.coachRaceAnimIdx=0;G.coachRaceAidPaused=false;
   G.coachNemesis=null;G.coachPendingEvent=null;G.coachLastDialogue=null;
   G.coachDayCondition=null;G.coachRaceEventPending=null;G.coachEventLog=[];
+  G.coachGels=3;G.coachGelsUsed=0;G.coachRadioUsed={};G.coachAidExtras={};G.coachPreRaceBlock=null;
+  G.coachSeasonObjective=null;G.coachInjury=null;G.coachSponsors=[];G.coachSponsorPool=null;G.coachRadioWindowOpen=false;
+  generateCoachSeasonObjective();
+  generateCoachSponsorPool();
   G.screen='coachHome';G.activeTab='game';
   autoSave();render();
 };
@@ -6712,6 +7121,29 @@ function renderCoachHome(){
       </div>
       ${G.coachTrust<30?`<div class="danger" style="margin-top:8px;margin-bottom:0;font-size:12px">⚠️ Confianza crítica. Si no mejoras los resultados, el atleta puede marcharse.</div>`:''}
     </div>
+
+    ${G.coachInjury&&G.coachInjury.racesLeft>0?`
+    <div class="card" style="margin-bottom:12px;border-color:#f5b8b8;border-width:1.5px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-size:16px">🩹</span>
+        <div style="font-size:13px;font-weight:700;color:#c0392b">${G.coachInjury.label}</div>
+        <span style="font-size:11px;background:#fef0f0;color:#c0392b;padding:1px 6px;border-radius:3px;margin-left:auto">${G.coachInjury.racesLeft} carrera${G.coachInjury.racesLeft!==1?'s':''} de baja</span>
+      </div>
+      <div style="font-size:12px;color:#888">${G.coachInjury.desc}</div>
+    </div>`:''}
+
+    ${G.coachSeasonObjective?`
+    <div class="card" style="margin-bottom:12px;border-color:${G.coachSeasonObjective.met?'#4a8a2a':'#e0dfd8'}">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">${G.coachSeasonObjective.met?'✅':'🎯'}</span>
+        <div style="flex:1">
+          <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Objetivo de ${esc(a.name)}</div>
+          <div style="font-size:13px;font-weight:600">${G.coachSeasonObjective.label}</div>
+          <div style="font-size:12px;color:#aaa;font-style:italic;margin-top:2px">${G.coachSeasonObjective.desc}</div>
+        </div>
+      </div>
+    </div>`:''}
+
     <div class="card" style="margin-bottom:12px">
       <div class="sec-title-sm">Estado de la temporada</div>
       <div style="font-size:13px;color:#555">
@@ -6725,9 +7157,13 @@ function renderCoachHome(){
       <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="G.screen='coachSeasonEnd';render()">Ver balance de temporada →</button>
     `:!racesSelected?`
       <button class="main" onclick="G.screen='coachCalendar';G.activeTab='calendar';render()">📅 Planificar carreras de la temporada</button>
+      ${(G.coachSponsorPool||[]).length>0&&(G.coachSponsors||[]).length<2?`<button class="main" style="margin-top:6px;border-color:#c07a10;color:#c07a10" onclick="G.screen='coachSponsors';render()">🤝 Negociar sponsors del atleta (${(G.coachSponsorPool||[]).length} oferta${(G.coachSponsorPool||[]).length!==1?'s':''})</button>`:''}
     `:`
       <button class="main" onclick="G.screen='coachTraining';render()">💪 Proponer bloque de entrenamiento</button>
-      <button class="main" style="margin-top:6px" onclick="doCoachStartRace()">🏁 Ir a la carrera — ${esc(nextRace?.name||'siguiente')}</button>
+      ${G.coachInjury&&G.coachInjury.racesLeft>0
+        ?`<div class="warn" style="margin-top:8px;font-size:12px">🩹 ${esc(a.name)} está lesionado — no puede correr ${G.coachInjury.racesLeft} carrera${G.coachInjury.racesLeft!==1?'s':''} más. Se saltará la próxima.</div>
+           <button class="main" style="margin-top:6px;opacity:0.5" disabled>🏁 Carrera bloqueada por lesión</button>`
+        :`<button class="main" style="margin-top:6px" onclick="doCoachStartRace()">🏁 Ir a la carrera — ${esc(nextRace?.name||'siguiente')}</button>`}
     `}
     ${G.coachPendingEvent?`
     <div class="card" style="margin-top:12px;border-color:#c07a10;border-width:1.5px;cursor:pointer" onclick="G.screen='coachEvent';render()">
@@ -6763,19 +7199,130 @@ function renderCoachTraining(){
   const a=G.coachAthlete;
   const pl=PERSONALITY_LABEL[a.personality];
   const nextRace=(G.coachSelectedRaces||[])[G.coachRaceIdx];
+  const nextQ=nextRace?.quarter||1;
+
+  // Recommended block based on race profile
+  function recommendBlock(race){
+    if(!race)return null;
+    const segs=race.segs||[];
+    const climbKm=segs.filter(s=>s.type==='climb').reduce((s,x)=>s+x.km,0);
+    const descKm=segs.filter(s=>s.type==='descent').reduce((s,x)=>s+x.km,0);
+    const ratio=climbKm/Math.max(1,race.km);
+    if(ratio>0.35)return'subida';
+    if(descKm/race.km>0.3)return'tecnico';
+    if(race.km>=40)return'volumen';
+    return'velocidad';
+  }
+  const recKey=recommendBlock(nextRace);
+  const recLabel={volumen:'Volumen alto',velocidad:'Trabajo de velocidad',tecnico:'Descenso técnico',subida:'Subida específica'}[recKey]||'';
+
+  // Quarter races summary
+  const qRaces=(G.coachSelectedRaces||[]).filter(r=>r.quarter===nextQ);
+  const MONTH_NAMES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
   el.innerHTML=`
     <h2>Proponer entrenamiento</h2>
-    <p class="sub">Para <strong>${esc(a.name)}</strong> antes de ${esc(nextRace?.name||'la próxima carrera')}</p>
-    <div class="hint" style="margin-bottom:14px">${pl.emoji} <strong>${pl.label}:</strong> ${pl.desc}</div>
-    ${TRAINING_BLOCKS.map(b=>`
-      <div class="train-card" onclick="doCoachTraining('${b.id}')">
-        <div class="card-title">${b.name}</div>
+    <p class="sub"><strong>${esc(a.name)}</strong> · T${G.coachSeason}</p>
+
+    ${nextRace?`
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">
+        Q${nextQ} — carreras del trimestre
+      </div>
+      ${qRaces.map(r=>{
+        const isNext=r.id===nextRace.id;
+        const tC=TIER_COLOR_RACE[r.tier]||'#888';
+        return`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f0ede8">
+          <div>
+            <span style="font-size:13px;font-weight:${isNext?700:400}">${isNext?'→ ':''}${esc(r.name)}</span>
+            ${isNext?`<span style="font-size:11px;background:#f0f6ff;color:#4a90d9;padding:1px 6px;border-radius:3px;margin-left:6px">Próxima</span>`:''}
+            <div style="font-size:12px;color:#aaa">${MONTH_NAMES[(r.month||1)-1]} · ${r.type} · ${r.km}km · ${r.desnivel}</div>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:${tC};flex-shrink:0;margin-left:8px">${TIER_LABEL_RACE[r.tier]||r.tier}</span>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Perfil — ${esc(nextRace.name)}</div>
+      <div id="coach-train-prof-wrap">${profSvg(nextRace,-1,'preview',0)}</div>
+      <div id="coach-train-prof-info" data-sel="-1" style="min-height:16px">${profSegInfo(nextRace,null,'preview',0)}</div>
+      <div style="display:flex;gap:8px;font-size:11px;color:#aaa;margin-top:6px;flex-wrap:wrap">
+        <span><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#EAF3DE;border:1px solid #639922;margin-right:2px;vertical-align:middle"></span>Subida</span>
+        <span><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#FCEBEB;border:1px solid #E24B4A;margin-right:2px;vertical-align:middle"></span>Bajada</span>
+        <span><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#F1EFE8;border:1px solid #888;margin-right:2px;vertical-align:middle"></span>Llano</span>
+      </div>
+    </div>
+    ${recLabel?`<div class="note" style="margin-bottom:12px;font-size:13px">💡 Para este perfil se recomienda: <strong>${recLabel}</strong></div>`:''}
+    `:''}
+
+    <div class="hint" style="margin-bottom:10px">${pl.emoji} <strong>${pl.label}:</strong> ${pl.desc}</div>
+
+    ${(()=>{
+      // Warn about reduced effectiveness based on context
+      const ev=G.coachPendingEvent;
+      const load=G.coachBodyLoad||0;
+      const pers=a.personality;
+      const warnings=[];
+      if(ev){
+        if(ev.id==='family_stress')warnings.push({type:'warn',msg:`📞 ${esc(a.name)} tiene un problema familiar pendiente. Probablemente entrene con la cabeza en otro lado — efectividad reducida.`});
+        if(ev.id==='overtraining_signal')warnings.push({type:'danger',msg:`😴 ${esc(a.name)} muestra señales de sobrecarga. Cualquier bloque intenso podría agravar la situación.`});
+        if(ev.id==='doubt_crisis')warnings.push({type:'warn',msg:`💭 ${esc(a.name)} está atravesando una crisis de confianza. Su rendimiento en entreno será impredecible.`});
+        if(ev.id==='injury_scare')warnings.push({type:'warn',msg:`🩹 Hay una molestia física activa. Bloques de volumen o velocidad aumentan el riesgo.`});
+      }
+      if(pers==='quemado'&&load>60)warnings.push({type:'warn',msg:`⚫ Con la carga acumulada y el estado mental del atleta, existe riesgo real de que no aparezca al entrenamiento.`});
+      if(pers==='motivado'&&(G.coachRaceResults||[]).slice(-1)[0]?.dnf)warnings.push({type:'warn',msg:`🟡 Viene de un abandono. Puede entrenarse demasiado duro para compensar — vigila la carga.`});
+      if(load>80)warnings.push({type:'danger',msg:`🔴 Carga corporal ${Math.round(load)}% — solo considera Recuperación activa o Descarga.`});
+      return warnings.map(w=>`<div class="${w.type}" style="margin-bottom:8px;font-size:12px">${w.msg}</div>`).join('');
+    })()}
+
+    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Elige bloque</div>
+    ${TRAINING_BLOCKS.map(b=>{
+      const isRec=b.name===recLabel;
+      const isSel=G.coachTrainingSelected===b.id;
+      return`<div class="train-card${isSel?' sel':''}" style="${isSel?'border-color:#1a1a1a;background:#f5f4f0;':isRec?'border-color:#4a90d9;':''}"
+        onclick="G.coachTrainingSelected='${b.id}';render()">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="card-title">${b.name}
+            ${isRec?` <span style="font-size:11px;background:#4a90d9;color:#fff;padding:1px 6px;border-radius:3px;margin-left:4px">Recomendado</span>`:''}
+            ${isSel?` <span style="font-size:11px;background:#1a1a1a;color:#fff;padding:1px 6px;border-radius:3px;margin-left:4px">Seleccionado</span>`:''}
+          </div>
+        </div>
         <div class="card-sub">${b.desc}</div>
-        <div style="font-size:12px;margin-top:6px">
+        <div style="font-size:12px;margin-top:5px">
           ${Object.entries(b.effects).filter(([,v])=>v!==0).map(([k,v])=>`<span style="color:${v>0?'#2d7a2d':'#c0392b'};margin-right:8px">${v>0?'+':''}${v} ${k.charAt(0).toUpperCase()+k.slice(1)}</span>`).join('')}
         </div>
-      </div>`).join('')}
-    <button class="main" style="opacity:0.5;margin-top:8px" onclick="G.screen='coachHome';render()">← Volver sin entrenar</button>`;
+      </div>`;
+    }).join('')}
+    ${G.coachTrainingSelected
+      ?`<button class="main" style="margin-top:10px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doCoachTraining(G.coachTrainingSelected)">
+          Confirmar — ${TRAINING_BLOCKS.find(b=>b.id===G.coachTrainingSelected)?.name||''} →
+        </button>`
+      :`<div class="hint" style="margin-top:8px;text-align:center">Toca un bloque para seleccionarlo</div>`}
+    <button class="main" style="opacity:0.5;margin-top:6px" onclick="G.coachTrainingSelected=null;G.screen='coachHome';render()">← Volver sin entrenar</button>`;
+
+  // Attach profile tap handlers after render
+  if(nextRace){
+    setTimeout(()=>{
+      const svg=document.getElementById(`prof-${nextRace.id}`);
+      if(!svg)return;
+      svg.querySelectorAll('rect[data-seg]').forEach(r=>{
+        const h=()=>{
+          const si=parseInt(r.dataset.seg);
+          const info=document.getElementById('coach-train-prof-info');
+          const wrap=document.getElementById('coach-train-prof-wrap');
+          if(!info||!wrap)return;
+          const cur=info.dataset.sel;
+          const next=cur==si?-1:si;
+          info.dataset.sel=next;
+          info.innerHTML=profSegInfo(nextRace,next>=0?next:null,'preview',0);
+          wrap.innerHTML=profSvg(nextRace,next>=0?next:-1,'preview',0);
+          // re-attach
+          renderCoachTraining._reattach&&renderCoachTraining._reattach();
+        };
+        r.addEventListener('click',h);r.addEventListener('touchend',e=>{e.preventDefault();h();});
+      });
+    },0);
+  }
 }
 
 window.doCoachTraining=blockId=>{
@@ -6814,6 +7361,7 @@ window.doCoachTraining=blockId=>{
   G.coachBodyLoad=Math.max(0,Math.min(100,(G.coachBodyLoad||0)+(loadD[actualBlockId]||8)));
   G.coachTrust=Math.max(0,Math.min(100,(G.coachTrust||60)+trustDelta));
   G.coachLastTraining={blockId:actualBlockId,blockName:usedBlock.name,effMult,reactionMsg,trustDelta};
+  G.coachTrainingSelected=null;
   G.screen='coachTrainingReaction';render();
 };
 
@@ -6899,21 +7447,116 @@ window.doCoachConfirmCalendar=()=>{
 window.doCoachStartRace=()=>{
   const race=(G.coachSelectedRaces||[])[G.coachRaceIdx];
   if(!race)return;
-  G.coachRaceData=coachBuildRaceData(race);
-  G.coachRaceAnimIdx=0;G.coachRaceAidPaused=false;
+  G.coachGels=3;G.coachGelsUsed=0;
+  G.coachRadioUsed={};G.coachAidExtras={};G.coachPreRaceBlock=null;
+  G.screen='coachPreRace';render();
+};
+
+function renderCoachPreRace(){
+  const el=document.getElementById('main');
+  const race=(G.coachSelectedRaces||[])[G.coachRaceIdx];
+  if(!race){G.screen='coachHome';render();return;}
+  const a=G.coachAthlete;
+  const gels=G.coachGels||3;
+  const dc=G.coachDayCondition||(COACH_DAY_CONDITIONS[Math.floor(Math.random()*COACH_DAY_CONDITIONS.length)]);
+  if(!G.coachDayCondition)G.coachDayCondition=dc;
+  const MONTH_NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  el.innerHTML=`
+    <h2>Pre-carrera</h2>
+    <p class="sub">${esc(race.name)} · ${MONTH_NAMES[(race.month||1)-1]} · T${G.coachSeason}</p>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Perfil de la carrera</div>
+      <div id="coach-pre-prof-wrap">${profSvg(race,-1,'preview',0)}</div>
+      <div id="coach-pre-prof-info" data-sel="-1" style="min-height:16px">${profSegInfo(race,null,'preview',0)}</div>
+      <div style="display:flex;gap:8px;font-size:11px;color:#aaa;margin-top:6px;flex-wrap:wrap">
+        <span><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#EAF3DE;border:1px solid #639922;margin-right:2px;vertical-align:middle"></span>Subida</span>
+        <span><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#FCEBEB;border:1px solid #E24B4A;margin-right:2px;vertical-align:middle"></span>Bajada</span>
+        <span><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#F1EFE8;border:1px solid #888;margin-right:2px;vertical-align:middle"></span>Llano</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#378ADD;margin-right:2px;vertical-align:middle"></span>Avituallamiento</span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Condición del día</div>
+      <div style="font-size:13px;color:#555">🌅 ${dc.text}</div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Geles</div>
+      <div style="font-size:13px;color:#555;margin-bottom:10px">Cuántos geles lleva ${esc(a.name)} al bolsillo. Cada gel da +12% energía en avituallamiento.</div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <button onclick="G.coachGels=Math.max(0,G.coachGels-1);render()" style="width:36px;height:36px;border-radius:8px;border:1px solid #ddd;background:#fff;font-size:18px;cursor:pointer">−</button>
+        <div style="font-size:20px;font-weight:700;min-width:40px;text-align:center">${gels} 🍬</div>
+        <button onclick="G.coachGels=Math.min(6,G.coachGels+1);render()" style="width:36px;height:36px;border-radius:8px;border:1px solid #ddd;background:#fff;font-size:18px;cursor:pointer">+</button>
+        <div style="font-size:12px;color:#888">Coste: €${gels*2}</div>
+      </div>
+      ${race.km>=40?`<div class="hint" style="margin-top:8px;margin-bottom:0;font-size:12px">Para una ${race.km}km se recomiendan al menos 4 geles.</div>`:''}
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Ajuste de último momento</div>
+      <div style="font-size:13px;color:#555;margin-bottom:10px">¿Quieres ajustar algo antes de salir?</div>
+      ${[{id:'taper_race',label:'Descarga final',desc:'Sesión ligera hoy — el atleta llega más fresco (+5% energía)',energyBonus:5},
+         {id:'mental_talk',label:'Charla motivacional',desc:'10 minutos de activación mental (+8 confianza)',trustBonus:8},
+         {id:'nothing',label:'Nada — está listo',desc:'Confías en el trabajo hecho'}
+      ].map((opt,i)=>{
+        const isSel=(G.coachPreRaceBlock||'nothing')===opt.id;
+        return`<div class="train-card${isSel?' sel':''}" style="${isSel?'border-color:#4a90d9;':''};margin-bottom:6px" onclick="G.coachPreRaceBlock='${opt.id}';render()">
+          <div style="font-weight:600;font-size:13px">${opt.label}</div>
+          <div style="font-size:12px;color:#888">${opt.desc}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doCoachLaunchRace()">🏁 Salida — ${esc(race.name)} →</button>
+    <button class="main" style="margin-top:6px;opacity:0.5" onclick="G.coachDayCondition=null;G.screen='coachHome';render()">← Volver al hub</button>`;
+
+  // Attach profile touch handlers
+  setTimeout(()=>{
+    const svg=document.getElementById(`prof-${race.id}`);
+    if(!svg)return;
+    svg.querySelectorAll('rect[data-seg]').forEach(r=>{
+      const h=()=>{
+        const si=parseInt(r.dataset.seg);
+        const info=document.getElementById('coach-pre-prof-info');
+        const wrap=document.getElementById('coach-pre-prof-wrap');
+        if(!info||!wrap)return;
+        const cur=info.dataset.sel;const next=cur==si?-1:si;
+        info.dataset.sel=next;
+        info.innerHTML=profSegInfo(race,next>=0?next:null,'preview',0);
+        wrap.innerHTML=profSvg(race,next>=0?next:-1,'preview',0);
+        setTimeout(()=>{const s2=document.getElementById(`prof-${race.id}`);if(s2)s2.querySelectorAll('rect[data-seg]').forEach(r2=>{r2.addEventListener('click',h);r2.addEventListener('touchend',e=>{e.preventDefault();h();});});},0);
+      };
+      r.addEventListener('click',h);r.addEventListener('touchend',e=>{e.preventDefault();h();});
+    });
+  },0);
+}
+
+window.doCoachLaunchRace=()=>{
+  const race=(G.coachSelectedRaces||[])[G.coachRaceIdx];
+  if(!race)return;
+  // Apply pre-race choices
+  const preBlock=G.coachPreRaceBlock||'nothing';
+  let energyBonus=0;
+  if(preBlock==='taper_race')energyBonus=5;
+  if(preBlock==='mental_talk')G.coachTrust=Math.min(100,(G.coachTrust||60)+8);
+  G.coachRaceData=coachBuildRaceData(race,energyBonus);
+  G.coachRaceAnimIdx=0;G.coachRaceAidPaused=false;G.coachRaceEventPending=null;
+  G.coachGelsUsed=0;G.coachRadioUsed={};G.coachAidExtras={};
   G.screen='coachRace';render();
   startCoachRaceAnim();
 };
 
-function coachBuildRaceData(race){
+function coachBuildRaceData(race, extraEnergyBonus=0){
   const a=G.coachAthlete;const st=a.currentStats;
 
-  // Day condition (Tanda 2)
-  const dc=COACH_DAY_CONDITIONS[Math.floor(Math.random()*COACH_DAY_CONDITIONS.length)];
-  G.coachDayCondition=dc;
+  // Day condition already set in renderCoachPreRace
+  const dc=G.coachDayCondition||COACH_DAY_CONDITIONS[0];
 
-  let energy=Math.max(0,Math.min(100,100+(dc.energyMod||0)));
-  let legs=Math.max(0,Math.min(100,100+(dc.legsMod||0)));
+  let energy=Math.max(0,Math.min(110,100+(dc.energyMod||0)+extraEnergyBonus));
+  let legs=Math.max(0,Math.min(110,100+(dc.legsMod||0)));
   let hydration=Math.max(0,Math.min(100,100+(dc.hydMod||0)));
   const overload=(G.coachBodyLoad||0)>70?0.06:0;
   energy-=overload*100;legs-=overload*80;
@@ -6949,19 +7592,74 @@ function coachBuildRaceData(race){
       narrative:np[Math.floor(Math.random()*np.length)],cumTime:totalTime});
   }
   const n=18+G.coachSeason*3;
-  let pos=1;
+  // Generate rival times with names for live classification
+  const rivalNames=[
+    'Oriol Puig','Laia Bonell','Xavi Gómez','Sara Mateu','Iker Zubiaurre','Claire Dubois',
+    'Pau Ferrer','Marta Soler','Jordi Vidal','Ana Roca','Mikel Etxebarria','Elena Camps',
+    'David Muñoz','Neus Planell','Tomàs Mas','Carla Vidal','Raúl Pérez','Sílvia Bové',
+    'Marc Pou','Laura Gil',
+  ];
+  const rivals=[];
   for(let i=0;i<n;i++){
-    if((totalTime*(0.84+Math.random()*0.32))<totalTime)pos++;
+    const rt=totalTime*(0.84+Math.random()*0.32);
+    rivals.push({name:rivalNames[i%rivalNames.length],time:rt});
   }
+  rivals.sort((a,b)=>a.time-b.time);
+  // Find athlete position among rivals
+  let pos=1;
+  for(const rv of rivals){if(rv.time<totalTime)pos++;}
   pos=Math.min(pos,n+1);
-  return{race,segments:segs,totalTime,finalPos:pos,totalParticipants:n+1};
+  // Attach nearest rivals to each aid segment for display
+  segs.forEach(seg=>{
+    if(seg.isAid){
+      // Estimate position at this point proportionally
+      const progress=seg.cumTime/totalTime;
+      const estTime=totalTime*progress;
+      const nearRivals=rivals.map(rv=>({name:rv.name,time:rv.time*progress}))
+        .sort((a,b)=>a.time-b.time);
+      const myRank=nearRivals.filter(r=>r.time<estTime).length+1;
+      const above=nearRivals.filter(r=>r.time<estTime).slice(-2);
+      const below=nearRivals.filter(r=>r.time>=estTime).slice(0,2);
+      seg.aidRivals={myRank,above,below,myTime:estTime};
+    }
+  });
+  return{race,segments:segs,totalTime,finalPos:pos,totalParticipants:n+1,rivals};
 }
 
 let _coachRaceTimer=null;
+let _coachRadioPauseTimer=null;
+let _coachRadioPauseVal=0;  // countdown 0–35 (×100ms = 3.5s)
+
+function clearCoachRadioPause(){
+  if(_coachRadioPauseTimer){clearInterval(_coachRadioPauseTimer);_coachRadioPauseTimer=null;}
+  _coachRadioPauseVal=0;
+}
+
+function startRadioPause(onDone){
+  clearCoachRadioPause();
+  _coachRadioPauseVal=35; // 35 × 100ms = 3.5s
+  G.coachRadioWindowOpen=true;
+  // Update the countdown bar every 100ms
+  _coachRadioPauseTimer=setInterval(()=>{
+    _coachRadioPauseVal--;
+    const bar=document.getElementById('coach-radio-bar');
+    const secs=document.getElementById('coach-radio-secs');
+    if(bar)bar.style.width=(_coachRadioPauseVal/35*100)+'%';
+    if(secs)secs.textContent=Math.ceil(_coachRadioPauseVal/10);
+    if(_coachRadioPauseVal<=0){
+      clearCoachRadioPause();
+      G.coachRadioWindowOpen=false;
+      onDone();
+    }
+  },100);
+}
+
 function startCoachRaceAnim(){
   clearCoachRaceTimer();
+  clearCoachRadioPause();
+  G.coachRadioWindowOpen=false;
   _coachRaceTimer=setInterval(()=>{
-    if(G.coachRaceAidPaused||G.coachRaceEventPending)return;
+    if(G.coachRaceAidPaused||G.coachRaceEventPending||G.coachRadioWindowOpen)return;
     const data=G.coachRaceData;
     if(!data){clearCoachRaceTimer();return;}
     if(G.coachRaceAnimIdx>=data.segments.length){clearCoachRaceTimer();render();return;}
@@ -6973,10 +7671,14 @@ function startCoachRaceAnim(){
     }
     // Pause for aid station
     if(seg.isAid&&G.coachRaceAnimIdx<data.segments.length){
-      G.coachRaceAidPaused=true;clearCoachRaceTimer();
+      G.coachRaceAidPaused=true;clearCoachRaceTimer();render();return;
     }
     render();
-  },1400);
+    // Open 3.5s radio window (not on last seg, not on aid)
+    if(G.coachRaceAnimIdx<data.segments.length&&!seg.isAid){
+      startRadioPause(()=>{render();});
+    }
+  },1500);
 }
 function clearCoachRaceTimer(){
   if(_coachRaceTimer){clearInterval(_coachRaceTimer);_coachRaceTimer=null;}
@@ -6991,6 +7693,7 @@ function renderCoachRace(){
   const isDone=G.coachRaceAnimIdx>=data.segments.length&&!G.coachRaceAidPaused&&!G.coachRaceEventPending;
   const aidSeg=G.coachRaceAidPaused?data.segments[G.coachRaceAnimIdx-1]:null;
   const midEvt=G.coachRaceEventPending;
+  const currentSeg=!isDone&&!G.coachRaceAidPaused&&!midEvt&&G.coachRaceAnimIdx>0?data.segments[G.coachRaceAnimIdx-1]:null;
   const COL={climb:'#639922',descent:'#E24B4A',flat:'#888780'};
   const ICO={climb:'▲',descent:'▼',flat:'▶'};
   const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
@@ -7000,58 +7703,134 @@ function renderCoachRace(){
   const rival=G.coachAthlete?.rivalName||'el rival';
   const aName=G.coachAthlete?.name||'el atleta';
   const dc=G.coachDayCondition;
+  const gelsLeft=(G.coachGels||3)-(G.coachGelsUsed||0);
+  const lastSeg=shown[shown.length-1];
+
+  // Radio: show only when the 3.5s window is open
+  const showRadio=G.coachRadioWindowOpen&&!G.coachRaceAidPaused&&!midEvt&&!isDone;
+  const radioUsedHere=G.coachRadioUsed[G.coachRaceAnimIdx-1];
+  const highTrust=G.coachTrust>=70;
 
   el.innerHTML=`
-    ${dc&&G.coachRaceAnimIdx===0?`<div class="hint" style="margin-bottom:12px">🌅 ${dc.text}</div>`:''}
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    ${dc&&G.coachRaceAnimIdx<=1?`<div class="hint" style="margin-bottom:10px;font-size:12px">🌅 ${dc.text}</div>`:''}
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
       <div style="flex:1">
         <div style="font-size:15px;font-weight:700">${esc(race.name)}</div>
         <div style="font-size:12px;color:#888">${race.type} · ${race.km}km · ${race.desnivel}</div>
       </div>
       <div style="font-size:12px;background:#f5f4f0;padding:4px 10px;border-radius:6px;flex-shrink:0">${Math.round(kmDone)}/${race.km}km</div>
     </div>
-    <div style="height:5px;background:#e5e4de;border-radius:3px;margin-bottom:14px;overflow:hidden">
+    <div style="height:5px;background:#e5e4de;border-radius:3px;margin-bottom:12px;overflow:hidden">
       <div style="width:${pct}%;height:100%;background:#4a90d9;border-radius:3px;transition:width .4s"></div>
     </div>
+
     ${shown.length===0?`<div style="text-align:center;padding:30px 0;color:#aaa;font-size:14px">⏳ Preparando salida...</div>`:''}
     <div id="coach-race-feed">
     ${shown.map((seg,i)=>{
       const isLast=i===shown.length-1;
-      const bg=seg.isAid?'#fef9ec':isLast?'#f0f6ff':'#fafaf8';
-      const brd=seg.isAid?'#e8c97a':isLast?'#4a90d9':'#e0dfd8';
+      const bg=seg.isAid?'#fef9ec':isLast&&!isDone?'#f0f6ff':'#fafaf8';
+      const brd=seg.isAid?'#e8c97a':isLast&&!isDone?'#4a90d9':'#e0dfd8';
+      const usedRadio=G.coachRadioUsed[i];
       return`<div class="narrative-item ${seg.isAid?'aid-stop':''}" style="background:${bg};border-color:${brd}">
         <div style="display:flex;justify-content:space-between;margin-bottom:3px">
           <span style="font-size:12px;font-weight:600;color:${COL[seg.type]}">${ICO[seg.type]} ${esc(seg.name)}</span>
           ${seg.isAid?`<span style="font-size:12px;font-weight:600;color:#c07a10">🔵 Avituallamiento</span>`:''}
         </div>
         <div style="font-size:13px;color:#555">${seg.narrative}</div>
+        ${usedRadio?`<div style="font-size:11px;color:#4a90d9;margin-top:3px">📻 ${usedRadio}</div>`:''}
         ${isLast&&!isDone?`<div style="margin-top:5px;display:flex;gap:12px;font-size:12px;color:#888">
           <span>⚡ ${seg.energy}%</span><span>🦵 ${seg.legs}%</span><span>💧 ${seg.hydration}%</span>
+          ${gelsLeft>0?`<span>🍬 ×${gelsLeft}</span>`:''}
         </div>`:''}
       </div>`;
     }).join('')}
     </div>
 
+    ${showRadio&&!radioUsedHere?`
+    <div style="margin-top:10px;background:#f0f6ff;border:0.5px solid #4a90d9;border-radius:10px;padding:10px 12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:12px;font-weight:700;color:#4a90d9">📻 Radio</div>
+        <div style="font-size:11px;color:#aaa">Se cierra solo en <span id="coach-radio-secs">${Math.ceil(_coachRadioPauseVal/10)}</span>s</div>
+      </div>
+      <div style="height:3px;background:#dde8f8;border-radius:2px;overflow:hidden;margin-bottom:10px">
+        <div id="coach-radio-bar" style="height:100%;background:#4a90d9;border-radius:2px;width:${(_coachRadioPauseVal/35*100).toFixed(0)}%;transition:width .1s linear"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${COACH_RADIO_MESSAGES.map((m,mi)=>{
+          const disabled=m.id==='attack'&&lastSeg?.energy<20;
+          const canAlone=m.id==='silent'&&highTrust;
+          return`<button onclick="doCoachRadio(${mi})" style="padding:8px;border-radius:6px;border:0.5px solid ${canAlone?'#4a8a2a':'#ddd'};background:${canAlone?'#f2faf0':'#fff'};font-size:12px;text-align:left;cursor:pointer;opacity:${disabled?0.4:1}" ${disabled?'disabled':''}>
+            <div style="font-weight:600">${m.label}</div>
+            <div style="color:#aaa;font-size:11px">${m.desc}</div>
+          </button>`;
+        }).join('')}
+      </div>
+    </div>`:''}
+
+    ${showRadio&&radioUsedHere?`
+    <div style="margin-top:8px;background:#f8f7f3;border:0.5px solid #e0dfd8;border-radius:8px;padding:8px 12px">
+      <span style="font-size:12px;color:#4a90d9">📻 ${radioUsedHere}</span>
+    </div>`:''}
+
     ${midEvt&&!isDone?`
-      <div class="card" style="border-color:#c07a10;border-width:1.5px;margin-top:12px">
-        <div style="font-size:15px;font-weight:700;margin-bottom:6px">${midEvt.icon||'⚡'} ${midEvt.title}</div>
-        <div style="font-size:13px;color:#555;margin-bottom:12px;font-style:italic">"${(midEvt.desc||'').replace(/\{\{name\}\}/g,esc(aName)).replace(/\{\{rival\}\}/g,esc(rival))}"</div>
-        ${midEvt.choices.map((c,ci)=>`
-          <button class="main" style="margin-top:${ci===0?'0':'6px'}" onclick="doCoachMidRaceEvent(${ci})">${c.text}</button>
-        `).join('')}
-      </div>`:''}
+    <div class="card" style="border-color:#c07a10;border-width:1.5px;margin-top:10px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px">${midEvt.icon||'⚡'} ${midEvt.title}</div>
+      <div style="font-size:13px;color:#555;margin-bottom:12px;font-style:italic">"${(midEvt.desc||'').replace(/\{\{name\}\}/g,esc(aName)).replace(/\{\{rival\}\}/g,esc(rival))}"</div>
+      ${midEvt.choices.map((c,ci)=>`
+        <button class="main" style="margin-top:${ci===0?'0':'6px'}" onclick="doCoachMidRaceEvent(${ci})">${c.text}</button>
+      `).join('')}
+    </div>`:''}
 
     ${aidSeg&&!midEvt?`
-      <div class="card" style="border-color:#4a90d9;margin-top:12px">
-        <div style="font-size:14px;font-weight:700;margin-bottom:8px">📍 Avituallamiento — ¿Qué le dices a ${esc(aName)}?</div>
-        <div style="display:flex;gap:12px;font-size:12px;color:#888;margin-bottom:10px">
-          <span>⚡ ${aidSeg.energy}%</span><span>🦵 ${aidSeg.legs}%</span><span>💧 ${aidSeg.hydration}%</span>
+    <div class="card" style="border-color:#4a90d9;margin-top:10px">
+      <div style="font-size:14px;font-weight:700;margin-bottom:8px">📍 Avituallamiento ${aidSeg.aidNum||''} — ¿Qué hace ${esc(aName)}?</div>
+      <div style="display:flex;gap:12px;font-size:12px;color:#888;margin-bottom:10px">
+        <span>⚡ ${aidSeg.energy}%</span><span>🦵 ${aidSeg.legs}%</span><span>💧 ${aidSeg.hydration}%</span><span>🍬 ×${gelsLeft}</span>
+      </div>
+      ${aidSeg.energy<30||aidSeg.legs<25?`<div class="warn" style="margin-bottom:10px;font-size:12px">⚠️ El atleta llega muy cargado. Continuar tiene riesgo real.</div>`:''}
+      ${(G.coachNemesis&&G.coachNemesis.wins>=2)?`<div class="hint" style="margin-bottom:10px;font-size:12px">🎯 ${esc(G.coachNemesis.name)} está por delante. Puede que estés a tiempo.</div>`:''}
+
+      ${aidSeg.aidRivals?`
+      <div style="background:#f5f4f0;border-radius:8px;padding:8px 12px;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Clasificación en este punto</div>
+        ${aidSeg.aidRivals.above.map(r=>`
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:#888;padding:2px 0">
+            <span>#${aidSeg.aidRivals.myRank-(aidSeg.aidRivals.above.indexOf(r)+1)} ${esc(r.name)}</span>
+            <span style="color:#c0392b">−${fmt(aidSeg.aidRivals.myTime-r.time)}</span>
+          </div>`).join('')}
+        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#1a1a1a;padding:3px 0;background:#fff;border-radius:4px;padding:4px 8px;margin:3px -8px">
+          <span>#${aidSeg.aidRivals.myRank} ${esc(aName)}</span>
+          <span>← aquí</span>
         </div>
-        ${aidSeg.energy<30||aidSeg.legs<25?`<div class="warn" style="margin-bottom:10px;font-size:12px">El atleta llega muy cargado. Continuar tiene riesgo real.</div>`:''}
-        <button class="main" style="margin-top:0" onclick="doCoachAidAdvice('mantener')">Continúa como vas</button>
-        <button class="main" style="margin-top:6px" onclick="doCoachAidAdvice('bajar')">Baja el ritmo — ahorra para el final</button>
-        ${aidSeg.energy<30||aidSeg.legs<25?`<button class="main" style="margin-top:6px;border-color:#c0392b;color:#c0392b" onclick="doCoachAidAdvice('abandonar')">Abandona — conserva el cuerpo</button>`:''}
+        ${aidSeg.aidRivals.below.map(r=>`
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:#888;padding:2px 0">
+            <span>#${aidSeg.aidRivals.myRank+(aidSeg.aidRivals.below.indexOf(r)+1)} ${esc(r.name)}</span>
+            <span style="color:#2d7a2d">+${fmt(r.time-aidSeg.aidRivals.myTime)}</span>
+          </div>`).join('')}
       </div>`:''}
+
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Ritmo</div>
+      <button class="main" style="margin-top:0" onclick="doCoachAidAdvice('mantener')">Continúa como vas</button>
+      <button class="main" style="margin-top:6px" onclick="doCoachAidAdvice('bajar')">Baja el ritmo — ahorra para el final</button>
+      ${aidSeg.energy<30||aidSeg.legs<25?`<button class="main" style="margin-top:6px;border-color:#c0392b;color:#c0392b" onclick="doCoachAidAdvice('abandonar')">Abandona — conserva el cuerpo</button>`:''}
+
+      ${gelsLeft>0&&!G.coachAidExtras[aidSeg.aidNum||0]?`
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-top:12px;margin-bottom:6px">Nutrición</div>
+      <button class="main" style="margin-top:0;border-color:#c07a10;color:#c07a10" onclick="doCoachGiveGel(${aidSeg.aidNum||0})">
+        🍬 Dar gel (${gelsLeft} disponibles) — +12% energía
+      </button>`:''}
+
+      ${race.km>=35&&!G.coachAidExtras['socks_'+( aidSeg.aidNum||0)]?`
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-top:12px;margin-bottom:6px">Cuidado del pie</div>
+      <button class="main" style="margin-top:0" onclick="doCoachSocksChange(${aidSeg.aidNum||0})">
+        🧦 Cambio de calcetines (+90s pero previene pérdida de piernas en km finales)
+      </button>`:''}
+
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-top:12px;margin-bottom:6px">Información táctica</div>
+      <button class="main" style="margin-top:0" onclick="doCoachTacticInfo(${aidSeg.aidNum||0})">
+        📊 Decirle su posición y diferencia con el siguiente
+      </button>
+    </div>`:''}
 
     ${isDone?`
       ${G.coachLastDialogue?`
@@ -7059,7 +7838,7 @@ function renderCoachRace(){
           <div style="font-size:12px;color:#c07a10;font-weight:600;margin-bottom:4px">${esc(aName)} · post-carrera</div>
           <div style="font-size:14px;color:#333;font-style:italic">${G.coachLastDialogue}</div>
         </div>`:''}
-      <div class="card" style="background:#f0faf0;border-color:#4a8a2a;text-align:center;padding:20px">
+      <div class="card" style="background:#f0faf0;border-color:#4a8a2a;text-align:center;padding:20px;margin-bottom:0">
         <div style="font-size:32px;margin-bottom:6px">${data.finalPos<=3?'🏆':data.finalPos<=10?'🎯':'🏃'}</div>
         <div style="font-size:22px;font-weight:700;margin-bottom:4px">${data.finalPos<=3?`Podio — #${data.finalPos}`:`Posición #${data.finalPos}`}</div>
         <div style="font-size:13px;color:#888">${data.totalParticipants} participantes · ${fmt(data.totalTime)}</div>
@@ -7084,13 +7863,94 @@ window.doCoachAidAdvice=advice=>{
     G.coachBodyLoad=Math.max(0,G.coachBodyLoad-8);
     G.coachRaceIdx++;
     showToast('DNF — el atleta abandona','#c0392b');
-    clearCoachRaceTimer();G.screen='coachHome';render();return;
+    clearCoachRaceTimer();clearCoachRadioPause();G.coachRadioWindowOpen=false;
+    G.screen='coachHome';render();return;
   }
   if(advice==='mantener')trustDelta=aidSeg.energy>50?+1:-1;
   if(advice==='bajar')   trustDelta=aidSeg.energy<45?+2:0;
   G.coachTrust=Math.max(0,Math.min(100,G.coachTrust+trustDelta));
   G.coachRaceAidPaused=false;
   startCoachRaceAnim();render();
+};
+
+window.doCoachRadio=msgIdx=>{
+  const msg=COACH_RADIO_MESSAGES[msgIdx];if(!msg)return;
+  const segIdx=G.coachRaceAnimIdx-1;
+  G.coachRadioUsed[segIdx]=msg.label;
+  // Close the radio window immediately and continue
+  clearCoachRadioPause();
+  G.coachRadioWindowOpen=false;
+  // Apply effects to race data
+  const data=G.coachRaceData;if(!data)return;
+  if(msg.timeMod)data.totalTime+=msg.timeMod;
+  if(msg.energyCost&&data.segments[segIdx])
+    data.segments[segIdx].energy=Math.max(0,(data.segments[segIdx].energy||60)-msg.energyCost);
+  if(msg.energySave&&data.segments[segIdx])
+    data.segments[segIdx].energy=Math.min(100,(data.segments[segIdx].energy||60)+(msg.energySave||0));
+  if(msg.trustBoost)G.coachTrust=Math.min(100,(G.coachTrust||60)+(msg.trustBoost||0));
+  // Rebelde ignores sometimes
+  if(G.coachAthlete?.personality==='rebelde'&&Math.random()<0.3){
+    showToast(`${G.coachAthlete.name} ignora la indicación`,'#c0392b');
+    G.coachRadioUsed[segIdx]='(ignorado)';
+  } else {
+    showToast(msg.id==='silent'?'Sin radio':msg.label,'#4a90d9');
+  }
+  render();
+};
+
+window.doCoachGiveGel=aidNum=>{
+  if((G.coachGelsUsed||0)>=(G.coachGels||3))return;
+  G.coachGelsUsed=(G.coachGelsUsed||0)+1;
+  if(!G.coachAidExtras)G.coachAidExtras={};
+  G.coachAidExtras[aidNum]=true;
+  // Boost energy in remaining segs
+  const data=G.coachRaceData;if(!data)return;
+  const aidSegIdx=G.coachRaceAnimIdx-1;
+  for(let i=aidSegIdx;i<data.segments.length;i++){
+    data.segments[i].energy=Math.min(100,(data.segments[i].energy||60)+12);
+  }
+  data.totalTime-=15; // small time benefit from better energy
+  showToast('🍬 Gel dado — +12% energía','#c07a10');
+  render();
+};
+
+window.doCoachSocksChange=aidNum=>{
+  if(!G.coachAidExtras)G.coachAidExtras={};
+  G.coachAidExtras['socks_'+aidNum]=true;
+  const data=G.coachRaceData;if(!data)return;
+  data.totalTime+=90; // costs 90s
+  // Protect legs in last 40% of race
+  const startIdx=Math.floor(data.segments.length*0.6);
+  for(let i=startIdx;i<data.segments.length;i++){
+    data.segments[i].legs=Math.min(100,(data.segments[i].legs||40)+8);
+  }
+  showToast('🧦 Calcetines cambiados (+90s pero km finales mejor)','#888');
+  render();
+};
+
+window.doCoachTacticInfo=aidNum=>{
+  if(!G.coachAidExtras)G.coachAidExtras={};
+  G.coachAidExtras['tactic_'+aidNum]=true;
+  const data=G.coachRaceData;if(!data)return;
+  const pos=data.finalPos;
+  const gap=Math.floor(Math.random()*180+30);
+  const highTrust=G.coachTrust>=70;
+  let msg='';
+  if(pos<=5){
+    msg=`"Vas ${pos}º. El siguiente está a ${gap}s. Puedes alcanzarle."`;
+    if(highTrust){data.totalTime-=20;G.coachTrust=Math.min(100,G.coachTrust+1);}
+    else{data.totalTime-=8;}
+  } else {
+    msg=`"Llevas ${pos}º. El de delante está a ${gap}s. Gestiona y cierra posiciones."`;
+    if(G.coachAthlete?.personality==='motivado'){
+      G.coachTrust=Math.min(100,G.coachTrust+2);data.totalTime-=15;
+    }
+  }
+  showToast('📊 Información dada','#4a90d9');
+  // store message to show in feed
+  const seg=data.segments[G.coachRaceAnimIdx-1];
+  if(seg)seg.tacticMsg=msg;
+  render();
 };
 
 window.doCoachRaceFinish=()=>{
@@ -7117,11 +7977,38 @@ window.doCoachRaceFinish=()=>{
     else G.coachNemesis.wins=(G.coachNemesis.wins||0)+1;
   }
 
-  G.coachRaceResults.push({pos,dnf:false,prize,coachCut,raceName:race.name});
+  G.coachRaceResults.push({pos,dnf:false,prize,coachCut,raceName:race.name,tier:race.tier||'local'});
   G.coachEarnings=(G.coachEarnings||0)+coachCut+mFee;
+  // Sponsor income
+  (G.coachSponsors||[]).forEach(sp=>{
+    const monthly=Math.round((sp.salary||0)*(sp.coachCut||0.15)/12);
+    G.coachEarnings=(G.coachEarnings||0)+monthly;
+  });
   G.coachTrust=Math.max(0,Math.min(100,G.coachTrust+trustD));
   G.coachReputation=Math.min(100,(G.coachReputation||0)+repG);
   G.coachBodyLoad=bodyLoadAfterRace(race.km);
+
+  // Injury check based on bodyLoad
+  if(!G.coachInjury){
+    const load=G.coachBodyLoad;
+    const candidates=COACH_INJURY_TYPES.filter(t=>load>=t.causeLoad);
+    if(candidates.length&&Math.random()<(load-65)/100){
+      const inj=candidates[Math.floor(Math.random()*candidates.length)];
+      G.coachInjury={...inj,racesLeft:inj.racesOut};
+      // Apply stat penalties
+      Object.entries(inj.statPenalty||{}).forEach(([k,v])=>{
+        if(G.coachAthlete.currentStats[k]!==undefined)
+          G.coachAthlete.currentStats[k]=Math.max(10,G.coachAthlete.currentStats[k]+v);
+      });
+      G.coachTrust=Math.max(0,G.coachTrust-4); // coach pushed too hard
+      showToast(`⚠️ ${inj.label} — ${inj.racesOut} carrera${inj.racesOut>1?'s':''} de baja`,'#c0392b');
+    }
+  } else {
+    // Recover: each race ticks down
+    G.coachInjury.racesLeft=Math.max(0,(G.coachInjury.racesLeft||1)-1);
+    if(G.coachInjury.racesLeft===0)G.coachInjury=null;
+  }
+
   G.coachRaceIdx++;G.coachRaceData=null;
   G.coachRaceEventPending=null;G.coachDayCondition=null;
 
@@ -7142,49 +8029,105 @@ function renderCoachSeasonEnd(){
   const dnfs=results.filter(r=>r.dnf).length;
   const totalCut=results.reduce((s,r)=>s+(r.coachCut||0),0);
   const mFees=(a.monthlyFee||250)*12;
-  const total=totalCut+mFees;
+  // Sponsor income
+  const sponsorIncome=(G.coachSponsors||[]).reduce((s,sp)=>s+Math.round((sp.salary||0)*(sp.coachCut||0.15)),0);
+  const total=totalCut+mFees+sponsorIncome;
   const trustColor=G.coachTrust>=60?'#2d7a2d':G.coachTrust>=30?'#c07a10':'#c0392b';
+
+  // Check objective
+  const obj=G.coachSeasonObjective;
+  let objMet=false, objTrustDelta=0;
+  if(obj){
+    try{objMet=obj.checkAll?obj.checkAll(results):results.some(r=>obj.check(r,results));}catch(e){objMet=false;}
+    G.coachSeasonObjective={...obj,met:objMet};
+    objTrustDelta=objMet?(obj.reward||8):(obj.penalty||-5);
+    G.coachTrust=Math.max(0,Math.min(100,G.coachTrust+objTrustDelta));
+  }
+
+  // Check sponsor objectives
+  const sponsorResults=(G.coachSponsors||[]).map(sp=>{
+    let met=false;
+    if(sp.objKey==='finish2')met=results.filter(r=>!r.dnf).length>=2;
+    else if(sp.objKey==='finish3')met=results.filter(r=>!r.dnf).length>=3;
+    else if(sp.objKey==='top15')met=results.some(r=>r.pos<=15&&!r.dnf);
+    else if(sp.objKey==='top10')met=results.some(r=>r.pos<=10&&!r.dnf);
+    else if(sp.objKey==='top5')met=results.some(r=>r.pos<=5&&!r.dnf);
+    else if(sp.objKey==='podio')met=results.some(r=>r.pos<=3&&!r.dnf);
+    return{...sp,met};
+  });
+
   const willRenew=G.coachTrust>=40;
   const completedSeasons=((G.coachAthleteHistory||[]).filter(h=>h.completed).length)+(G.coachSeason-1);
   const clubUnlock=completedSeasons>=2;
+  const bestPos=results.filter(r=>!r.dnf).reduce((best,r)=>Math.min(best,r.pos),999);
+
   el.innerHTML=`
     <div style="text-align:center;padding:16px 0 18px">
       <div style="font-size:32px;margin-bottom:6px">${wins>0?'🏆':podiums>0?'🎯':'📋'}</div>
       <h2>Balance de temporada</h2>
       <p class="sub">Temporada ${G.coachSeason} con ${esc(a.name)}</p>
     </div>
+
+    ${obj?`
+    <div class="card" style="margin-bottom:12px;border-color:${objMet?'#4a8a2a':'#f5b8b8'};border-width:1.5px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:20px">${objMet?'✅':'❌'}</span>
+        <div style="flex:1">
+          <div style="font-size:12px;color:#888;margin-bottom:2px">Objetivo de ${esc(a.name)}</div>
+          <div style="font-size:13px;font-weight:600">${obj.label}</div>
+        </div>
+        <span style="font-size:13px;font-weight:700;color:${objTrustDelta>=0?'#2d7a2d':'#c0392b'}">${objTrustDelta>=0?'+':''}${objTrustDelta} conf.</span>
+      </div>
+    </div>`:''}
+
     <div class="card" style="margin-bottom:12px">
       <div class="sec-title-sm">Resultados</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
-        ${[['Carreras',results.filter(r=>!r.dnf).length],['Podios',podiums],['DNF',dnfs]].map(([l,v])=>`
-          <div style="background:#f5f4f0;border-radius:8px;padding:10px">
-            <div style="font-size:12px;color:#aaa">${l}</div>
-            <div style="font-size:20px;font-weight:700">${v}</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">
+        ${[['Carreras',results.filter(r=>!r.dnf).length],['Podios',podiums],['DNF',dnfs],['Mejor','#'+(bestPos<999?bestPos:'—')]].map(([l,v])=>`
+          <div style="background:#f5f4f0;border-radius:8px;padding:8px">
+            <div style="font-size:11px;color:#aaa">${l}</div>
+            <div style="font-size:18px;font-weight:700">${v}</div>
           </div>`).join('')}
       </div>
     </div>
+
     <div class="card" style="margin-bottom:12px">
       <div class="sec-title-sm">Economía</div>
       <div class="fin-row"><span>Honorarios (12 meses)</span><span class="plus">+€${mFees}</span></div>
-      <div class="fin-row"><span>Bonus podios (20% premios)</span><span class="plus">+€${totalCut}</span></div>
+      <div class="fin-row"><span>Bonus podios (20%)</span><span class="plus">+€${totalCut}</span></div>
+      ${sponsorIncome>0?`<div class="fin-row"><span>Comisión sponsors</span><span class="plus">+€${sponsorIncome}</span></div>`:''}
       <div class="fin-row tot"><span>Total temporada</span><span class="plus">+€${total}</span></div>
-      <div style="font-size:12px;color:#aaa;margin-top:8px">Reputación: ${G.coachReputation}/100</div>
+      <div style="font-size:12px;color:#aaa;margin-top:6px">Reputación: ${G.coachReputation}/100</div>
     </div>
+
+    ${sponsorResults.length>0?`
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Sponsors</div>
+      ${sponsorResults.map(sp=>`
+        <div class="history-row">
+          <div>
+            <div style="font-size:13px;font-weight:500">${esc(sp.name)}</div>
+            <div style="font-size:12px;color:#888">${sp.objective}</div>
+          </div>
+          <span style="font-size:12px;font-weight:700;color:${sp.met?'#2d7a2d':'#c0392b'}">${sp.met?'✓ Cumplido':'✗ No cumplido'}</span>
+        </div>`).join('')}
+    </div>`:''}
+
     <div class="card" style="margin-bottom:14px">
       <div class="sec-title-sm">Decisión del atleta</div>
       ${willRenew?`
         <div class="note">
-          <strong>${esc(a.name)} quiere renovar.</strong><br>Confianza: ${G.coachTrust}/100. Seguirá contigo la próxima temporada.
+          <strong>${esc(a.name)} quiere renovar.</strong><br>Confianza: ${G.coachTrust}/100.
         </div>
-        <button class="main" style="margin-top:10px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doCoachNextSeason()">Temporada ${G.coachSeason+1} con ${esc(a.name)} →</button>
+        <button class="main" style="margin-top:10px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doCoachNextSeason()">Temporada ${G.coachSeason+1} →</button>
       `:`
         <div class="danger">
-          <strong>${esc(a.name)} no renueva.</strong><br>La confianza cayó demasiado (${G.coachTrust}/100). El atleta busca otro entrenador.
+          <strong>${esc(a.name)} no renueva.</strong><br>Confianza: ${G.coachTrust}/100.
         </div>
         <button class="main" style="margin-top:10px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doCoachNewAthlete()">Buscar nuevo atleta →</button>
       `}
     </div>
-    ${clubUnlock?`<div class="note" style="margin-bottom:12px">🏕️ <strong>Modo Club — próximamente</strong> — ${completedSeasons} temporadas completadas. El Club Montaña Pirineo empieza a interesarse por ti.</div>`:''}
+    ${clubUnlock?`<div class="note" style="margin-bottom:12px">🏕️ <strong>Modo Club — próximamente</strong> — ${completedSeasons} temporadas completadas.</div>`:''}
     <button class="main" style="opacity:0.5" onclick="G=freshState();render()">← Menú principal</button>`;
 }
 
@@ -7193,12 +8136,17 @@ window.doCoachNextSeason=()=>{
   G.coachAthleteHistory.push({name:G.coachAthlete.name,season:G.coachSeason,
     wins:(G.coachRaceResults||[]).filter(r=>r.pos===1&&!r.dnf).length,
     podiums:(G.coachRaceResults||[]).filter(r=>r.pos<=3&&!r.dnf).length,
+    bestPos:(G.coachRaceResults||[]).filter(r=>!r.dnf).reduce((b,r)=>Math.min(b,r.pos),999),
     trust:G.coachTrust,completed:true});
   G.coachSeason++;G.coachSelectedRaces=[];G.coachRaceIdx=0;
   G.coachRaceResults=[];G.coachLastTraining=null;
   G.coachBodyLoad=Math.max(0,(G.coachBodyLoad||0)-20);
   G.coachPendingEvent=null;G.coachLastDialogue=null;
   G.coachRaceEventPending=null;G.coachEventLog=[];
+  G.coachGels=3;G.coachGelsUsed=0;G.coachRadioUsed={};G.coachAidExtras={};G.coachPreRaceBlock=null;
+  G.coachSeasonObjective=null;G.coachInjury=null;G.coachSponsors=[];G.coachSponsorPool=null;G.coachRadioWindowOpen=false;
+  generateCoachSeasonObjective();
+  generateCoachSponsorPool();
   // Athlete grows slightly between seasons
   const a=G.coachAthlete;
   Object.keys(a.currentStats).forEach(k=>{
@@ -7269,43 +8217,92 @@ function renderCoachAthleteTab(){
 function renderCoachRepTab(){
   const el=document.getElementById('main');
   const hist=G.coachAthleteHistory||[];
-  const curWins=(G.coachRaceResults||[]).filter(r=>r.pos===1&&!r.dnf).length;
-  const curPodiums=(G.coachRaceResults||[]).filter(r=>r.pos<=3&&!r.dnf).length;
+  const curResults=G.coachRaceResults||[];
+  const curWins=curResults.filter(r=>r.pos===1&&!r.dnf).length;
+  const curPodiums=curResults.filter(r=>r.pos<=3&&!r.dnf).length;
+  const curBest=curResults.filter(r=>!r.dnf).reduce((b,r)=>Math.min(b,r.pos),999);
   const totalWins=hist.reduce((s,h)=>s+(h.wins||0),0)+curWins;
   const totalPodiums=hist.reduce((s,h)=>s+(h.podiums||0),0)+curPodiums;
   const totalAthletes=hist.length+(G.coachAthlete?1:0);
+  const totalSeasons=hist.length+(G.coachSeason||1);
   const rep=G.coachReputation||0;
-  const repDesc=rep<20?'Entrenador novato — el circuito apenas te conoce.':rep<40?'Empiezas a tener nombre en las carreras regionales.':rep<60?'Referente conocido. Los atletas preguntan por ti.':rep<80?'Coach de confianza en el circuito nacional.':'🌟 Entrenador de élite — los mejores te buscan.';
+  const repTier=rep<20?{label:'Novato',color:'#aaa'}:rep<40?{label:'Regional',color:'#4a90d9'}:rep<60?{label:'Conocido',color:'#2d7a2d'}:rep<80?{label:'Nacional',color:'#c07a10'}:{label:'Élite 🌟',color:'#c0392b'};
+  const repDesc=rep<20?'El circuito apenas te conoce.':rep<40?'Tienes nombre en las carreras regionales.':rep<60?'Los atletas preguntan por ti.':rep<80?'Coach de confianza en el circuito nacional.':'Los mejores atletas te buscan.';
+  const a=G.coachAthlete;
+
+  // Build per-season data for sparkline
+  const allSeasons=[
+    ...hist.map(h=>({name:h.name,season:h.season,wins:h.wins||0,podiums:h.podiums||0,trust:h.trust,completed:h.completed,bestPos:h.bestPos||999})),
+    ...(a?[{name:a.name,season:G.coachSeason,wins:curWins,podiums:curPodiums,trust:G.coachTrust,completed:false,bestPos:curBest,current:true}]:[])
+  ].sort((a,b)=>a.season-b.season);
+
   el.innerHTML=`
-    <div class="card" style="margin-bottom:12px;text-align:center">
-      <div style="font-size:30px;font-weight:700;color:#c07a10">${rep}<span style="font-size:16px;color:#aaa">/100</span></div>
-      <div style="font-size:13px;color:#888;margin-top:2px">Reputación como entrenador</div>
-      <div style="height:6px;background:#e5e4de;border-radius:3px;margin:10px 0;overflow:hidden">
-        <div style="width:${rep}%;height:100%;background:#c07a10;border-radius:3px;transition:width .4s"></div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="flex:1">
+          <div style="font-size:24px;font-weight:700;color:${repTier.color}">${rep}<span style="font-size:14px;color:#aaa">/100</span></div>
+          <div style="font-size:12px;color:#888;margin-top:1px">Reputación · <strong style="color:${repTier.color}">${repTier.label}</strong></div>
+        </div>
+        <div style="font-size:28px">📋</div>
+      </div>
+      <div style="height:5px;background:#e5e4de;border-radius:3px;margin:8px 0;overflow:hidden">
+        <div style="width:${rep}%;height:100%;background:${repTier.color};border-radius:3px;transition:width .5s"></div>
       </div>
       <div style="font-size:12px;color:#aaa">${repDesc}</div>
     </div>
+
     <div class="card" style="margin-bottom:12px">
-      <div class="sec-title-sm">Palmares como entrenador</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
-        ${[['Atletas',totalAthletes],['Victorias',totalWins],['Podios',totalPodiums]].map(([l,v])=>`
-          <div style="background:#f5f4f0;border-radius:8px;padding:10px">
-            <div style="font-size:12px;color:#aaa">${l}</div>
-            <div style="font-size:20px;font-weight:700">${v}</div>
+      <div class="sec-title-sm">Palmares acumulado</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center">
+        ${[['Atletas',totalAthletes],['Temporadas',totalSeasons],['Victorias',totalWins],['Podios',totalPodiums]].map(([l,v])=>`
+          <div style="background:#f5f4f0;border-radius:8px;padding:8px 4px">
+            <div style="font-size:11px;color:#aaa">${l}</div>
+            <div style="font-size:18px;font-weight:700">${v}</div>
           </div>`).join('')}
       </div>
     </div>
-    ${hist.length>0?`
+
+    ${a?`
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Temporada actual — ${esc(a.name)}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:13px">T${G.coachSeason} · ${SPEC_LABEL[a.spec]||a.spec}</span>
+        <span style="font-size:13px;font-weight:700;color:${G.coachTrust>=60?'#2d7a2d':G.coachTrust>=30?'#c07a10':'#c0392b'}">Confianza ${G.coachTrust}/100</span>
+      </div>
+      ${Object.entries(a.currentStats).map(([k,v])=>{
+        const base=a.baseStats?.[k]||50;
+        const diff=v-base;
+        return`<div class="bar-row" style="margin-bottom:3px">
+          <div class="bar-label" style="font-size:11px">${k.charAt(0).toUpperCase()+k.slice(1)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${v}%;background:#4a90d9"></div></div>
+          <div class="bar-pct" style="font-size:11px;color:${diff>0?'#2d7a2d':diff<0?'#c0392b':'#aaa'}">${diff>0?'+':''}${diff||0}</div>
+        </div>`;
+      }).join('')}
+    </div>`:''}
+
+    ${allSeasons.length>0?`
     <div class="card">
-      <div class="sec-title-sm">Historial de atletas</div>
-      ${hist.map(h=>`
-        <div class="history-row">
-          <div>
-            <div style="font-size:13px;font-weight:600">${esc(h.name)}</div>
-            <div style="font-size:12px;color:#888">T${h.season} · ${h.wins||0} victorias · confianza ${h.trust}</div>
+      <div class="sec-title-sm">Historial de temporadas</div>
+      ${allSeasons.map(s=>{
+        const trustC=s.trust>=60?'#2d7a2d':s.trust>=30?'#c07a10':'#c0392b';
+        const bestStr=s.bestPos<999?`Mejor #${s.bestPos}`:'—';
+        return`<div style="padding:10px 0;border-bottom:1px solid #f0ede8">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+            <div>
+              <span style="font-size:13px;font-weight:600">${esc(s.name)}</span>
+              ${s.current?`<span style="font-size:11px;background:#f0f6ff;color:#4a90d9;padding:1px 5px;border-radius:3px;margin-left:5px">Actual</span>`:''}
+            </div>
+            <span style="font-size:11px;font-weight:600;color:${s.completed?'#2d7a2d':s.current?'#4a90d9':'#c0392b'}">${s.current?'En curso':s.completed?'Renovó':'Se fue'}</span>
           </div>
-          <span style="font-size:12px;font-weight:600;color:${h.completed?'#2d7a2d':'#c0392b'}">${h.completed?'Renovó':'Se fue'}</span>
-        </div>`).join('')}
+          <div style="display:flex;gap:12px;font-size:12px;color:#888;flex-wrap:wrap">
+            <span>T${s.season}</span>
+            <span>🏆 ${s.wins} vic.</span>
+            <span>🎯 ${s.podiums} podios</span>
+            <span>${bestStr}</span>
+            <span style="color:${trustC}">Conf. ${s.trust}</span>
+          </div>
+        </div>`;
+      }).join('')}
     </div>`:`<div class="hint">Completa tu primera temporada para ver el historial.</div>`}`;
 }
 
@@ -7314,12 +8311,28 @@ window.doCoachMidRaceEvent=choiceIdx=>{
   const evt=G.coachRaceEventPending;if(!evt)return;
   const choice=evt.choices[choiceIdx];if(!choice)return;
   if(choice.trust)G.coachTrust=Math.max(0,Math.min(100,G.coachTrust+(choice.trust||0)));
+  if(choice.reputation)G.coachReputation=Math.min(100,(G.coachReputation||0)+(choice.reputation||0));
   if(choice.dnf){
     G.coachRaceResults.push({pos:999,dnf:true,prize:0,coachCut:0,raceName:G.coachRaceData?.race?.name||''});
     G.coachRaceIdx++;G.coachRaceData=null;G.coachRaceEventPending=null;
     generateCoachBetweenEvent();
     showToast('DNF — el atleta abandona','#c0392b');
     G.screen='coachHome';render();return;
+  }
+  // Apply stat effects
+  const data=G.coachRaceData;
+  if(data&&choice.timeMod)data.totalTime+=(choice.timeMod||0);
+  if(data&&choice.legBoost){
+    const si=G.coachRaceAnimIdx-1;
+    for(let i=si;i<data.segments.length;i++){
+      data.segments[i].legs=Math.min(100,(data.segments[i].legs||40)+(choice.legBoost||0));
+    }
+  }
+  if(data&&choice.energyCost){
+    const si=G.coachRaceAnimIdx-1;
+    for(let i=si;i<data.segments.length;i++){
+      data.segments[i].energy=Math.max(0,(data.segments[i].energy||60)-(choice.energyCost||0));
+    }
   }
   if(!G.coachEventLog)G.coachEventLog=[];
   G.coachEventLog.push({evtId:evt.id,choice:choice.text,trust:choice.trust||0});
@@ -7383,6 +8396,98 @@ window.doCoachEventChoice=choiceIdx=>{
   G.coachEventLog.push({evtId:ev.id,choice:c.text,trust:c.trust||0});
   G.coachPendingEvent=null;
   G.screen='coachHome';render();
+};
+
+// ── Generate season objective ──
+function generateCoachSeasonObjective(){
+  const a=G.coachAthlete;if(!a)return;
+  const pool=COACH_SEASON_OBJECTIVES[a.personality]||COACH_SEASON_OBJECTIVES.obediente;
+  const chosen=pool[Math.floor(Math.random()*pool.length)];
+  G.coachSeasonObjective={
+    id:chosen.id,label:chosen.label,desc:chosen.desc,
+    reward:chosen.reward,penalty:chosen.penalty,met:false,
+    checkAll:(all)=>{
+      const id=chosen.id;
+      if(id==='win_elite')  return(all||[]).some(r=>r.pos===1&&['elite','nacional'].includes(r.tier||''));
+      if(id==='no_abandon') return(all||[]).every(r=>!r.dnf);
+      if(id==='podio_x2')   return(all||[]).filter(x=>x.pos<=3&&!x.dnf).length>=2;
+      if(id==='top10_all')  return(all||[]).every(x=>x.dnf||x.pos<=10);
+      if(id==='finish_all') return(all||[]).filter(x=>!x.dnf).length>=(G.coachSelectedRaces||[]).length;
+      if(id==='improve_pb'){const prev=(G.coachAthleteHistory||[]).slice(-1)[0]?.bestPos||999;return(all||[]).some(x=>!x.dnf&&x.pos<prev);}
+      if(id==='no_injury')  return!G.coachInjury||(G.coachInjury?.severity||0)<2;
+      if(id==='two_races')  return(all||[]).filter(x=>!x.dnf).length>=2;
+      return false;
+    }
+  };
+}
+
+// ── Generate sponsor pool for the season ──
+function generateCoachSponsorPool(){
+  const season=G.coachSeason||1;
+  const tier=season<=1?1:2;
+  const pool=[...COACH_SPONSORS_POOL].filter(s=>s.tier<=tier).sort(()=>Math.random()-0.5);
+  G.coachSponsorPool=pool.slice(0,3);
+}
+
+// ── Sponsors screen ──
+function renderCoachSponsors(){
+  const el=document.getElementById('main');
+  const a=G.coachAthlete;
+  const pool=G.coachSponsorPool||[];
+  const active=G.coachSponsors||[];
+  const CAT_LABEL={zapatillas:'👟 Zapatillas',ropa:'👕 Ropa',nutricion:'🍬 Nutrición',tecnologia:'⌚ Tecnología'};
+  el.innerHTML=`
+    <h2>Sponsors del atleta</h2>
+    <p class="sub">${esc(a?.name||'—')} · T${G.coachSeason} · Comisión ${Math.round((pool[0]?.coachCut||0.15)*100)}%</p>
+
+    ${active.length>0?`
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Activos esta temporada</div>
+      ${active.map(sp=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f0ede8">
+          <div>
+            <div style="font-size:13px;font-weight:600">${esc(sp.name)} <span style="font-size:11px;color:#888">${CAT_LABEL[sp.cat]||sp.cat}</span></div>
+            <div style="font-size:12px;color:#aaa">${sp.objective}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;margin-left:8px">
+            <div style="font-size:13px;font-weight:700">€${sp.salary}/año</div>
+            <div style="font-size:11px;color:#4a90d9">+€${Math.round(sp.salary*(sp.coachCut||0.15))} para ti</div>
+          </div>
+        </div>`).join('')}
+    </div>`:''}
+
+    ${pool.filter(sp=>!active.find(ac=>ac.id===sp.id)).length>0?`
+    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Ofertas disponibles</div>
+    ${pool.filter(sp=>!active.find(ac=>ac.id===sp.id)).map(sp=>`
+      <div class="card" style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div>
+            <div style="font-size:14px;font-weight:600">${esc(sp.name)}</div>
+            <div style="font-size:12px;color:#888">${CAT_LABEL[sp.cat]||sp.cat}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;margin-left:8px">
+            <div style="font-size:14px;font-weight:700">€${sp.salary}/año</div>
+            <div style="font-size:11px;color:#4a90d9">+€${Math.round(sp.salary*(sp.coachCut||0.15))} comisión</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#555;margin-bottom:4px">📋 ${sp.objective}</div>
+        <div style="font-size:12px;color:#888;margin-bottom:10px">🎁 ${sp.bonus}</div>
+        ${active.length<2
+          ?`<button class="main" style="margin-top:0" onclick="doCoachAcceptSponsor('${sp.id}')">Aceptar oferta →</button>`
+          :`<div style="font-size:12px;color:#aaa;text-align:center;padding:6px">Máx. 2 sponsors activos</div>`}
+      </div>`).join('')}
+    `:`<div class="hint">No hay ofertas disponibles ahora mismo.</div>`}
+
+    <button class="main" style="margin-top:8px;opacity:0.5" onclick="G.screen='coachHome';render()">← Volver</button>`;
+}
+
+window.doCoachAcceptSponsor=id=>{
+  const sp=(G.coachSponsorPool||[]).find(s=>s.id===id);
+  if(!sp||(G.coachSponsors||[]).find(s=>s.id===id))return;
+  if(!G.coachSponsors)G.coachSponsors=[];
+  G.coachSponsors.push({...sp});
+  showToast(`🤝 ${sp.name} — contrato firmado`,'#2d7a2d');
+  render();
 };
 
 render();
