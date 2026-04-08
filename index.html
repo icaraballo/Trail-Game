@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Monte Perdido Trail</title>
+<title>Juego Trail · v33</title>
 <style>
 :root{--color-background-primary:#fff;--color-background-secondary:#f8f7f3;--color-background-tertiary:#f0ede8;--color-text-primary:#1a1a1a;--color-text-secondary:#888;--color-text-tertiary:#aaa;--color-border-tertiary:#e0dfd8;--border-radius-md:8px;--border-radius-lg:12px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -98,6 +98,27 @@ button.secondary:hover{background:#f0ede8}
 .prog-fill{height:100%;background:#4a90d9;border-radius:2px;transition:width .4s}
 .event-box{font-size:13px;color:#666;font-style:italic;background:#f5f4f0;padding:9px 12px;border-radius:8px;margin-bottom:10px}
 .warn{background:#fef9ec;border:1px solid #f0d98a;border-radius:8px;padding:10px 13px;font-size:13px;color:#7a5a10;margin-bottom:12px}
+.notif-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#4a8a2a;flex-shrink:0;box-shadow:0 0 0 2px #fff}
+.notif-dot.urgent{background:#c0392b}
+.coach-slot-card{background:#fff;border:1.5px solid #e0dfd8;border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:all .15s;position:relative}
+.coach-slot-card:hover{background:#f8f7f3;border-color:#bbb}
+.coach-slot-card.active-slot{border-color:#4a90d9;background:#f0f6ff}
+.coach-slot-card.empty-slot{border:1.5px dashed #ccc;background:#fafaf8;opacity:0.7}
+.coach-slot-card.locked-slot{border:1.5px dashed #e0dfd8;background:#fafaf8;opacity:0.45;cursor:default}
+.slot-tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px}
+.slot-tab{padding:6px 12px;border-radius:20px;border:1.5px solid #e0dfd8;background:#fff;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s;display:flex;align-items:center;gap:6px}
+.slot-tab:hover{background:#f5f4f0}
+.slot-tab.active{border-color:#1a1a1a;background:#1a1a1a;color:#fff}
+.delegated-badge{display:inline-block;background:#f0f6ff;color:#4a90d9;font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;border:1px solid #b8d4f0}
+.club-runner-card{background:#fff;border:1.5px solid #e0dfd8;border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:all .15s}
+.club-runner-card:hover{background:#f8f7f3}
+.club-runner-card.sel{border-color:#4a8a2a;background:#f2faf0}
+.club-runner-card.assigned{border-color:#4a90d9;background:#f0f6ff}
+.club-stat-pill{display:inline-block;background:#f0ede8;border-radius:4px;padding:2px 6px;font-size:11px;font-weight:600;color:#555;margin-right:4px}
+.club-level-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700}
+.club-race-row{background:#fff;border:1px solid #e0dfd8;border-radius:8px;padding:10px 14px;margin-bottom:6px}
+.socios-bar{height:6px;background:#e5e4de;border-radius:3px;overflow:hidden;margin-top:4px}
+.socios-fill{height:100%;border-radius:3px;transition:width .4s}
 .note{background:#eaf4ea;border:1px solid #b8ddb8;border-radius:8px;padding:10px 13px;font-size:13px;color:#2d5a2d;margin-bottom:12px}
 .danger{background:#fef0f0;border:1px solid #f5b8b8;border-radius:8px;padding:10px 13px;font-size:13px;color:#7a1010;margin-bottom:12px}
 .hint{background:#f5f4f0;border:1px solid #e8e6e0;border-radius:8px;padding:9px 13px;font-size:13px;color:#666;margin-bottom:12px;font-style:italic}
@@ -274,10 +295,6 @@ button.secondary:hover{background:#f0ede8}
         <div class="fin-top">Guardar</div>
         <div class="fin-val neutral">💾</div>
       </div>
-      <div class="fin-cell" style="cursor:default;opacity:0.55" title="Versión del juego">
-        <div class="fin-top">Versión</div>
-        <div class="fin-val neutral" style="font-size:11px" id="fb-version"></div>
-      </div>
     </div>
   </div>
   <div id="main"></div>
@@ -308,11 +325,6 @@ button.secondary:hover{background:#f0ede8}
 </nav>
 
 <script>
-// ══════════════════════════════════════
-//  VERSIÓN
-// ══════════════════════════════════════
-const GAME_VERSION = 'v29-1';
-
 // ══════════════════════════════════════
 //  CONSTANTES
 // ══════════════════════════════════════
@@ -434,29 +446,29 @@ function trainingEffFromH(h){
 }
 
 const RACES_DB=[
-  {id:'pinar',    name:'Carrera del Pinar',      type:'20K local',   km:20, cost:30,  prize:60,   reqRanking:999, desnivel:'600m+',  weather_risk:0.10, month:1, monthName:'Enero',      quarter:1, tier:'local',
-   segs:[{name:'Llano Salida',km:4,type:'flat',gain:0,base:1100},{name:'Subida Pinar',km:5,type:'climb',gain:350,base:1900},{name:'Cresta',km:4,type:'flat',gain:0,base:1300,aid:true},{name:'Bajada',km:4,type:'descent',gain:-350,base:1300},{name:'Sprint',km:3,type:'flat',gain:0,base:800}]},
-  {id:'febrero',  name:'Trail de Invierno',       type:'25K regional',km:25, cost:40,  prize:80,   reqRanking:999, desnivel:'800m+',  weather_risk:0.25, month:2, monthName:'Febrero',     quarter:1, tier:'local',
-   segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1200},{name:'Subida',km:5,type:'climb',gain:400,base:2000},{name:'Cima',km:3,type:'flat',gain:0,base:1100,aid:true},{name:'Bajada',km:5,type:'descent',gain:-400,base:1600},{name:'Meta',km:3,type:'flat',gain:0,base:900}]},
-  {id:'copa',     name:'Copa Regional Trail',     type:'30K regional',km:30, cost:70,  prize:200,  reqRanking:999, desnivel:'1.100m+',weather_risk:0.20, month:3, monthName:'Marzo',       quarter:1, tier:'regional',
-   segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1200},{name:'Primera Subida',km:4,type:'climb',gain:400,base:2100},{name:'Loma Alta',km:3,type:'flat',gain:0,base:1100,aid:true},{name:'Bajada',km:4,type:'descent',gain:-500,base:1600},{name:'Ribera',km:5,type:'flat',gain:0,base:1700},{name:'Repecho',km:4,type:'climb',gain:300,base:1900},{name:'Meta',km:3,type:'descent',gain:-200,base:1000,aid:true}]},
-  {id:'abril',    name:'Vuelta al Valle',         type:'28K media',   km:28, cost:55,  prize:150,  reqRanking:999, desnivel:'950m+',  weather_risk:0.15, month:4, monthName:'Abril',       quarter:2, tier:'regional',
-   segs:[{name:'Llano',km:5,type:'flat',gain:0,base:1400},{name:'Subida',km:5,type:'climb',gain:450,base:2200},{name:'Alto',km:3,type:'flat',gain:0,base:1200,aid:true},{name:'Bajada',km:5,type:'descent',gain:-450,base:1700},{name:'Final',km:5,type:'flat',gain:0,base:1500}]},
-  {id:'mayo',     name:'Trail Primavera',         type:'32K media',   km:32, cost:75,  prize:220,  reqRanking:999, desnivel:'1.200m+',weather_risk:0.15, month:5, monthName:'Mayo',        quarter:2, tier:'regional',
-   segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1200},{name:'Subida',km:5,type:'climb',gain:500,base:2200},{name:'Cresta',km:3,type:'climb',gain:200,base:1800,aid:true},{name:'Bajada',km:5,type:'descent',gain:-500,base:1700},{name:'Llano',km:5,type:'flat',gain:0,base:1600},{name:'Meta',km:4,type:'descent',gain:-200,base:1300}]},
-  {id:'junio',    name:'Ruta de los Picos',       type:'35K media',   km:35, cost:90,  prize:300,  reqRanking:30,  desnivel:'1.400m+',weather_risk:0.20, month:6, monthName:'Junio',       quarter:2, tier:'nacional',
-   segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1300},{name:'Repecho',km:4,type:'climb',gain:400,base:2300},{name:'Cresta',km:3,type:'climb',gain:300,base:2000,aid:true},{name:'Bajada',km:4,type:'descent',gain:-600,base:1700},{name:'Valle',km:5,type:'flat',gain:0,base:1800,aid:true},{name:'Pared',km:3,type:'climb',gain:500,base:2600},{name:'Descenso',km:5,type:'descent',gain:-400,base:1700},{name:'Sprint',km:4,type:'flat',gain:0,base:1100}]},
-  {id:'julio',    name:'Ultra del Verano',        type:'42K nacional', km:42, cost:110, prize:450,  reqRanking:25,  desnivel:'1.600m+',weather_risk:0.35, month:7, monthName:'Julio',       quarter:3, tier:'nacional',
-   segs:[{name:'Salida',km:5,type:'flat',gain:0,base:1500},{name:'Subida Larga',km:6,type:'climb',gain:600,base:2500},{name:'Alta Montaña',km:4,type:'flat',gain:0,base:1800,aid:true},{name:'Bajada Técnica',km:5,type:'descent',gain:-700,base:2000},{name:'Valle',km:6,type:'flat',gain:0,base:2000,aid:true},{name:'Pared Final',km:4,type:'climb',gain:500,base:2600},{name:'Descenso',km:5,type:'descent',gain:-400,base:1700},{name:'Meta',km:4,type:'flat',gain:0,base:1300}]},
-  {id:'agosto',   name:'Trail de Altura',        type:'20K vertical', km:20, cost:50,  prize:120,  reqRanking:999, desnivel:'1.800m+',weather_risk:0.20, month:8, monthName:'Agosto',      quarter:3, tier:'local',    altitude:true,
-   segs:[{name:'Salida',km:2,type:'flat',gain:0,base:900},{name:'Subida Continua',km:8,type:'climb',gain:1000,base:3200,aid:true},{name:'Cresta',km:2,type:'flat',gain:0,base:1100},{name:'Bajada',km:5,type:'descent',gain:-800,base:1900},{name:'Meta',km:3,type:'flat',gain:0,base:900}]},
-  {id:'sierra',   name:'Trail de la Sierra',     type:'35K media',   km:35, cost:90,  prize:350,  reqRanking:20,  desnivel:'1.400m+',weather_risk:0.30, month:9, monthName:'Septiembre',  quarter:3, tier:'nacional',
-   segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1300},{name:'Repecho',km:4,type:'climb',gain:400,base:2300},{name:'Cresta Alta',km:3,type:'climb',gain:300,base:2000,aid:true},{name:'Bajada',km:4,type:'descent',gain:-600,base:1700},{name:'Valle',km:5,type:'flat',gain:0,base:1800,aid:true},{name:'La Pared',km:3,type:'climb',gain:500,base:2600},{name:'Descenso',km:5,type:'descent',gain:-400,base:1700},{name:'Sprint',km:4,type:'flat',gain:0,base:1100}]},
-  {id:'octubre',  name:'Clásica de Otoño',       type:'30K regional',km:30, cost:65,  prize:200,  reqRanking:999, desnivel:'1.000m+',weather_risk:0.25, month:10,monthName:'Octubre',     quarter:4, tier:'regional',
-   segs:[{name:'Salida',km:5,type:'flat',gain:0,base:1400},{name:'Subida',km:5,type:'climb',gain:450,base:2100},{name:'Alto',km:3,type:'flat',gain:0,base:1200,aid:true},{name:'Bajada',km:5,type:'descent',gain:-450,base:1700},{name:'Llano Final',km:5,type:'flat',gain:0,base:1600},{name:'Meta',km:4,type:'descent',gain:-200,base:1200}]},
+  {id:'pinar',    name:'Trail Mágina',             type:'20K local',   km:20, cost:30,  prize:60,   reqRanking:999, desnivel:'1.200m+',weather_risk:0.10, month:1, monthName:'Enero',      quarter:1, tier:'local',
+   segs:[{name:'Llano Salida',km:4,type:'flat',gain:0,base:1100},{name:'Subida Pinar',km:5,type:'climb',gain:600,base:1900},{name:'Cresta',km:4,type:'flat',gain:0,base:1300,aid:true},{name:'Bajada',km:4,type:'descent',gain:-600,base:1300},{name:'Sprint',km:3,type:'flat',gain:0,base:800}]},
+  {id:'febrero',  name:'La Pedriza Trail',        type:'25K regional',km:25, cost:40,  prize:80,   reqRanking:999, desnivel:'1.300m+',weather_risk:0.25, month:2, monthName:'Febrero',     quarter:1, tier:'local',
+   segs:[{name:'Salida',km:3,type:'flat',gain:0,base:1200},{name:'Subida Granito',km:7,type:'climb',gain:700,base:2200},{name:'Cuerda Larga',km:2,type:'flat',gain:0,base:1400,aid:true},{name:'Subida Cogolludo',km:3,type:'climb',gain:600,base:2400},{name:'Bajada Técnica',km:8,type:'descent',gain:-900,base:2000,aid:true},{name:'Meta',km:2,type:'flat',gain:0,base:1000}]},
+  {id:'copa',     name:'Copa Catalana de Trail',  type:'30K regional',km:30, cost:70,  prize:200,  reqRanking:999, desnivel:'1.200m+',weather_risk:0.20, month:3, monthName:'Marzo',       quarter:1, tier:'regional',
+   segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1200},{name:'Primera Subida',km:5,type:'climb',gain:600,base:2100},{name:'Collado',km:3,type:'flat',gain:0,base:1100,aid:true},{name:'Bajada',km:4,type:'descent',gain:-600,base:1600},{name:'Ribera',km:5,type:'flat',gain:0,base:1700},{name:'Segundo Repecho',km:5,type:'climb',gain:600,base:2000},{name:'Meta',km:4,type:'descent',gain:-500,base:1200,aid:true}]},
+  {id:'abril',    name:'Maratón de Montaña de Guadarrama',type:'28K media',   km:28, cost:55,  prize:150,  reqRanking:999, desnivel:'1.600m+',weather_risk:0.15, month:4, monthName:'Abril',       quarter:2, tier:'regional',
+   segs:[{name:'Llano Inicio',km:4,type:'flat',gain:0,base:1400},{name:'Subida Peñalara',km:7,type:'climb',gain:900,base:2500},{name:'Collado',km:2,type:'flat',gain:0,base:1500,aid:true},{name:'Bajada Técnica',km:5,type:'descent',gain:-800,base:2000},{name:'Valle',km:3,type:'flat',gain:0,base:1400,aid:true},{name:'Repecho Final',km:4,type:'climb',gain:700,base:2200},{name:'Descenso Meta',km:3,type:'descent',gain:-600,base:1700}]},
+  {id:'mayo',     name:'Zegama-Aizkorri',         type:'42K élite',   km:42, cost:100, prize:500,  reqRanking:20,  desnivel:'2.800m+',weather_risk:0.25, month:5, monthName:'Mayo',        quarter:2, tier:'elite',   zegamaSpecial:true,
+   segs:[{name:'Salida Zumarraga',km:3,type:'flat',gain:0,base:900},{name:'Subida Usategi',km:6,type:'climb',gain:700,base:2800},{name:'Cresta Aizkorri',km:5,type:'climb',gain:800,base:3200,aid:true},{name:'Bajada Técnica',km:5,type:'descent',gain:-1000,base:2400},{name:'Valle de Zegama',km:3,type:'flat',gain:0,base:1200,aid:true},{name:'Subida Aratz',km:8,type:'climb',gain:1000,base:3100},{name:'Collado Zelai',km:3,type:'climb',gain:300,base:1800,aid:true},{name:'Descenso Final',km:7,type:'descent',gain:-1100,base:2200},{name:'Meta Zegama',km:2,type:'flat',gain:0,base:900}]},
+  {id:'junio',    name:'Buff Epic Trail',         type:'32K nacional',km:32, cost:90,  prize:300,  reqRanking:30,  desnivel:'2.200m+',weather_risk:0.20, month:6, monthName:'Junio',       quarter:2, tier:'nacional',
+   segs:[{name:'Salida Bagà',km:4,type:'flat',gain:0,base:1300},{name:'Repecho Berguedà',km:4,type:'climb',gain:700,base:2300},{name:'Cresta',km:3,type:'climb',gain:600,base:2000,aid:true},{name:'Bajada',km:4,type:'descent',gain:-800,base:1700},{name:'Valle',km:5,type:'flat',gain:0,base:1800,aid:true},{name:'La Pared',km:3,type:'climb',gain:900,base:2600},{name:'Descenso',km:5,type:'descent',gain:-700,base:1700},{name:'Sprint',km:4,type:'flat',gain:0,base:1100}]},
+  {id:'julio',    name:'Maratón Alpino Madrileño',type:'42K nacional', km:42, cost:110, prize:450,  reqRanking:25,  desnivel:'2.600m+',weather_risk:0.35, month:7, monthName:'Julio',       quarter:3, tier:'nacional',
+   segs:[{name:'Salida Navacerrada',km:5,type:'flat',gain:0,base:1500},{name:'Subida Siete Picos',km:8,type:'climb',gain:900,base:2500},{name:'Collado',km:2,type:'flat',gain:0,base:1800,aid:true},{name:'Bajada Técnica',km:6,type:'descent',gain:-800,base:2000},{name:'Valle Lozoya',km:3,type:'flat',gain:0,base:1500,aid:true},{name:'Subida Peñalara',km:8,type:'climb',gain:1000,base:2800},{name:'Repecho Final',km:3,type:'climb',gain:700,base:2200,aid:true},{name:'Gran Descenso',km:7,type:'descent',gain:-900,base:2500}]},
+  {id:'agosto',   name:'KV Canfranc · Vertical', type:'12K vertical', km:12, cost:50,  prize:120,  reqRanking:999, desnivel:'1.000m+',weather_risk:0.20, month:8, monthName:'Agosto',      quarter:3, tier:'local',    altitude:true,
+   segs:[{name:'Salida Canfranc',km:2,type:'flat',gain:0,base:900},{name:'Rampa Inicial',km:3,type:'climb',gain:300,base:2000},{name:'Subida Vertical',km:5,type:'climb',gain:700,base:3500,aid:true},{name:'Descenso Rápido',km:2,type:'descent',gain:-700,base:1500}]},
+  {id:'sierra',   name:'Ultra Pirineu UP55',      type:'55K élite',   km:55, cost:130, prize:700,  reqRanking:15,  desnivel:'3.700m+',weather_risk:0.30, month:9, monthName:'Septiembre',  quarter:3, tier:'elite',
+   segs:[{name:'Salida Bagà',km:4,type:'flat',gain:0,base:1400},{name:'Primer Repecho',km:6,type:'climb',gain:900,base:2800},{name:'Puig de la Canal',km:3,type:'flat',gain:0,base:1800,aid:true},{name:'Bajada Gisclareny',km:5,type:'descent',gain:-900,base:2000},{name:'Valle Llobregat',km:5,type:'flat',gain:0,base:1600,aid:true},{name:'Subida Pedraforca',km:7,type:'climb',gain:1400,base:3200},{name:'Cresta Pedraforca',km:3,type:'climb',gain:400,base:2200,aid:true},{name:'Subida Final',km:5,type:'climb',gain:1000,base:2800,aid:true},{name:'Gran Descenso',km:9,type:'descent',gain:-1300,base:2400},{name:'Meta Guardiola',km:8,type:'flat',gain:0,base:1500}]},
+  {id:'octubre',  name:'Ultra Sierra Nevada',     type:'32K media',   km:32, cost:65,  prize:200,  reqRanking:999, desnivel:'1.800m+',weather_risk:0.25, month:10,monthName:'Octubre',     quarter:4, tier:'regional',
+   segs:[{name:'Salida Granada',km:4,type:'flat',gain:0,base:1400},{name:'Subida Veleta',km:7,type:'climb',gain:900,base:2800},{name:'Collado',km:3,type:'flat',gain:0,base:1600,aid:true},{name:'Bajada Técnica',km:6,type:'descent',gain:-800,base:2200},{name:'Valle',km:4,type:'flat',gain:0,base:1500,aid:true},{name:'Subida Final',km:5,type:'climb',gain:900,base:2600},{name:'Descenso Meta',km:3,type:'descent',gain:-700,base:1800}]},
   {id:'monteperdido',name:'Monte Perdido Trail 50K',type:'50K élite',km:50,cost:150,prize:800,    reqRanking:20,  desnivel:'1.900m+',weather_risk:0.40, month:11,monthName:'Noviembre',   quarter:4, tier:'elite',    altitude:true,
-   segs:[{name:'Salida Llano',km:5,type:'flat',gain:0,base:1800},{name:'Primer Repecho',km:4,type:'climb',gain:400,base:2400},{name:'Cresta Alta',km:3,type:'climb',gain:300,base:2100,aid:true},{name:'Bajada Técnica',km:4,type:'descent',gain:-600,base:1800},{name:'Valle del Río',km:5,type:'flat',gain:0,base:1800,aid:true},{name:'La Pared',km:3,type:'climb',gain:500,base:2700},{name:'Descenso Final',km:4,type:'descent',gain:-400,base:1600,aid:true},{name:'Sprint Llegada',km:3,type:'flat',gain:0,base:900}]},
-  {id:'diciembre', name:'Trail Fin de Año',       type:'15K popular', km:15, cost:20,  prize:40,   reqRanking:999, desnivel:'400m+',  weather_risk:0.30, month:12,monthName:'Diciembre',   quarter:4, tier:'local',
+   segs:[{name:'Salida Llano',km:8,type:'flat',gain:0,base:1800},{name:'Primer Repecho',km:6,type:'climb',gain:650,base:2400},{name:'Cresta Alta',km:5,type:'climb',gain:500,base:2100,aid:true},{name:'Bajada Técnica',km:6,type:'descent',gain:-900,base:1800},{name:'Valle del Río',km:8,type:'flat',gain:0,base:1800,aid:true},{name:'La Pared',km:5,type:'climb',gain:750,base:2700},{name:'Descenso Final',km:6,type:'descent',gain:-600,base:1600,aid:true},{name:'Sprint Llegada',km:6,type:'flat',gain:0,base:900}]},
+  {id:'diciembre', name:'San Silvestre de Montaña',type:'15K popular', km:15, cost:20,  prize:40,   reqRanking:999, desnivel:'400m+',  weather_risk:0.30, month:12,monthName:'Diciembre',   quarter:4, tier:'local',
    segs:[{name:'Salida',km:3,type:'flat',gain:0,base:900},{name:'Subida',km:4,type:'climb',gain:250,base:1600},{name:'Cresta',km:2,type:'flat',gain:0,base:900,aid:true},{name:'Bajada',km:3,type:'descent',gain:-250,base:1100},{name:'Meta',km:3,type:'flat',gain:0,base:800}]},
 ];
 
@@ -1209,36 +1221,36 @@ const COACH_RADIO_MESSAGES=[
 ];
 const SPEC_RACES={
   fondista:[
-    {id:'sf1',name:'Ultra Ribera del Ebro',  type:'55K ultra',   km:55,cost:120,prize:500, reqRanking:25, desnivel:'1.200m+',weather_risk:0.20,month:4,monthName:'Abril',   quarter:2,tier:'nacional',spec:'fondista',
-     segs:[{name:'Salida',km:6,type:'flat',gain:0,base:1600},{name:'Subida',km:6,type:'climb',gain:400,base:2200},{name:'Alto',km:5,type:'flat',gain:0,base:1800,aid:true},{name:'Bajada',km:6,type:'descent',gain:-400,base:1900},{name:'Llano Final',km:6,type:'flat',gain:0,base:1800,aid:true},{name:'Meta',km:5,type:'flat',gain:0,base:1600}]},
-    {id:'sf2',name:'Maratón de Montaña',     type:'42K fondista',km:42,cost:85, prize:300, reqRanking:999,desnivel:'900m+', weather_risk:0.15,month:7,monthName:'Julio',    quarter:3,tier:'regional',spec:'fondista',
-     segs:[{name:'Salida',km:5,type:'flat',gain:0,base:1400},{name:'Subida',km:6,type:'climb',gain:500,base:2000},{name:'Cresta',km:4,type:'flat',gain:0,base:1500,aid:true},{name:'Bajada',km:6,type:'descent',gain:-500,base:1800},{name:'Final',km:6,type:'flat',gain:0,base:1600}]},
-    {id:'sf3',name:'100K del Camino',         type:'100K ultra',  km:100,cost:200,prize:1200,reqRanking:15,desnivel:'2.500m+',weather_risk:0.25,month:10,monthName:'Octubre', quarter:4,tier:'elite',spec:'fondista',
-     segs:[{name:'Tramo 1',km:12,type:'flat',gain:0,base:2000},{name:'Subida',km:10,type:'climb',gain:600,base:3000},{name:'Cima',km:8,type:'flat',gain:0,base:2200,aid:true},{name:'Bajada',km:10,type:'descent',gain:-600,base:2400},{name:'Llanura',km:12,type:'flat',gain:0,base:2100,aid:true},{name:'Tramo Final',km:10,type:'climb',gain:400,base:2800},{name:'Meta',km:8,type:'descent',gain:-400,base:2000,aid:true}]},
+    {id:'sf1',name:'Transvulcania Ultramarathon',type:'73K ultra',   km:73,cost:200,prize:1000,reqRanking:10, desnivel:'4.200m+',weather_risk:0.30,month:5,monthName:'Mayo',    quarter:2,tier:'elite',  spec:'fondista',
+     segs:[{name:'Salida Los Llanos',km:5,type:'flat',gain:0,base:1500},{name:'Valle Aridane',km:5,type:'flat',gain:0,base:1600,aid:true},{name:'Subida Inicial',km:8,type:'climb',gain:900,base:2800},{name:'Cumbre Vieja',km:6,type:'climb',gain:800,base:3200,aid:true},{name:'Bajada Técnica',km:8,type:'descent',gain:-1100,base:2200},{name:'Valle Central',km:6,type:'flat',gain:0,base:1800,aid:true},{name:'Subida Roque',km:7,type:'climb',gain:1000,base:3000},{name:'Cresta Alta',km:4,type:'flat',gain:0,base:1800,aid:true},{name:'Subida Final',km:6,type:'climb',gain:1500,base:3200},{name:'Gran Descenso',km:9,type:'descent',gain:-1400,base:2500,aid:true},{name:'Llegada Santa Cruz',km:9,type:'flat',gain:0,base:1800,aid:true}]},
+    {id:'sf2',name:'Andalucía Ultra Trail',  type:'42K fondista',km:42,cost:85, prize:300, reqRanking:999,desnivel:'1.500m+',weather_risk:0.15,month:7,monthName:'Julio',    quarter:3,tier:'regional',spec:'fondista',
+     segs:[{name:'Salida Almería',km:5,type:'flat',gain:0,base:1200},{name:'Subida Sierra',km:9,type:'climb',gain:700,base:2400,aid:true},{name:'Collado',km:3,type:'flat',gain:0,base:1500},{name:'Bajada',km:7,type:'descent',gain:-700,base:2000},{name:'Valle Almanzora',km:4,type:'flat',gain:0,base:1400,aid:true},{name:'Repecho Final',km:7,type:'climb',gain:800,base:2200},{name:'Descenso Meta',km:5,type:'descent',gain:-700,base:1800},{name:'Meta',km:2,type:'flat',gain:0,base:1100}]},
+    {id:'sf3',name:'100 Millas de Aneto',    type:'100K ultra',  km:100,cost:200,prize:1200,reqRanking:15,desnivel:'4.500m+',weather_risk:0.25,month:10,monthName:'Octubre', quarter:4,tier:'elite',spec:'fondista',
+     segs:[{name:'Salida Benasque',km:8,type:'flat',gain:0,base:1500},{name:'Subida Aneto 1',km:14,type:'climb',gain:1300,base:3100,aid:true},{name:'Collado 1',km:6,type:'flat',gain:0,base:2000},{name:'Bajada 1',km:10,type:'descent',gain:-1200,base:2200},{name:'Valle Central',km:8,type:'flat',gain:0,base:1500,aid:true},{name:'Subida Aneto 2',km:14,type:'climb',gain:1700,base:3300},{name:'Collado 2',km:4,type:'flat',gain:0,base:2000,aid:true},{name:'Subida Final',km:10,type:'climb',gain:1500,base:3200,aid:true},{name:'Gran Descenso',km:14,type:'descent',gain:-1400,base:2800},{name:'Meta Benasque',km:12,type:'flat',gain:0,base:1500}]},
   ],
   montanero:[
-    {id:'sm1',name:'Skyrace Pirineos',        type:'25K vertical',km:25,cost:80, prize:280, reqRanking:999,desnivel:'2.200m+',weather_risk:0.35,month:3,monthName:'Marzo',    quarter:1,tier:'regional',spec:'montanero',
-     segs:[{name:'Salida',km:2,type:'flat',gain:0,base:900},{name:'Subida Continua',km:10,type:'climb',gain:1400,base:3500,aid:true},{name:'Cresta',km:3,type:'flat',gain:0,base:1200},{name:'Bajada',km:7,type:'descent',gain:-1000,base:2200},{name:'Meta',km:3,type:'flat',gain:0,base:1000}]},
-    {id:'sm2',name:'Ruta de las Cumbres',     type:'38K montaña', km:38,cost:95, prize:380, reqRanking:20, desnivel:'2.800m+',weather_risk:0.30,month:7,monthName:'Julio',    quarter:3,tier:'nacional',spec:'montanero',
-     segs:[{name:'Salida',km:3,type:'flat',gain:0,base:1100},{name:'Subida 1',km:7,type:'climb',gain:800,base:2800,aid:true},{name:'Cresta Alta',km:4,type:'flat',gain:0,base:1600},{name:'Bajada Técnica',km:6,type:'descent',gain:-900,base:2400},{name:'Valle',km:4,type:'flat',gain:0,base:1400,aid:true},{name:'Última Subida',km:7,type:'climb',gain:700,base:2600},{name:'Meta',km:5,type:'descent',gain:-600,base:1900}]},
-    {id:'sm3',name:'Clásica de Alta Montaña', type:'45K élite mt',km:45,cost:140,prize:700, reqRanking:12, desnivel:'3.500m+',weather_risk:0.40,month:9,monthName:'Septiembre',quarter:3,tier:'elite',spec:'montanero',
-     segs:[{name:'Salida',km:3,type:'flat',gain:0,base:1100},{name:'Subida Larga',km:9,type:'climb',gain:1200,base:3200,aid:true},{name:'Cima Principal',km:5,type:'flat',gain:0,base:1800},{name:'Bajada 1',km:7,type:'descent',gain:-1100,base:2600},{name:'Valle Intermedio',km:5,type:'flat',gain:0,base:1600,aid:true},{name:'Segunda Subida',km:8,type:'climb',gain:900,base:3000},{name:'Descenso Final',km:8,type:'descent',gain:-800,base:2400,aid:true}]},
+    {id:'sm1',name:'Zegama Skyrace',          type:'25K vertical',km:25,cost:80, prize:280, reqRanking:999,desnivel:'2.200m+',weather_risk:0.35,month:3,monthName:'Marzo',    quarter:1,tier:'regional',spec:'montanero',
+     segs:[{name:'Salida',km:2,type:'flat',gain:0,base:900},{name:'Subida Continua',km:10,type:'climb',gain:2200,base:3500,aid:true},{name:'Cresta',km:3,type:'flat',gain:0,base:1200},{name:'Bajada Técnica',km:7,type:'descent',gain:-1800,base:2200},{name:'Meta',km:3,type:'flat',gain:0,base:1000}]},
+    {id:'sm2',name:'Trail dels Bastions',     type:'50K montaña', km:50,cost:120,prize:600, reqRanking:20, desnivel:'3.000m+',weather_risk:0.30,month:7,monthName:'Julio',    quarter:3,tier:'nacional',spec:'montanero',
+     segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1100},{name:'Subida 1',km:9,type:'climb',gain:900,base:2800,aid:true},{name:'Cresta Alta',km:4,type:'flat',gain:0,base:1600},{name:'Bajada Técnica',km:7,type:'descent',gain:-800,base:2400},{name:'Valle',km:5,type:'flat',gain:0,base:1400,aid:true},{name:'Subida 2',km:9,type:'climb',gain:1100,base:3000},{name:'Collado',km:3,type:'flat',gain:0,base:1600,aid:true},{name:'Subida 3',km:6,type:'climb',gain:1000,base:2800},{name:'Bajada Final',km:3,type:'descent',gain:-900,base:1900}]},
+    {id:'sm3',name:'UTMB OCC',                type:'55K élite mt',km:55,cost:160,prize:900, reqRanking:12, desnivel:'3.500m+',weather_risk:0.40,month:8,monthName:'Agosto',   quarter:3,tier:'elite',spec:'montanero',
+     segs:[{name:'Salida Orsières',km:4,type:'flat',gain:0,base:900},{name:'Subida Champex',km:10,type:'climb',gain:1400,base:3000,aid:true},{name:'Lac de Champex',km:4,type:'flat',gain:0,base:1200},{name:'Bajada Vallorcine',km:8,type:'descent',gain:-1100,base:2200,aid:true},{name:'Valle Montagne',km:5,type:'flat',gain:0,base:1100,aid:true},{name:'Subida Tête Vents',km:9,type:'climb',gain:1300,base:3000},{name:'Cresta Brévent',km:3,type:'flat',gain:0,base:1600,aid:true},{name:'Subida Final',km:5,type:'climb',gain:800,base:2600},{name:'Gran Descenso Chamonix',km:7,type:'descent',gain:-1000,base:2000}]},
   ],
   tecnico:[
-    {id:'st1',name:'Descenso del Barranco',   type:'18K técnico', km:18,cost:55, prize:160, reqRanking:999,desnivel:'800m+', weather_risk:0.20,month:5,monthName:'Mayo',     quarter:2,tier:'regional',spec:'tecnico',
+    {id:'st1',name:'Descenso de Jaca',        type:'18K técnico', km:18,cost:55, prize:160, reqRanking:999,desnivel:'800m+', weather_risk:0.20,month:5,monthName:'Mayo',     quarter:2,tier:'regional',spec:'tecnico',
      segs:[{name:'Salida',km:2,type:'flat',gain:0,base:800},{name:'Subida',km:4,type:'climb',gain:400,base:1600},{name:'Cresta',km:2,type:'flat',gain:0,base:900,aid:true},{name:'Bajada Técnica',km:6,type:'descent',gain:-800,base:2000},{name:'Meta',km:4,type:'flat',gain:0,base:1100}]},
-    {id:'st2',name:'Trail Técnico del Norte', type:'30K técnico', km:30,cost:80, prize:260, reqRanking:25, desnivel:'1.600m+',weather_risk:0.25,month:8,monthName:'Agosto',   quarter:3,tier:'nacional',spec:'tecnico',
+    {id:'st2',name:'TransValles Cantábrico',  type:'30K técnico', km:30,cost:80, prize:260, reqRanking:25, desnivel:'1.600m+',weather_risk:0.25,month:8,monthName:'Agosto',   quarter:3,tier:'nacional',spec:'tecnico',
      segs:[{name:'Salida',km:3,type:'flat',gain:0,base:1000},{name:'Subida',km:5,type:'climb',gain:600,base:2100},{name:'Cresta',km:3,type:'flat',gain:0,base:1100,aid:true},{name:'Bajada Técnica 1',km:5,type:'descent',gain:-700,base:2200},{name:'Puerto',km:4,type:'climb',gain:400,base:1800,aid:true},{name:'Bajada Final',km:6,type:'descent',gain:-900,base:2500},{name:'Meta',km:4,type:'flat',gain:0,base:1100}]},
-    {id:'st3',name:'Gran Travesía Técnica',   type:'40K técnico', km:40,cost:110,prize:500, reqRanking:15, desnivel:'2.200m+',weather_risk:0.30,month:11,monthName:'Noviembre',quarter:4,tier:'elite',spec:'tecnico',
-     segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1200},{name:'Subida',km:6,type:'climb',gain:700,base:2400},{name:'Alto',km:4,type:'flat',gain:0,base:1400,aid:true},{name:'Bajada 1',km:6,type:'descent',gain:-800,base:2300},{name:'Repecho',km:4,type:'climb',gain:500,base:1900,aid:true},{name:'Descenso Final',km:8,type:'descent',gain:-1100,base:2800},{name:'Meta',km:4,type:'flat',gain:0,base:1100}]},
+    {id:'st3',name:'TransPirenaica Técnica',  type:'40K técnico', km:40,cost:110,prize:500, reqRanking:15, desnivel:'2.200m+',weather_risk:0.30,month:11,monthName:'Noviembre',quarter:4,tier:'elite',spec:'tecnico',
+     segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1200},{name:'Subida',km:7,type:'climb',gain:700,base:2400},{name:'Alto',km:5,type:'flat',gain:0,base:1400,aid:true},{name:'Bajada 1',km:6,type:'descent',gain:-800,base:2300},{name:'Repecho',km:5,type:'climb',gain:500,base:1900,aid:true},{name:'Descenso Final',km:8,type:'descent',gain:-1100,base:2800},{name:'Meta',km:5,type:'flat',gain:0,base:1100}]},
   ],
   todoterreno:[
-    {id:'stt1',name:'Trail Todo Terreno',      type:'28K mixto',   km:28,cost:65, prize:200, reqRanking:999,desnivel:'1.000m+',weather_risk:0.18,month:4,monthName:'Abril',   quarter:2,tier:'regional',spec:'todoterreno',
-     segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1200},{name:'Subida',km:5,type:'climb',gain:500,base:2000},{name:'Cresta',km:3,type:'flat',gain:0,base:1100,aid:true},{name:'Bajada',km:5,type:'descent',gain:-500,base:1800},{name:'Llano',km:4,type:'flat',gain:0,base:1300},{name:'Meta',km:4,type:'climb',gain:200,base:1500}]},
-    {id:'stt2',name:'Ruta Mixta del Sur',     type:'35K mixto',   km:35,cost:85, prize:320, reqRanking:22, desnivel:'1.300m+',weather_risk:0.22,month:8,monthName:'Agosto',   quarter:3,tier:'nacional',spec:'todoterreno',
-     segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1300},{name:'Subida',km:6,type:'climb',gain:600,base:2200},{name:'Alto',km:4,type:'flat',gain:0,base:1400,aid:true},{name:'Bajada',km:6,type:'descent',gain:-600,base:1900},{name:'Valle',km:5,type:'flat',gain:0,base:1500,aid:true},{name:'Meta',km:5,type:'climb',gain:300,base:1700}]},
-    {id:'stt3',name:'Ultra Todoterreno',       type:'50K mixto',   km:50,cost:130,prize:650, reqRanking:15, desnivel:'2.000m+',weather_risk:0.28,month:10,monthName:'Octubre', quarter:4,tier:'elite',spec:'todoterreno',
-     segs:[{name:'Salida',km:5,type:'flat',gain:0,base:1500},{name:'Subida Larga',km:8,type:'climb',gain:800,base:2600},{name:'Cima',km:5,type:'flat',gain:0,base:1700,aid:true},{name:'Bajada Técnica',km:7,type:'descent',gain:-900,base:2300},{name:'Llanura',km:6,type:'flat',gain:0,base:1700,aid:true},{name:'Último Puerto',km:6,type:'climb',gain:700,base:2400},{name:'Descenso Meta',km:7,type:'descent',gain:-600,base:2100,aid:true}]},
+    {id:'stt1',name:'Copa Spain Trail',        type:'28K mixto',   km:28,cost:65, prize:200, reqRanking:999,desnivel:'1.000m+',weather_risk:0.18,month:4,monthName:'Abril',   quarter:2,tier:'regional',spec:'todoterreno',
+     segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1200},{name:'Subida',km:6,type:'climb',gain:500,base:2000},{name:'Cresta',km:3,type:'flat',gain:0,base:1100,aid:true},{name:'Bajada',km:6,type:'descent',gain:-500,base:1800},{name:'Llano',km:5,type:'flat',gain:0,base:1300},{name:'Meta',km:4,type:'climb',gain:200,base:1500}]},
+    {id:'stt2',name:'Ultra Alpujarra Trail',   type:'35K mixto',   km:35,cost:85, prize:320, reqRanking:22, desnivel:'2.000m+',weather_risk:0.22,month:8,monthName:'Agosto',   quarter:3,tier:'nacional',spec:'todoterreno',
+     segs:[{name:'Salida',km:5,type:'flat',gain:0,base:1300},{name:'Subida',km:7,type:'climb',gain:600,base:2200},{name:'Alto',km:5,type:'flat',gain:0,base:1400,aid:true},{name:'Bajada',km:7,type:'descent',gain:-600,base:1900},{name:'Valle',km:6,type:'flat',gain:0,base:1500,aid:true},{name:'Meta',km:5,type:'climb',gain:300,base:1700}]},
+    {id:'stt3',name:'Transandalus Trail',      type:'50K mixto',   km:50,cost:130,prize:650, reqRanking:15, desnivel:'2.000m+',weather_risk:0.28,month:10,monthName:'Octubre', quarter:4,tier:'elite',spec:'todoterreno',
+     segs:[{name:'Salida',km:6,type:'flat',gain:0,base:1500},{name:'Subida Larga',km:8,type:'climb',gain:800,base:2600},{name:'Cima',km:6,type:'flat',gain:0,base:1700,aid:true},{name:'Bajada Técnica',km:8,type:'descent',gain:-900,base:2300},{name:'Llanura',km:7,type:'flat',gain:0,base:1700,aid:true},{name:'Último Puerto',km:6,type:'climb',gain:700,base:2400},{name:'Descenso Meta',km:9,type:'descent',gain:-600,base:2100,aid:true}]},
   ],
 };
 
@@ -1305,6 +1317,114 @@ const FAME_THRESHOLDS=[
   {followers:15000, label:'Referente nacional',  benefit:'Sponsors nacionales te contactan'},
   {followers:50000, label:'Figura del trail',    benefit:'Invitaciones élite automáticas'},
 ];
+// ══════════════════════════════════════
+//  MODO CLUB — CONSTANTES
+// ══════════════════════════════════════
+const CLUB_RUNNER_POOL=[
+  {id:'cr1', name:'Iker Garmendia',  flag:'🇪🇸', spec:'montanero',  age:24, stats:{resistencia:52,velocidad:44,subida:65,bajada:55}, salary:150, potential:'alto',   bio:'Joven del Pirineo. Sube como un cabra.'},
+  {id:'cr2', name:'Amaia Etxeberria',flag:'🇪🇸', spec:'fondista',   age:29, stats:{resistencia:68,velocidad:54,subida:50,bajada:48}, salary:180, potential:'medio',  bio:'Fondo sólido. Gana en los tramos largos.'},
+  {id:'cr3', name:'Josu Markiegi',   flag:'🇪🇸', spec:'tecnico',    age:32, stats:{resistencia:55,velocidad:58,subida:52,bajada:70}, salary:200, potential:'bajo',   bio:'Veterano del circuito. Bajadas de manual.'},
+  {id:'cr4', name:'Nere Iturbe',     flag:'🇪🇸', spec:'todoterreno',age:26, stats:{resistencia:60,velocidad:56,subida:58,bajada:58}, salary:170, potential:'alto',   bio:'Polivalente. Se adapta a cualquier terreno.'},
+  {id:'cr5', name:'Unai Lazkano',    flag:'🇪🇸', spec:'montanero',  age:21, stats:{resistencia:44,velocidad:48,subida:60,bajada:50}, salary:100, potential:'alto',   bio:'Sub-23 con hambre. Poco rodaje, mucho talento.'},
+  {id:'cr6', name:'Miren Azpeitia',  flag:'🇪🇸', spec:'fondista',   age:34, stats:{resistencia:70,velocidad:50,subida:48,bajada:46}, salary:190, potential:'bajo',   bio:'Resistencia bruta. Mejor en ultras largas.'},
+  {id:'cr7', name:'Gorka Tellería',  flag:'🇪🇸', spec:'tecnico',    age:28, stats:{resistencia:56,velocidad:62,subida:54,bajada:66}, salary:210, potential:'medio',  bio:'Ex-ciclista reconvertido. Rápido en llano.'},
+  {id:'cr8', name:'Leire Ugarte',    flag:'🇪🇸', spec:'todoterreno',age:31, stats:{resistencia:62,velocidad:55,subida:60,bajada:58}, salary:175, potential:'medio',  bio:'Constante y fiable. La capitana ideal.'},
+  {id:'cr9', name:'Aritz Agirre',    flag:'🇪🇸', spec:'montanero',  age:27, stats:{resistencia:58,velocidad:50,subida:72,bajada:52}, salary:220, potential:'alto',   bio:'Especialista en vertical. Fuera de serie en rampas.'},
+  {id:'cr10',name:'Ane Goikoetxea',  flag:'🇪🇸', spec:'fondista',   age:23, stats:{resistencia:50,velocidad:52,subida:46,bajada:50}, salary:120, potential:'alto',   bio:'Recién llegada al trail. Viene del atletismo de pista.'},
+  {id:'cr11',name:'Txomin Elosegi',  flag:'🇪🇸', spec:'tecnico',    age:36, stats:{resistencia:60,velocidad:55,subida:50,bajada:68}, salary:160, potential:'bajo',   bio:'Alma del club. Nunca abandona. Liderazgo natural.'},
+  {id:'cr12',name:'Itziar Mendiburu',flag:'🇪🇸', spec:'todoterreno',age:25, stats:{resistencia:55,velocidad:58,subida:62,bajada:60}, salary:155, potential:'alto',   bio:'Talento sin pulir. Necesita disciplina de entreno.'},
+];
+
+const CLUB_LEVELS=[
+  {id:'local',    label:'Club Local',    icon:'🏘️', sociosMin:0,   sociosMax:30,  presupuestoBase:800,  color:'#888',    repReq:0},
+  {id:'regional', label:'Club Regional', icon:'🏔️', sociosMin:31,  sociosMax:100, presupuestoBase:2000, color:'#4a90d9', repReq:40},
+  {id:'nacional', label:'Club Nacional', icon:'🏅', sociosMin:101, sociosMax:300, presupuestoBase:5000, color:'#2d7a2d', repReq:70},
+  {id:'elite',    label:'Club Élite',    icon:'🌟', sociosMin:301, sociosMax:999, presupuestoBase:12000,color:'#c07a10', repReq:90},
+];
+
+const CLUB_RACES=[
+  {id:'clr1', name:'Trail Local de Primavera',  dist:21, month:4, cost:0,  tier:'local',    prize:300,  desc:'Carrera de club. Ambiente familiar.'},
+  {id:'clr2', name:'Circuito Vasco Trail',      dist:28, month:5, cost:80, tier:'regional', prize:600,  desc:'Circuito con varios clubes del norte.'},
+  {id:'clr3', name:'Vertical del Gorbea',       dist:12, month:6, cost:60, tier:'regional', prize:400,  desc:'Vertical de referencia. Sube sin parar.'},
+  {id:'clr4', name:'Ultra Aralar',              dist:50, month:7, cost:120,tier:'nacional',  prize:1200, desc:'Ultra exigente. Solo los mejores del club.'},
+  {id:'clr5', name:'Vuelta al Txindoki',        dist:35, month:8, cost:90, tier:'regional', prize:700,  desc:'Clásica del Goierri. Mucho desnivel.'},
+  {id:'clr6', name:'Copa de Clubes País Vasco', dist:42, month:9, cost:0,  tier:'regional', prize:800,  desc:'Puntos para el ranking de clubes regional.'},
+  {id:'clr7', name:'Marathon de Montaña',       dist:44, month:10,cost:100,tier:'nacional',  prize:1500, desc:'Nacional. Clasifica para el ranking anual.'},
+  {id:'clr8', name:'Kilómetro Vertical Otoño',  dist:8,  month:11,cost:50, tier:'local',    prize:200,  desc:'Cierre de temporada. Corto pero letal.'},
+];
+
+const CLUB_EVENTS=[
+  {id:'cle1', title:'Un socio organiza un taller de nutrición para el club',
+   options:[{text:'Apoyarlo públicamente — cohesión del club (+rep, +socios)',repDelta:8,sociosDelta:3},{text:'Dejarlo hacer sin implicarte',repDelta:0,sociosDelta:1}]},
+  {id:'cle2', title:'El ayuntamiento os ofrece un espacio para entrenar gratuitamente',
+   options:[{text:'Aceptar — base de entrenamiento del club (−€200 acondicionamiento, +rep)',repDelta:12,cost:200,sociosDelta:5},{text:'Rechazar — no tenéis recursos ahora',repDelta:-3}]},
+  {id:'cle3', title:'Un corredor local con potencial os contacta para unirse al club',
+   options:[{text:'Ficharlo — suma a la plantilla (−€100/mes salario)',repDelta:5,addRunner:true},{text:'No tenemos hueco ahora',repDelta:0}]},
+  {id:'cle4', title:'Hay tensión entre dos corredores de la plantilla',
+   options:[{text:'Mediar y resolver (+cohesión, +rep)',repDelta:10},{text:'Ignorarlo — que lo resuelvan solos',repDelta:-5,sociosDelta:-1}]},
+  {id:'cle5', title:'Os invitan a participar en una carrera benéfica',
+   options:[{text:'Mandar a dos corredores (+visibilidad, +socios)',repDelta:6,sociosDelta:4,cost:80},{text:'No podemos permitírnoslo este mes',repDelta:-2}]},
+  {id:'cle6', title:'Un patrocinador local ofrece materiales a cambio de llevar su logo',
+   options:[{text:'Aceptar — €300 en material gratis',repDelta:3,income:300},{text:'Prefiero mantener la imagen limpia',repDelta:2}]},
+  {id:'cle7', title:'Una revista de trail quiere hacer un reportaje sobre el club',
+   options:[{text:'Sí — visibilidad nacional (+rep, +socios)',repDelta:15,sociosDelta:8},{text:'Aún no estamos listos',repDelta:0}]},
+  {id:'cle8', title:'Uno de tus corredores quiere irse a un club rival',
+   options:[{text:'Ofrecerle una mejora salarial (+€50/mes) para retenerle',repDelta:5,salaryIncrease:true},{text:'Dejarle ir — el club no puede forzar a nadie',repDelta:-4,loseRunner:true}]},
+];
+
+function clubLevel(){
+  const socios=(G.clubModeData&&G.clubModeData.socios)||8;
+  return CLUB_LEVELS.find(l=>socios>=l.sociosMin&&socios<=l.sociosMax)||CLUB_LEVELS[0];
+}
+function clubLevelByRep(){
+  const rep=(G.clubModeData&&G.clubModeData.reputacion)||0;
+  const lvls=[...CLUB_LEVELS].reverse();
+  return lvls.find(l=>rep>=l.repReq)||CLUB_LEVELS[0];
+}
+
+function simClubRace(runner,race){
+  const s=runner.stats;
+  let base=(s.resistencia*0.35+s.velocidad*0.2+s.subida*0.25+s.bajada*0.2);
+  if(runner.spec==='montanero')base+=race.dist>30?4:2;
+  if(runner.spec==='fondista')base+=race.dist>40?5:0;
+  if(runner.spec==='tecnico')base+=race.dist<25?3:0;
+  const rng=(Math.random()*16)-8;
+  const perf=Math.max(10,Math.min(95,base+rng));
+  const rivals={local:18,regional:35,nacional:70,elite:110}[race.tier||'local']||25;
+  const pos=Math.max(1,Math.round((1-perf/100)*rivals*0.85)+1+Math.floor(Math.random()*3));
+  const prize=pos===1?race.prize:pos===2?Math.round(race.prize*0.6):pos===3?Math.round(race.prize*0.4):0;
+  return{pos,perf:Math.round(perf),prize,rivals};
+}
+
+function initClubModeData(name,specialty){
+  const startRunners=CLUB_RUNNER_POOL.filter(r=>r.spec===specialty||specialty==='mixto').slice(0,3);
+  const fill=startRunners.length<3?CLUB_RUNNER_POOL.filter(r=>!startRunners.includes(r)).slice(0,3-startRunners.length):[];
+  return{
+    name,specialty,
+    socios:8, reputacion:10, presupuesto:800, temporada:1,
+    plantilla:[...startRunners,...fill].map(r=>({...r,stats:{...r.stats},currentSalary:r.salary})),
+    calAssignments:{}, seasonResults:[], pendingEvent:null,
+    historial:[], instalaciones:{local:false,fisio:false},
+    seasonSimulated:false,
+  };
+}
+
+function clubMonthlyWage(){
+  const d=G.clubModeData;if(!d)return 0;
+  return d.plantilla.reduce((s,r)=>s+(r.currentSalary||r.salary),0);
+}
+
+function generateClubEvent(){
+  const d=G.clubModeData;if(!d)return;
+  if(d.pendingEvent)return;
+  const pool=CLUB_EVENTS.filter(e=>{
+    if(e.id==='cle3'&&d.plantilla.length>=6)return false;
+    if(e.id==='cle8'&&d.plantilla.length<=2)return false;
+    return true;
+  });
+  if(Math.random()<0.65)d.pendingEvent=pool[Math.floor(Math.random()*pool.length)];
+}
+
 function freshState(){
   return{
     screen:'saveScreen',year:1,ranking:999,specRanking:999,money:300,
@@ -1404,9 +1524,81 @@ function freshState(){
     coachSponsorPool:null,
     coachRadioWindowOpen:false,  // ventana de radio abierta (sobrevive render)
     coachTrainingSelected:null,  // bloque seleccionado pendiente de confirmar
+    _coachSlotNotifs:[],         // notificaciones pendientes de este slot
+    // ── Multi-atleta ─────────────────────
+    coachRoster:[],              // [{...slotState}] — slots guardados
+    coachActiveIdx:0,            // índice de slot activo
+    // ── Modo Club ────────────────────────
+    clubModeData:null,           // objeto completo del club (ver initClubModeData)
+    // ── Tienda propia ──
+    ownBrand:null,               // null | {launched:year, hasEmployee:bool, employeeYear:null|year}
+    // ── Clasificación Zegama ──
+    zegamaQual:false,            // true = acceso garantizado a Zegama esta temporada (tiempo del año anterior)
+    zegamaQualNext:false,        // true = terminó Zegama bajo el corte este año → pasa a zegamaQual el año siguiente
   };
 }
 let G=freshState();
+
+// ══════════════════════════════════════
+//  MULTI-ATLETA — GESTIÓN DE SLOTS
+// ══════════════════════════════════════
+function coachSlotKeys(){
+  return['coachAthlete','coachSeason','coachTrust','coachEarnings','coachSelectedRaces',
+    'coachRaceIdx','coachRaceResults','coachBodyLoad','coachRaceData','coachRaceAnimIdx',
+    'coachRaceAidPaused','coachLastTraining','coachNemesis','coachPendingEvent',
+    'coachLastDialogue','coachDayCondition','coachRaceEventPending','coachEventLog',
+    'coachGels','coachGelsUsed','coachRadioUsed','coachAidExtras','coachPreRaceBlock',
+    'coachSeasonObjective','coachInjury','coachSponsors','coachSponsorPool',
+    'coachRadioWindowOpen','coachTrainingSelected','coachPool','_coachSlotNotifs'];
+}
+
+function saveCoachSlot(){
+  const idx=G.coachActiveIdx||0;
+  if(!G.coachRoster)G.coachRoster=[];
+  const slot={};
+  coachSlotKeys().forEach(k=>{slot[k]=G[k];});
+  G.coachRoster[idx]=slot;
+}
+
+function loadCoachSlot(idx){
+  if(!G.coachRoster||!G.coachRoster[idx])return;
+  const slot=G.coachRoster[idx];
+  G.coachActiveIdx=idx;
+  coachSlotKeys().forEach(k=>{if(k in slot)G[k]=slot[k];});
+}
+
+window.switchCoachSlot=idx=>{
+  if(idx===(G.coachActiveIdx||0)){G.screen='coachHome';G.activeTab='game';render();return;}
+  saveCoachSlot();
+  loadCoachSlot(idx);
+  G.screen='coachHome';G.activeTab='game';render();
+};
+
+function coachSlotUnlocked(idx){
+  if(idx===0)return true;
+  if(idx===1)return(G.coachReputation||0)>=40;
+  if(idx===2)return(G.coachReputation||0)>=70;
+  return false;
+}
+
+function coachSlotNotifCount(idx){
+  saveCoachSlot();
+  const slot=G.coachRoster[idx];
+  if(!slot||!slot.coachAthlete)return 0;
+  let n=0;
+  if((slot._coachSlotNotifs||[]).filter(x=>!x.read).length)n+=(slot._coachSlotNotifs||[]).filter(x=>!x.read).length;
+  if(slot.coachPendingEvent&&!slot.coachPendingEvent.resolved)n++;
+  return n;
+}
+
+function addCoachNotif(text,type='info'){
+  if(!G._coachSlotNotifs)G._coachSlotNotifs=[];
+  G._coachSlotNotifs.push({text,type,read:false,ts:Date.now()});
+}
+
+function markNotifsRead(){
+  (G._coachSlotNotifs||[]).forEach(n=>n.read=true);
+}
 
 // ══════════════════════════════════════
 //  HELPERS FINANCIEROS
@@ -1421,6 +1613,18 @@ function curWorkOpt(){
 }
 function monthlySponsorIncome(){return Math.round(Object.values(G.sponsors).filter(Boolean).reduce((a,s)=>a+(s.salary||0),0)/12*(modeCfg().sponsorMult||1));}
 function monthlyClubCost(){return G.club?.cost||0;}
+function monthlyBrandIncome(){
+  if(!G.ownBrand) return 0;
+  return G.ownBrand.hasEmployee ? 600 : 300; // con empleado: 1300 bruto - 700 coste = 600 neto
+}
+function brandHoursPerWeek(){
+  // Horas de entrenamiento consumidas por la marca (sin empleado)
+  if(!G.ownBrand || G.ownBrand.hasEmployee) return 0;
+  return 6;
+}
+function canLaunchBrand(){
+  return !G.ownBrand && (G.ranking<=30 || G.year>=3);
+}
 
 // ── REPUTACIÓN DE CLUB ──────────────────
 function changeClubRep(delta){
@@ -1444,7 +1648,7 @@ const EXCLUSIVE_CLUB_RACE={
 };
 function monthlyNet(){
   if(G.gameMode==='expres')return monthlySponsorIncome();
-  return monthlyWorkIncome()+monthlySponsorIncome()-FIXED_COSTS.total-monthlyClubCost();
+  return monthlyWorkIncome()+monthlySponsorIncome()+monthlyBrandIncome()-FIXED_COSTS.total-monthlyClubCost();
 }
 function sponsorAnnual(){return Math.round(Object.values(G.sponsors).filter(Boolean).reduce((a,s)=>a+(s.salary||0),0)*(modeCfg().sponsorMult||1));}
 
@@ -1467,8 +1671,6 @@ function updateFinBar(){
   document.getElementById('fb-rank').textContent=G.ranking<900?'#'+G.ranking:'—';
   const sr=document.getElementById('fb-specrank');
   if(sr)sr.textContent=G.specRanking<900?'#'+G.specRanking:'—';
-  const vr=document.getElementById('fb-version');
-  if(vr)vr.textContent=GAME_VERSION;
 }
 
 // ══════════════════════════════════════
@@ -1676,7 +1878,8 @@ function racePreviewCard(race, mode, raceProgress){
 function effForWork(){
   const wo=curWorkOpt();
   const vacBonus=vacTrainingHBonus(G.currentQuarter||1);
-  const h=(wo?.trainingH||5)+vacBonus;
+  const brandH=brandHoursPerWeek(); // 6h/sem si marca activa sin empleado
+  const h=Math.max(0,(wo?.trainingH||5)+vacBonus-brandH);
   return trainingEffFromH(h)*(G.spending.entrenador?1.2:1.0)*G.trainingEff;
 }
 function getSpecRaces(){return SPEC_RACES[G.runner.specialty]||[];}
@@ -2260,7 +2463,11 @@ function render(){
     coachTrainingReaction:renderCoachTrainingReaction,
     coachRace:renderCoachRace,coachSeasonEnd:renderCoachSeasonEnd,
     coachEvent:renderCoachEvent,coachPreRace:renderCoachPreRace,
-    coachSponsors:renderCoachSponsors,
+    coachSponsors:renderCoachSponsors,coachHub:renderCoachHub,
+    clubCreate:renderClubCreate,clubHub:renderClubHub,
+    clubPlantilla:renderClubPlantilla,clubCalendar:renderClubCalendar,
+    clubSimulate:renderClubSimulate,clubSeasonEnd:renderClubSeasonEnd,
+    clubEvent:renderClubEvent,
   }[G.screen]||renderIntro)();
   triggerFade(el);
 }
@@ -2279,7 +2486,7 @@ function renderCalendarTab(){
   // uses global QUARTERS
   const tierColor=TIER_COLOR_RACE;
   const tierLabel=TIER_LABEL_RACE;
-  const canAccess=r=>G.year===1?r.reqRanking===999:r.reqRanking>=G.ranking||r.reqRanking===999;
+  const canAccess=r=>r.zegamaSpecial?(G.ranking<=20||G.zegamaQual):(G.year===1?r.reqRanking===999:r.reqRanking>=G.ranking||r.reqRanking===999);
 
   // Calcula qué carreras dan puntos de circuito y cuántos
   function circuitBadge(raceId){
@@ -2368,19 +2575,57 @@ function renderFinancesTab(){
   const wo=WORK_OPTIONS.find(o=>o.pct===G.workPct)||WORK_OPTIONS[0];
   const workM=monthlyWorkIncome();
   const sponsorM=monthlySponsorIncome();
+  const brandM=monthlyBrandIncome();
   const clubM=G.club?.cost||0;
   const netM=monthlyNet();
   const workA=workM*12;
   const sponsorA=sponsorAnnual();
+  const brandA=brandM*12;
   const fixedA=FIXED_COSTS.total*12;
   const clubA=clubM*12;
   const netA=netM*12;
   const raceCosts=G.selectedRaces.reduce((a,r)=>a+r.cost,0);
   const staffCosts=(G.spending.fisio?200:0)+(G.spending.entrenador?250:0)+(G.spending.suplementos?100:0);
   const netAfterRaces=netA-raceCosts-staffCosts;
-  // Proyección de ahorros a 12 meses
   const savingsEnd=Math.max(0,G.money+netAfterRaces);
   const savingsPct=Math.min(100,Math.round(savingsEnd/(G.money+Math.abs(netAfterRaces)+1)*100));
+
+  // ── Sección Tienda Propia ──────────────
+  const brandEligible=canLaunchBrand()&&G.gameMode!=='expres';
+  const canHireEmployee=G.ownBrand&&!G.ownBrand.hasEmployee&&(G.year>=G.ownBrand.launched+2);
+  let brandSection='';
+  if(G.ownBrand){
+    const yearsActive=G.year-G.ownBrand.launched;
+    brandSection=`
+    <div class="fin-section" style="border-color:#c07a10">
+      <div class="fin-title" style="color:#c07a10">👟 Tu Marca — ${G.ownBrand.hasEmployee?'Consolidada':'Activa'}</div>
+      ${G.ownBrand.hasEmployee
+        ? `<div class="fin-row"><span>Ingresos brutos marca</span><span class="plus">+€1.300/mes</span></div>
+           <div class="fin-row"><span>Coste empleado</span><span class="minus">-€700/mes</span></div>
+           <div class="fin-row"><span>Neto marca</span><span class="plus">+€600/mes</span></div>
+           <div style="font-size:12px;color:#4a8a2a;margin-top:8px">✓ Empleado contratado — sin coste de horas de entrenamiento</div>`
+        : `<div class="fin-row"><span>Ingresos marca</span><span class="plus">+€300/mes</span></div>
+           <div style="font-size:12px;color:#c07a10;margin-top:8px">⏱ Consume 6h/semana de tu tiempo de entrenamiento</div>
+           ${canHireEmployee
+             ? `<button class="main" style="margin-top:10px;border-color:#4a8a2a;color:#4a8a2a" onclick="doHireEmployee()">Contratar empleado — €700/mes · recuperas 6h entrenamiento</button>`
+             : `<div style="font-size:12px;color:#aaa;margin-top:6px">Podrás contratar empleado a partir del año ${(G.ownBrand.launched+2)}</div>`
+           }`
+      }
+      <div style="font-size:11px;color:#aaa;margin-top:6px">Marca lanzada en Año ${G.ownBrand.launched} · ${yearsActive} temporada${yearsActive!==1?'s':''} activa${yearsActive!==1?'s':''}</div>
+    </div>`;
+  } else if(brandEligible){
+    brandSection=`
+    <div class="fin-section" style="border-color:#e0dfd8;border-style:dashed">
+      <div class="fin-title">👟 Tu Propia Marca</div>
+      <div style="font-size:13px;color:#555;margin-bottom:10px">Desbloqueable ahora que tienes nombre en el circuito. Inversión inicial de €2.500 — genera €300/mes aunque consume 6h/semana de entrenamiento.</div>
+      <div style="font-size:12px;color:#888;margin-bottom:10px">A los 2 años puedes contratar un empleado (€700/mes) y recuperar las horas de entrenamiento. La marca seguirá generando sin esfuerzo.</div>
+      ${G.money>=2500
+        ? `<button class="main" style="border-color:#c07a10;color:#c07a10" onclick="doLaunchBrand()">Lanzar mi marca — −€2.500 · +€300/mes</button>`
+        : `<button class="main" disabled>Lanzar mi marca (necesitas €${2500-G.money} más)</button>`
+      }
+    </div>`;
+  }
+
   el.innerHTML=`
     <h2>Finanzas</h2>
     <p class="sub">Temporada ${G.year} · ${esc(G.runner.name||'Corredor')}</p>
@@ -2389,6 +2634,7 @@ function renderFinancesTab(){
       <div class="fin-title">Mensual</div>
       ${workM>0?`<div class="fin-row"><span>Trabajo (${wo.label})</span><span class="plus">+€${workM}</span></div>`:''}
       ${sponsorM>0?`<div class="fin-row"><span>Patrocinios</span><span class="plus">+€${sponsorM}</span></div>`:''}
+      ${brandM>0?`<div class="fin-row"><span>Tu marca 👟</span><span class="plus">+€${brandM}</span></div>`:''}
       <div class="fin-row"><span>Gastos fijos de vida</span><span class="minus">-€${FIXED_COSTS.total}</span></div>
       ${clubM>0?`<div class="fin-row"><span>Club (${G.club?.name})</span><span class="minus">-€${clubM}</span></div>`:''}
       <div class="fin-row tot"><span>Neto mensual</span><span class="${netM>=0?'plus':'minus'}">${netM>=0?'+':''}€${netM}</span></div>
@@ -2398,6 +2644,7 @@ function renderFinancesTab(){
       <div class="fin-title">Proyección anual</div>
       ${workA>0?`<div class="fin-row"><span>Ingresos trabajo</span><span class="plus">+€${workA}</span></div>`:''}
       ${sponsorA>0?`<div class="fin-row"><span>Ingresos patrocinios</span><span class="plus">+€${sponsorA}</span></div>`:''}
+      ${brandA>0?`<div class="fin-row"><span>Tu marca (neto)</span><span class="plus">+€${brandA}</span></div>`:''}
       <div class="fin-row"><span>Gastos fijos (12 meses)</span><span class="minus">-€${fixedA}</span></div>
       ${clubA>0?`<div class="fin-row"><span>Club</span><span class="minus">-€${clubA}</span></div>`:''}
       ${raceCosts>0?`<div class="fin-row"><span>Inscripciones carreras</span><span class="minus">-€${raceCosts}</span></div>`:''}
@@ -2425,6 +2672,8 @@ function renderFinancesTab(){
         </div>
       </div>
     </div>
+
+    ${brandSection}
 
     ${netAfterRaces<0?`<div class="warn">Atención: con la configuración actual perderás €${Math.abs(netAfterRaces)} esta temporada. Considera aumentar la jornada laboral o reducir gastos.</div>`:''}
     ${netAfterRaces>=0&&netM>=0?`<div class="note">Vas bien. La temporada cierra con superávit. Puedes valorar reducir jornada laboral para entrenar más.</div>`:''}`;
@@ -2740,6 +2989,7 @@ function importFromText(txt, slot){
 
 function autoSave(){
   if(G._saveSlot==null)return;
+  if(G.gameMode==='coach')saveCoachSlot();
   try{saveToSlot(G._saveSlot);}catch(e){}
 }
 
@@ -2765,7 +3015,8 @@ function renderSaveScreen(){
   const slots=getAllSlots();
   const autoData=loadFromSlot('auto');
   el.innerHTML=`
-    <h1>Monte Perdido Trail</h1>
+    <h1>Juego Trail</h1>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v31</span></div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
       <p class="sub" style="margin-bottom:0;flex:1">Partidas guardadas</p>
       <button onclick="showTutorial()" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid #ddd;border-radius:20px;background:#fff;font-size:12px;font-weight:600;color:#888;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background='#fff'">📖 Tutorial</button>
@@ -2893,14 +3144,14 @@ function renderExpresSeasonStart(){
 function renderExpresCalendar(){
   const el=document.getElementById('main');
   const selIds=G.selectedRaces.map(r=>r.id);
-  const canAccess=r=>r.reqRanking>=G.ranking||r.reqRanking===999;
+  const canAccess=r=>r.zegamaSpecial?(G.ranking<=20||G.zegamaQual):(r.reqRanking>=G.ranking||r.reqRanking===999);
   const allRaces=[...RACES_DB,...getSpecRaces()];
   const tierColor=TIER_COLOR_RACE;
   const MAX=5;
 
   el.innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-      <h2>Elige 3 carreras</h2>
+      <h2>Elige 5 carreras</h2>
       <span style="font-size:13px;font-weight:700;color:${selIds.length>=MAX?'#2d7a2d':'#c07a10'}">${selIds.length}/${MAX}</span>
     </div>
     <p class="sub">Temporada ${G.year}/3 · elige 5 carreras · sin coste de inscripción</p>
@@ -2909,11 +3160,13 @@ function renderExpresCalendar(){
         const sel=selIds.includes(r.id);
         const locked=!canAccess(r);
         const full=!sel&&selIds.length>=MAX;
+        const zegamaBadge=r.zegamaSpecial&&!locked&&G.zegamaQual?'<div style="font-size:10px;color:#4a8a2a;margin-top:2px">✓ Clasificado por tiempo</div>':r.zegamaSpecial&&!locked&&G.ranking<=20?'<div style="font-size:10px;color:#c07a10;margin-top:2px">✓ Invitación por ranking</div>':'';
+
         return `<div style="background:#fff;border:1.5px solid ${sel?'#4a8a2a':locked?'#eee':'#e0dfd8'};border-radius:10px;padding:10px 12px;cursor:${locked||full?'default':'pointer'};opacity:${locked||(!sel&&full)?0.45:1};transition:background .15s" onclick="${locked||full?'':'window.toggleExpresRace(\''+r.id+'\')'}" >
           <div style="font-size:13px;font-weight:600;margin-bottom:3px;line-height:1.3">${sel?'✓ ':''}<span style="color:${tierColor[r.tier]||'#888'}">${r.name}</span></div>
           <div style="font-size:12px;color:#888">${r.km}km · ${r.type}</div>
           <div style="font-size:11px;color:#aaa;margin-top:2px">${r.monthName}</div>
-          ${locked?`<div style="font-size:11px;color:#ccc;margin-top:3px">🔒 Ranking #${r.reqRanking}</div>`:''}
+          ${locked?(r.zegamaSpecial?`<div style="font-size:11px;color:#c07a10;margin-top:3px">🏔️ Invitación — Top 20 o clasificado por tiempo</div>`:`<div style="font-size:11px;color:#ccc;margin-top:3px">🔒 Ranking #${r.reqRanking}</div>`):''}
         </div>`;
       }).join('')}
     </div>
@@ -2926,7 +3179,7 @@ window.toggleExpresRace=id=>{
   const race=all.find(r=>r.id===id);if(!race)return;
   const idx=G.selectedRaces.findIndex(r=>r.id===id);
   if(idx>=0){G.selectedRaces.splice(idx,1);}
-  else if(G.selectedRaces.length<3){G.selectedRaces.push({...race});}
+  else if(G.selectedRaces.length<5){G.selectedRaces.push({...race});}
   render();
 };
 
@@ -3151,6 +3404,7 @@ function renderModeSelect(){
     {id:'expres',        icon:'⚡', label:'Carrera Exprés',        desc:'3 temporadas · sin jornada laboral · ganancias ×1.5',         available:true},
     {id:'infinite_prog', icon:'📈', label:'Modo infinito',          desc:'Dificultad progresiva · sin techo · próximamente',            available:false},
     {id:'coach',         icon:'📋', label:'Entrenador',              desc:'Lleva un atleta ajeno · honorarios + bonus · temporadas',     available:true},
+    {id:'club',          icon:'🏕️', label:'Club',                   desc:'Gestiona un club · plantilla · presupuesto · ranking',        available:true},
     {id:'canicross',     icon:'🐕', label:'Canicross',              desc:'Corres con tu perro · carreras específicas · próximamente',    available:false},
   ];
   const sel=G.gameMode||'medio';
@@ -3222,11 +3476,21 @@ window.toggleModeGroup=()=>{
 };
 window.selectMode=id=>{G.gameMode=id;render();};
 window.confirmMode=()=>{
+  if(G.gameMode==='club'){
+    if(G.clubModeData){G.screen='clubHub';render();return;}
+    G.screen='clubCreate';render();return;
+  }
   if(G.gameMode==='coach'){
-    // Init coach pool and go to athlete selection
+    G.coachReputation=G.coachReputation||0;
+    // If roster already has athletes, go to hub
+    if((G.coachRoster||[]).some(s=>s&&s.coachAthlete)){
+      G.screen='coachHub';render();return;
+    }
+    // First time — init pool and go to athlete selection for slot 0
+    G.coachActiveIdx=0;
+    if(!G.coachRoster)G.coachRoster=[];
     const shuffled=[...COACH_ATHLETE_POOL].sort(()=>Math.random()-0.5);
     G.coachPool=shuffled.slice(0,3).map(a=>({...a,currentStats:{...a.baseStats}}));
-    G.coachReputation=G.coachReputation||0;
     G.screen='coachSelect';render();return;
   }
   G.screen='intro';render();
@@ -3236,8 +3500,9 @@ function renderIntro(){
   const el=document.getElementById('main');
   const r=G.runner;
   el.innerHTML=`
-    <h1>Monte Perdido Trail</h1>
+    <h1>Juego Trail</h1>
     <p class="sub">Crea tu corredor y empieza tu carrera deportiva</p>
+    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v33</div>
     ${G.gameMode==='expres'?`<div class="warn" style="margin-bottom:14px">⚡ <strong>Carrera Exprés</strong> — 3 temporadas · sin gestión de jornada · ganancias de entrenamiento ×1.5</div>`:''}
     <label class="field-label">Nombre de la partida</label>
     <input id="runname" type="text" placeholder="Ej: Temporada del reto, Sin trabajo año 1..." value="${esc(G.runName||'')}" maxlength="30" style="margin-bottom:14px"/>
@@ -3448,7 +3713,7 @@ function renderSeasonStart(){
 // ── CALENDAR ───────────────────────────
 function renderCalendar(){
   const el=document.getElementById('main');
-  const canAccess=r=>r.reqRanking>=G.ranking||r.reqRanking===999;
+  const canAccess=r=>r.zegamaSpecial?(G.ranking<=20||G.zegamaQual):(r.reqRanking>=G.ranking||r.reqRanking===999);
   const selIds=G.selectedRaces.map(r=>r.id);
   const spent=G.selectedRaces.reduce((a,r)=>a+r.cost,0);
   const budget=G.money;
@@ -3477,7 +3742,7 @@ function renderCalendar(){
             ${inCirc?`<span style="font-size:12px;font-weight:600;padding:1px 5px;border-radius:4px;background:#c07a1022;color:#c07a10">Liga · ~${circPts}pts</span>`:''}
           </div>
           <div style="font-size:12px;color:#888">${r.monthName} · ${r.type} · ${r.desnivel}</div>
-          ${locked?`<div style="font-size:12px;color:#ccc;margin-top:2px">🔒 Ranking #${r.reqRanking} requerido</div>`:''}
+          ${locked?(r.zegamaSpecial?`<div style="font-size:12px;color:#c07a10;margin-top:2px">🏔️ Invitación Top 20 o clasificación por tiempo (corte 4h20)</div>`:`<div style="font-size:12px;color:#ccc;margin-top:2px">🔒 Ranking #${r.reqRanking} requerido</div>`):''}
           ${noMoney&&!sel?`<div class="text-warn">Sin presupuesto</div>`:''}
           ${isSpec?`<div style="font-size:12px;color:${myColor};margin-top:2px">+15% rendimiento para ${myLabel}</div>`:''}
         </div>
@@ -4265,7 +4530,7 @@ function renderMidSeasonCalendar(){
   const doneNames=G.raceResults.map(r=>r.name);
   const selIds=G.selectedRaces.map(r=>r.id);
   const spent=G.selectedRaces.reduce((a,r)=>a+r.cost,0);
-  const canAccess=r=>r.reqRanking>=G.ranking||r.reqRanking===999;
+  const canAccess=r=>r.zegamaSpecial?(G.ranking<=20||G.zegamaQual):(r.reqRanking>=G.ranking||r.reqRanking===999);
   const tierColor=TIER_COLOR_RACE;
   const tierLabel=TIER_LABEL_RACE;
   const qLabel={1:'Primer trimestre',2:'Segundo trimestre',3:'Tercer trimestre',4:'Cuarto trimestre'};
@@ -4293,7 +4558,7 @@ function renderMidSeasonCalendar(){
             <span style="font-size:12px;font-weight:600;padding:1px 5px;border-radius:3px;background:${tierColor[r.tier]||'#888'}22;color:${tierColor[r.tier]||'#888'}">${tierLabel[r.tier]||''}</span>
           </div>
           <div style="font-size:12px;color:#888">${r.monthName} · ${r.type} · ${r.desnivel}</div>
-          ${locked?`<div style="font-size:12px;color:#ccc;margin-top:2px">🔒 Ranking #${r.reqRanking} requerido</div>`:''}
+          ${locked?(r.zegamaSpecial?`<div style="font-size:12px;color:#c07a10;margin-top:2px">🏔️ Invitación Top 20 o clasificación por tiempo (corte 4h20)</div>`:`<div style="font-size:12px;color:#ccc;margin-top:2px">🔒 Ranking #${r.reqRanking} requerido</div>`):''}
           ${noMoney&&!isSel?`<div class="text-warn">Sin presupuesto</div>`:''}
         </div>
         <div class="right-col">
@@ -6437,6 +6702,11 @@ function applyPostRaceTracking(race,res){
     kmAtInjury:G.injuryType?Math.round(race.km*(G.seg/curSegs().length)):null,
     zeroedOut,
   });
+  // Clasificación Zegama por tiempo (corte: 4h20 = 260 min)
+  if(race.id==='mayo'&&!G.injuryType&&G.time<=260){
+    G.zegamaQualNext=true;
+    showToast('¡Bajo el corte de Zegama! Clasificado para el año que viene 🏔️','#4a8a2a');
+  }
   G.careerHistory.push({name:race.name,year:G.year,time:G.time,pos,prize,catPos,catTotal,catName:playerCat.label});
   G.money+=prize;
 
@@ -6755,6 +7025,26 @@ window.resolveMonthlyEvent=(evIdx,optIdx)=>{
   if(parts.length)showToast(parts.join(' · '), opt.value<0||opt.loadAdd||(opt.clubRepDelta&&opt.clubRepDelta<0)?'#c07a10':'#2d7a2d');
   render();
 };
+// ══════════════════════════════════════
+//  TIENDA PROPIA
+// ══════════════════════════════════════
+window.doLaunchBrand=()=>{
+  if(G.money<2500){showToast('Necesitas €2.500 para lanzar tu marca','#c0392b');return;}
+  if(!confirm('¿Lanzar tu propia marca de ropa trail?\n\nCosta €2.500 de inversión inicial.\nGenerará €300/mes pero consumirá 6h/semana de entrenamiento.\n\nA los 2 años podrás contratar un empleado para recuperar esas horas.'))return;
+  G.money-=2500;
+  G.ownBrand={launched:G.year,hasEmployee:false,employeeYear:null};
+  showToast('¡Marca lanzada! 👟 +€300/mes · −6h entrenamiento/semana','#c07a10');
+  autoSave();render();
+};
+window.doHireEmployee=()=>{
+  if(!G.ownBrand||G.ownBrand.hasEmployee)return;
+  if(!confirm('¿Contratar empleado para tu marca?\n\nCoste: €700/mes (se deduce de los ingresos de la marca).\nBeneficio: recuperas 6h/semana de entrenamiento.\nIngresos netos de la marca: €600/mes.'))return;
+  G.ownBrand.hasEmployee=true;
+  G.ownBrand.employeeYear=G.year;
+  showToast('Empleado contratado 👟 — ingresos netos €600/mes · sin coste de horas','#4a8a2a');
+  autoSave();render();
+};
+
 window.doNextYear=yearNet=>{
   checkAndUnlockAchievements();
   generateDiaryEntry(yearNet);
@@ -6777,6 +7067,9 @@ window.doNextYear=yearNet=>{
   });
   G.money=Math.max(0,G.money+yearNet);
 
+  // Ingresos anuales de marca (ya están en yearNet a través de monthlyNet, pero el empleado se paga aparte)
+  // El coste del empleado ya está descontado en monthlyBrandIncome() = 600 neto
+
   // Envejecer
   G.runner.age=(G.runner.age||25)+1;
   applyAgingPenalties();
@@ -6787,6 +7080,8 @@ window.doNextYear=yearNet=>{
   if(G.gameMode==='expres'&&G.year>3){G.screen='retirement';render();return;}
 
   if(G.year>=3&&G.ranking<200&&monthlyNet()>=0)G.workPct=Math.min(G.workPct,80);
+  // Traspasar clasificación Zegama
+  G.zegamaQual=G.zegamaQualNext;G.zegamaQualNext=false;
   G.selectedRaces=[];G.trainingBlock=null;G.raceResults=[];G.currentRaceIdx=0;G.trainingEff=1.0;
   G.activeTab='game';G.liveClass=[];G.lastRaceGains=[];
   G.workByQuarter={1:G.workPct,2:G.workPct,3:G.workPct,4:G.workPct};
@@ -7085,9 +7380,11 @@ window.doCoachSelect=id=>{
   G.coachDayCondition=null;G.coachRaceEventPending=null;G.coachEventLog=[];
   G.coachGels=3;G.coachGelsUsed=0;G.coachRadioUsed={};G.coachAidExtras={};G.coachPreRaceBlock=null;
   G.coachSeasonObjective=null;G.coachInjury=null;G.coachSponsors=[];G.coachSponsorPool=null;G.coachRadioWindowOpen=false;
+  G._coachSlotNotifs=[];
   generateCoachSeasonObjective();
   generateCoachSponsorPool();
-  G.screen='coachHome';G.activeTab='game';
+  saveCoachSlot(); // persist to roster
+  G.screen='coachHub';G.activeTab='game';
   autoSave();render();
 };
 
@@ -7102,7 +7399,35 @@ function renderCoachHome(){
   const trustColor=G.coachTrust>=60?'#2d7a2d':G.coachTrust>=30?'#c07a10':'#c0392b';
   const trustLabel=G.coachTrust>=80?'Excelente':G.coachTrust>=60?'Buena':G.coachTrust>=30?'Tensa':'Crítica';
   const results=G.coachRaceResults||[];
+  markNotifsRead();
+
+  // Build slot tabs
+  const roster=G.coachRoster||[];
+  const activeIdx=G.coachActiveIdx||0;
+  const filledSlots=roster.filter(s=>s&&s.coachAthlete).length;
+  const slot1Unlocked=coachSlotUnlocked(1);
+  const slot2Unlocked=coachSlotUnlocked(2);
+  const tabsHtml=`
+    <div class="slot-tabs" style="margin-bottom:14px">
+      ${roster.map((s,i)=>{
+        if(!s||!s.coachAthlete)return'';
+        const notifs=coachSlotNotifCount(i);
+        const isActive=i===activeIdx;
+        return`<button class="slot-tab ${isActive?'active':''}" onclick="switchCoachSlot(${i})">
+          ${s.coachAthlete.flag} ${esc(s.coachAthlete.name.split(' ')[0])}
+          ${notifs>0&&!isActive?`<span class="notif-dot"></span>`:''}
+        </button>`;
+      }).join('')}
+      ${filledSlots<2&&slot1Unlocked?`<button class="slot-tab" onclick="addCoachSlot()" style="border-style:dashed;color:#4a90d9">+ Atleta</button>`:''}
+      ${filledSlots===2&&slot2Unlocked?`<button class="slot-tab" onclick="addCoachSlot()" style="border-style:dashed;color:#4a90d9">+ Atleta</button>`:''}
+    </div>`;
+
   el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <button onclick="G.screen='coachHub';render()" style="background:none;border:1px solid #e0dfd8;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#888">← Hub</button>
+      <div style="font-size:12px;color:#aaa">Rep. entrenador: <strong>${G.coachReputation||0}/100</strong></div>
+    </div>
+    ${filledSlots>1?tabsHtml:''}
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
       <div style="width:48px;height:48px;border-radius:50%;background:#f0ede8;border:2px solid #e0dfd8;display:flex;align-items:center;justify-content:center;font-size:24px">${a.flag}</div>
       <div style="flex:1">
@@ -7511,6 +7836,8 @@ function renderCoachPreRace(){
     </div>
 
     <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doCoachLaunchRace()">🏁 Salida — ${esc(race.name)} →</button>
+    <button class="main" style="margin-top:6px;border-color:#4a90d9;color:#4a90d9" onclick="doCoachDelegateRace()">📡 Delegar — ${esc(a.name)} corre solo</button>
+    <div style="font-size:12px;color:#aaa;text-align:center;margin-top:4px">Te avisaré cuando acabe con el resultado</div>
     <button class="main" style="margin-top:6px;opacity:0.5" onclick="G.coachDayCondition=null;G.screen='coachHome';render()">← Volver al hub</button>`;
 
   // Attach profile touch handlers
@@ -8128,7 +8455,8 @@ function renderCoachSeasonEnd(){
       `}
     </div>
     ${clubUnlock?`<div class="note" style="margin-bottom:12px">🏕️ <strong>Modo Club — próximamente</strong> — ${completedSeasons} temporadas completadas.</div>`:''}
-    <button class="main" style="opacity:0.5" onclick="G=freshState();render()">← Menú principal</button>`;
+    <button class="main" style="margin-top:6px;opacity:0.5" onclick="saveCoachSlot();G.screen='coachHub';render()">← Volver al hub</button>
+    <button class="main" style="margin-top:6px;opacity:0.4" onclick="G=freshState();render()">← Menú principal</button>`;
 }
 
 window.doCoachNextSeason=()=>{
@@ -8152,7 +8480,7 @@ window.doCoachNextSeason=()=>{
   Object.keys(a.currentStats).forEach(k=>{
     a.currentStats[k]=Math.min(95,a.currentStats[k]+Math.floor(Math.random()*3));
   });
-  G.screen='coachHome';G.activeTab='game';autoSave();render();
+  G.screen='coachHome';G.activeTab='game';saveCoachSlot();autoSave();render();
 };
 
 window.doCoachNewAthlete=()=>{
@@ -8160,12 +8488,696 @@ window.doCoachNewAthlete=()=>{
   G.coachAthleteHistory.push({name:G.coachAthlete.name,season:G.coachSeason,
     wins:(G.coachRaceResults||[]).filter(r=>r.pos===1&&!r.dnf).length,
     trust:G.coachTrust,completed:false});
+  // Clear current slot
   G.coachAthlete=null;G.coachSeason=1;G.coachRaceResults=[];
+  G._coachSlotNotifs=[];
   const coached=(G.coachAthleteHistory||[]).map(h=>h.name);
   const avail=COACH_ATHLETE_POOL.filter(a=>!coached.includes(a.name));
   const src=(avail.length>=3?avail:COACH_ATHLETE_POOL).sort(()=>Math.random()-0.5);
   G.coachPool=src.slice(0,3).map(a=>({...a,currentStats:{...a.baseStats}}));
+  saveCoachSlot(); // save empty slot back
   G.screen='coachSelect';render();
+};
+
+// ══════════════════════════════════════
+//  COACH HUB — PANTALLA PRINCIPAL
+// ══════════════════════════════════════
+function renderCoachHub(){
+  const el=document.getElementById('main');
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  saveCoachSlot();
+  const roster=G.coachRoster||[];
+  const rep=G.coachReputation||0;
+  const repTier=rep<20?{label:'Entrenador novato',color:'#aaa'}:rep<40?{label:'Entrenador regional',color:'#4a90d9'}:rep<60?{label:'Entrenador conocido',color:'#2d7a2d'}:rep<80?{label:'Entrenador nacional',color:'#c07a10'}:{label:'Entrenador élite 🌟',color:'#c0392b'};
+  const filledSlots=roster.filter(s=>s&&s.coachAthlete).length;
+
+  // Build slot cards
+  const slotCards=[0,1,2].map(idx=>{
+    const slot=roster[idx];
+    const unlocked=coachSlotUnlocked(idx);
+    const notifs=coachSlotNotifCount(idx);
+    const hasAthlete=slot&&slot.coachAthlete;
+
+    if(!unlocked){
+      const reqRep=idx===1?40:70;
+      return`<div class="coach-slot-card locked-slot">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:24px;opacity:0.4">🔒</div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#aaa">Slot ${idx+1} bloqueado</div>
+            <div style="font-size:12px;color:#bbb">Necesitas reputación ≥${reqRep} · Actual: ${rep}</div>
+          </div>
+        </div>
+      </div>`;
+    }
+    if(!hasAthlete){
+      return`<div class="coach-slot-card empty-slot" onclick="addCoachSlot(${idx})">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:24px">➕</div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#4a90d9">Añadir atleta al slot ${idx+1}</div>
+            <div style="font-size:12px;color:#aaa">Presenta tres candidatos y elige uno</div>
+          </div>
+        </div>
+      </div>`;
+    }
+    const a=slot.coachAthlete;
+    const trust=slot.coachTrust||60;
+    const trustColor=trust>=60?'#2d7a2d':trust>=30?'#c07a10':'#c0392b';
+    const season=slot.coachSeason||1;
+    const raceIdx=slot.coachRaceIdx||0;
+    const totalRaces=(slot.coachSelectedRaces||[]).length;
+    const allDone=totalRaces>0&&raceIdx>=totalRaces;
+    const nextRace=totalRaces>0?(slot.coachSelectedRaces||[])[raceIdx]:null;
+    const pendingEvent=slot.coachPendingEvent&&!slot.coachPendingEvent.resolved;
+    const injury=slot.coachInjury&&slot.coachInjury.racesLeft>0;
+    const unreadNotifs=(slot._coachSlotNotifs||[]).filter(x=>!x.read);
+    const isActive=(G.coachActiveIdx||0)===idx;
+
+    // Status text
+    let statusText='';
+    if(allDone)statusText='✅ Temporada completa — ver balance';
+    else if(totalRaces===0)statusText='📅 Sin calendario — planificar';
+    else if(injury)statusText=`🩹 Lesionado — ${slot.coachInjury.racesLeft} carrera${slot.coachInjury.racesLeft!==1?'s':''} de baja`;
+    else if(nextRace)statusText=`🏁 Próxima: ${nextRace.name}`;
+    else statusText='🏃 En entrenamiento';
+
+    return`<div class="coach-slot-card ${isActive?'active-slot':''}" onclick="switchCoachSlot(${idx})">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <div style="width:44px;height:44px;border-radius:50%;background:#f0ede8;border:2px solid #e0dfd8;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${a.flag}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+            <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</div>
+            ${notifs>0?`<span class="notif-dot ${pendingEvent||unreadNotifs.some(n=>n.type==='urgent')?'urgent':''}"></span>`:''}
+            ${isActive?`<span style="font-size:10px;background:#e8eef8;color:#2d4fa0;padding:1px 5px;border-radius:3px;font-weight:700">ACTIVO</span>`:''}
+          </div>
+          <div style="font-size:12px;color:#888;margin-bottom:6px">T${season} · ${SPEC_LABEL[a.spec]||a.spec} · Confianza <span style="color:${trustColor};font-weight:600">${trust}/100</span></div>
+          <div style="font-size:12px;color:#555">${statusText}</div>
+          ${unreadNotifs.length>0?`
+          <div style="margin-top:8px;background:#f0f6ff;border-radius:6px;padding:7px 10px;border:1px solid #b8d4f0">
+            ${unreadNotifs.slice(0,2).map(n=>`<div style="font-size:12px;color:#4a90d9;margin-bottom:2px">${n.text}</div>`).join('')}
+            ${unreadNotifs.length>2?`<div style="font-size:11px;color:#aaa">+${unreadNotifs.length-2} más</div>`:''}
+          </div>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const hist=G.coachAthleteHistory||[];
+  const totalWins=hist.reduce((s,h)=>s+(h.wins||0),0);
+  const totalAthletes=hist.length+filledSlots;
+
+  el.innerHTML=`
+    <div style="text-align:center;padding:14px 0 16px">
+      <div style="font-size:30px;margin-bottom:6px">📋</div>
+      <h2 style="margin-bottom:2px">Centro de Entrenamiento</h2>
+      <div style="font-size:13px;color:${repTier.color};font-weight:600">${repTier.label}</div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-around;text-align:center">
+        ${[['Reputación',`${rep}/100`],['Atletas',totalAthletes],['Victorias',totalWins]].map(([l,v])=>`
+          <div>
+            <div style="font-size:18px;font-weight:700">${v}</div>
+            <div style="font-size:11px;color:#aaa">${l}</div>
+          </div>`).join('')}
+      </div>
+      <div style="height:5px;background:#e5e4de;border-radius:3px;margin-top:10px;overflow:hidden">
+        <div style="width:${rep}%;height:100%;background:${repTier.color};border-radius:3px;transition:width .4s"></div>
+      </div>
+      ${rep<40?`<div style="font-size:11px;color:#aaa;margin-top:4px;text-align:center">Reputación ≥40 para un 2º atleta · ≥70 para un 3º</div>`:''}
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Mis atletas</div>
+    ${slotCards}
+
+    ${hist.length>0?`
+    <div class="card" style="margin-top:10px">
+      <div class="sec-title-sm">Historial de atletas</div>
+      ${hist.slice(-4).reverse().map(h=>`
+        <div class="history-row">
+          <div>
+            <div style="font-size:13px;font-weight:500">${esc(h.name)}</div>
+            <div style="font-size:12px;color:#888">T${h.season} · ${h.wins||0} victorias · Confianza final ${h.trust}/100</div>
+          </div>
+          <span style="font-size:11px;background:${h.completed?'#f0faf0':'#fef0f0'};color:${h.completed?'#2d7a2d':'#c0392b'};padding:2px 6px;border-radius:4px;font-weight:600">${h.completed?'Renovó':'No renovó'}</span>
+        </div>`).join('')}
+    </div>`:''}
+
+    <button class="main" style="margin-top:12px;opacity:0.5" onclick="G=freshState();render()">← Menú principal</button>`;
+}
+
+window.addCoachSlot=idx=>{
+  // Determine which slot to fill: if idx given, use it; else find first empty unlocked slot
+  let targetIdx=idx!==undefined?idx:-1;
+  if(targetIdx===-1){
+    for(let i=0;i<3;i++){
+      if(coachSlotUnlocked(i)&&!(G.coachRoster&&G.coachRoster[i]&&G.coachRoster[i].coachAthlete)){
+        targetIdx=i;break;
+      }
+    }
+  }
+  if(targetIdx===-1){showToast('No hay slots disponibles','#c07a10');return;}
+  // Save current slot, switch to target, show select
+  saveCoachSlot();
+  G.coachActiveIdx=targetIdx;
+  // Init empty state for this slot
+  coachSlotKeys().forEach(k=>{
+    const defaults={coachAthlete:null,coachSeason:1,coachTrust:60,coachEarnings:0,
+      coachSelectedRaces:[],coachRaceIdx:0,coachRaceResults:[],coachBodyLoad:0,
+      coachRaceData:null,coachRaceAnimIdx:0,coachRaceAidPaused:false,coachLastTraining:null,
+      coachNemesis:null,coachPendingEvent:null,coachLastDialogue:null,coachDayCondition:null,
+      coachRaceEventPending:null,coachEventLog:[],coachGels:3,coachGelsUsed:0,
+      coachRadioUsed:{},coachAidExtras:{},coachPreRaceBlock:null,coachSeasonObjective:null,
+      coachInjury:null,coachSponsors:[],coachSponsorPool:null,coachRadioWindowOpen:false,
+      coachTrainingSelected:null,coachPool:null,_coachSlotNotifs:[]};
+    if(k in defaults)G[k]=defaults[k];
+  });
+  const coached=(G.coachAthleteHistory||[]).map(h=>h.name);
+  // Also exclude athletes already in other slots
+  const activeNames=(G.coachRoster||[]).filter((s,i)=>i!==targetIdx&&s&&s.coachAthlete).map(s=>s.coachAthlete.name);
+  const avail=COACH_ATHLETE_POOL.filter(a=>!coached.includes(a.name)&&!activeNames.includes(a.name));
+  const src=(avail.length>=3?avail:COACH_ATHLETE_POOL).sort(()=>Math.random()-0.5);
+  G.coachPool=src.slice(0,3).map(a=>({...a,currentStats:{...a.baseStats}}));
+  G.screen='coachSelect';render();
+};
+
+window.doCoachDelegateRace=()=>{
+  const race=(G.coachSelectedRaces||[])[G.coachRaceIdx];
+  if(!race)return;
+  const a=G.coachAthlete;
+  // Apply pre-race block
+  let energyBonus=0,trustBonus=0;
+  if(G.coachPreRaceBlock==='taper_race')energyBonus=5;
+  if(G.coachPreRaceBlock==='mental_talk'){trustBonus=8;G.coachTrust=Math.min(100,G.coachTrust+trustBonus);}
+  // Apply day condition
+  const dc=G.coachDayCondition||{energyMod:0,legsMod:0};
+  // Simulate race silently using existing logic
+  const stats=a.currentStats||a.baseStats;
+  const basePerf=(stats.resistencia||50)*0.35+(stats.subida||50)*0.25+(stats.bajada||50)*0.2+(stats.velocidad||50)*0.2;
+  const condMod=(energyBonus/100)+(dc.energyMod/100)+(dc.legsMod/200);
+  const loadPenalty=Math.max(0,(G.coachBodyLoad||0)-60)/200;
+  const injPenalty=G.coachInjury&&G.coachInjury.racesLeft>0?0.15:0;
+  const rng=(Math.random()*0.2)-0.1;
+  const finalPerf=Math.max(10,Math.min(95,basePerf*(1+condMod-loadPenalty-injPenalty)+rng*10));
+  const tier=race.tier||'local';
+  const numRivals={local:20,regional:40,nacional:80,elite:120}[tier]||30;
+  const pos=Math.max(1,Math.round((1-(finalPerf/100))*numRivals*0.8)+1+Math.floor(Math.random()*3));
+  const prize=pos<=3?race.prize||0:0;
+  const coachCut=Math.round(prize*0.2);
+  const trustD=pos<=3?+6:pos<=10?+3:pos<=20?0:-3;
+  const repG=pos<=3?4:pos<=10?2:0;
+  // Post-race dialogue
+  const pers=a.personality;
+  const dlgPool=COACH_POST_RACE_DIALOGUES[pers]||{};
+  const cat=pos<=3?'great':pos<=10?'good':'bad';
+  const pool=dlgPool[cat]||['"..."'];
+  const dialogue=pool[Math.floor(Math.random()*pool.length)];
+  // Store result
+  G.coachRaceResults.push({pos,dnf:false,prize,coachCut,raceName:race.name,tier,delegated:true});
+  G.coachEarnings=(G.coachEarnings||0)+coachCut+(a.monthlyFee||250);
+  G.coachTrust=Math.max(0,Math.min(100,G.coachTrust+trustD));
+  G.coachReputation=Math.min(100,(G.coachReputation||0)+repG);
+  G.coachBodyLoad=Math.min(100,(G.coachBodyLoad||0)+race.km*0.3);
+  G.coachRaceIdx++;
+  G.coachRaceData=null;G.coachDayCondition=null;G.coachPreRaceBlock=null;
+  // Add notification
+  const icon=pos<=3?'🏆':pos<=10?'🎯':'📋';
+  addCoachNotif(`${icon} ${race.name} — ${pos<=3?'¡Podio! ':''}#${pos} · ${dialogue}`,'race_result');
+  generateCoachBetweenEvent();
+  saveCoachSlot();autoSave();
+  showToast(`📡 ${esc(a.name)} ha terminado — #${pos}`,'#4a90d9');
+  G.screen='coachHub';render();
+};
+
+// ══════════════════════════════════════
+//  MODO CLUB — PANTALLAS
+// ══════════════════════════════════════
+function renderClubCreate(){
+  const el=document.getElementById('main');
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const name=G._clubNameDraft||'';
+  const spec=G._clubSpecDraft||'mixto';
+  const specs=[
+    {id:'montanero', label:'🏔️ Montaña',    desc:'Mejor en subidas y ultras de montaña'},
+    {id:'fondista',  label:'🏃 Fondo',       desc:'Resistencia larga. Ultras y maratones'},
+    {id:'tecnico',   label:'⚡ Técnico',     desc:'Corredores rápidos en terrenos difíciles'},
+    {id:'mixto',     label:'🌐 Mixto',       desc:'Sin especialidad — plantilla variada'},
+  ];
+  el.innerHTML=`
+    <div style="text-align:center;padding:14px 0 16px">
+      <div style="font-size:32px;margin-bottom:6px">🏕️</div>
+      <h2>Crear tu club</h2>
+      <p class="sub">Dale un nombre y elige la especialidad. Define el carácter del club.</p>
+    </div>
+    <label class="field-label">Nombre del club</label>
+    <input id="club-name-inp" type="text" placeholder="Ej: Gorbea Trail Club, Txindoki Runners..." maxlength="32" value="${esc(name)}" oninput="G._clubNameDraft=this.value;"/>
+    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Especialidad del club</div>
+    ${specs.map(s=>`
+      <div class="work-card${spec===s.id?' sel':''}" onclick="G._clubSpecDraft='${s.id}';render()" style="margin-bottom:8px${spec===s.id?';border-color:#1a1a1a;background:#f5f4f0':''}">
+        <div style="font-size:14px;font-weight:600">${s.label}</div>
+        <div style="font-size:12px;color:#888">${s.desc}</div>
+      </div>`).join('')}
+    <div class="hint" style="margin-top:8px;margin-bottom:14px">Empiezas con 3 corredores de la especialidad elegida, 8 socios y €800 de presupuesto.</div>
+    <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doClubCreate()">Fundar el club →</button>
+    <button class="main" style="margin-top:6px;opacity:0.5" onclick="G.screen='modeSelect';render()">← Volver</button>`;
+}
+
+window.doClubCreate=()=>{
+  const nameEl=document.getElementById('club-name-inp');
+  const name=(nameEl?nameEl.value:G._clubNameDraft||'').trim()||'Mi Club Trail';
+  const spec=G._clubSpecDraft||'mixto';
+  G.clubModeData=initClubModeData(name,spec);
+  G._clubNameDraft=null;G._clubSpecDraft=null;
+  generateClubEvent();
+  G.screen='clubHub';autoSave();render();
+};
+
+function renderClubHub(){
+  const el=document.getElementById('main');
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const d=G.clubModeData;
+  if(!d){G.screen='clubCreate';render();return;}
+  const lvl=clubLevelByRep();
+  const wages=clubMonthlyWage();
+  const annualWages=wages*12;
+  const annualIncome=Math.round(d.socios*25*12);
+  const annualNet=annualIncome-annualWages;
+  const assigned=Object.values(d.calAssignments||{}).filter(v=>v).length;
+  const totalRaces=CLUB_RACES.length;
+  const allAssigned=d.plantilla.length>0&&Object.keys(d.calAssignments||{}).length>0;
+
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="font-size:32px">${lvl.icon}</div>
+      <div style="flex:1">
+        <div style="font-size:18px;font-weight:700">${esc(d.name)}</div>
+        <span class="club-level-badge" style="background:${lvl.color}22;color:${lvl.color}">${lvl.label}</span>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:12px;color:#aaa">Temporada</div>
+        <div style="font-size:18px;font-weight:700">${d.temporada}</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+      ${[['👥 Socios',d.socios],['⭐ Rep.',`${d.reputacion}/100`],['💶 Presup.',`€${d.presupuesto}`]].map(([l,v])=>`
+        <div class="stat" style="background:#fff;border:1px solid #e0dfd8">
+          <div class="stat-label">${l}</div>
+          <div class="stat-val" style="font-size:13px">${v}</div>
+        </div>`).join('')}
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Economía anual estimada</div>
+      <div class="fin-row"><span>Cuotas de socios (${d.socios} × €25/mes)</span><span class="plus">+€${annualIncome}</span></div>
+      <div class="fin-row"><span>Salarios plantilla</span><span class="minus">−€${annualWages}</span></div>
+      <div class="fin-row tot"><span>Balance neto</span><span class="${annualNet>=0?'plus':'minus'}">${annualNet>=0?'+':''}€${annualNet}</span></div>
+    </div>
+
+    ${d.pendingEvent?`
+    <div class="card" style="margin-bottom:12px;border-color:#c07a10;border-width:1.5px;cursor:pointer" onclick="G.screen='clubEvent';render()">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:22px">📣</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:#c07a10">Evento pendiente</div>
+          <div style="font-size:12px;color:#555">${esc(d.pendingEvent.title)}</div>
+        </div>
+        <span style="color:#c07a10">→</span>
+      </div>
+    </div>`:''}
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Estado de la temporada</div>
+      <div style="font-size:13px;color:#555">
+        ${d.seasonSimulated
+          ?`✅ Temporada completada — ${(d.seasonResults||[]).length} carreras corridas`
+          :allAssigned
+            ?`🏁 ${assigned} carrera${assigned!==1?'s':''} asignada${assigned!==1?'s':''}. Listo para simular.`
+            :`📅 Asigna corredores a las carreras para empezar`}
+      </div>
+    </div>
+
+    ${d.seasonSimulated
+      ?`<button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="G.screen='clubSeasonEnd';render()">Ver balance de temporada →</button>`
+      :`<button class="main" onclick="G.screen='clubCalendar';render()">📅 Asignar corredores a carreras</button>
+       ${allAssigned?`<button class="main" style="margin-top:6px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doClubSimulateSeason()">🏁 Simular temporada →</button>`:''}`}
+    <button class="main" style="margin-top:6px" onclick="G.screen='clubPlantilla';render()">👥 Plantilla (${d.plantilla.length} corredores)</button>
+    <button class="main" style="margin-top:6px;opacity:0.5" onclick="G=freshState();render()">← Menú principal</button>`;
+}
+
+function renderClubPlantilla(){
+  const el=document.getElementById('main');
+  const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
+  const wages=clubMonthlyWage();
+  // Available to sign (not already in plantilla)
+  const inIds=d.plantilla.map(r=>r.id);
+  const available=CLUB_RUNNER_POOL.filter(r=>!inIds.includes(r.id));
+  const potColors={alto:'#2d7a2d',medio:'#c07a10',bajo:'#888'};
+
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin-bottom:0">Plantilla</h2>
+      <button onclick="G.screen='clubHub';render()" style="background:none;border:1px solid #e0dfd8;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#888">← Hub</button>
+    </div>
+    <div class="hint" style="margin-bottom:12px">Salarios: <strong>€${wages}/mes · €${wages*12}/año</strong> · Presupuesto disponible: €${d.presupuesto}</div>
+
+    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Mi plantilla</div>
+    ${d.plantilla.map((r,i)=>{
+      const pc=potColors[r.potential]||'#888';
+      return`<div class="club-runner-card">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:22px">${r.flag}</div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="font-size:14px;font-weight:700">${esc(r.name)}</div>
+              <span style="font-size:11px;color:${pc};background:${pc}18;padding:1px 5px;border-radius:3px;font-weight:600">Potencial ${r.potential}</span>
+            </div>
+            <div style="font-size:12px;color:#888;margin-bottom:4px">${r.age} años · ${SPEC_LABEL[r.spec]||r.spec} · €${r.currentSalary||r.salary}/mes</div>
+            <div>${['Res','Vel','Sub','Baj'].map((k,ki)=>{
+              const keys=['resistencia','velocidad','subida','bajada'];
+              return`<span class="club-stat-pill">${k} ${r.stats[keys[ki]]}</span>`;
+            }).join('')}</div>
+            <div style="font-size:11px;color:#aaa;margin-top:3px;font-style:italic">${esc(r.bio)}</div>
+          </div>
+          ${d.plantilla.length>2?`<button onclick="doClubRelease(${i})" style="border:1px solid #f5b8b8;border-radius:6px;padding:4px 8px;background:#fff;color:#c0392b;font-size:11px;cursor:pointer;flex-shrink:0">Liberar</button>`:''}
+        </div>
+      </div>`;
+    }).join('')}
+
+    ${available.length>0&&d.plantilla.length<6?`
+    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Fichar corredor</div>
+    ${available.slice(0,4).map(r=>{
+      const pc=potColors[r.potential]||'#888';
+      const canAfford=d.presupuesto>=r.salary*3;
+      return`<div class="club-runner-card${canAfford?'':' locked-work'}" ${canAfford?`onclick="doClubSign('${r.id}')"`:''}  style="${!canAfford?'opacity:0.45;cursor:default':''}">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:22px">${r.flag}</div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="font-size:14px;font-weight:700">${esc(r.name)}</div>
+              <span style="font-size:11px;color:${pc};background:${pc}18;padding:1px 5px;border-radius:3px;font-weight:600">Pot. ${r.potential}</span>
+            </div>
+            <div style="font-size:12px;color:#888;margin-bottom:4px">${r.age} años · ${SPEC_LABEL[r.spec]||r.spec} · <strong>€${r.salary}/mes</strong></div>
+            <div>${['Res','Vel','Sub','Baj'].map((k,ki)=>{
+              const keys=['resistencia','velocidad','subida','bajada'];
+              return`<span class="club-stat-pill">${k} ${r.stats[keys[ki]]}</span>`;
+            }).join('')}</div>
+            <div style="font-size:11px;color:#aaa;margin-top:3px;font-style:italic">${esc(r.bio)}</div>
+          </div>
+          <div style="font-size:11px;color:${canAfford?'#4a8a2a':'#c0392b'};flex-shrink:0">${canAfford?'+ Fichar':'Sin fondos'}</div>
+        </div>
+      </div>`;
+    }).join('')}`:''}`;
+}
+
+window.doClubSign=id=>{
+  const d=G.clubModeData;if(!d)return;
+  const r=CLUB_RUNNER_POOL.find(x=>x.id===id);if(!r)return;
+  if(d.plantilla.length>=6){showToast('Plantilla completa — máx. 6','#c07a10');return;}
+  d.plantilla.push({...r,stats:{...r.stats},currentSalary:r.salary});
+  d.presupuesto-=r.salary*3; // 3 months signing fee
+  showToast(`${r.name} fichado — coste inicial €${r.salary*3}`,'#4a8a2a');
+  autoSave();render();
+};
+window.doClubRelease=idx=>{
+  const d=G.clubModeData;if(!d)return;
+  if(d.plantilla.length<=2){showToast('Necesitas al menos 2 corredores','#c07a10');return;}
+  const r=d.plantilla[idx];
+  if(!confirm(`¿Liberar a ${r.name}?`))return;
+  d.plantilla.splice(idx,1);
+  // Remove any assignments for this runner
+  Object.keys(d.calAssignments||{}).forEach(k=>{if(d.calAssignments[k]===r.id)delete d.calAssignments[k];});
+  showToast(`${r.name} liberado`,'#888');
+  autoSave();render();
+};
+
+function renderClubCalendar(){
+  const el=document.getElementById('main');
+  const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
+  const assignments=d.calAssignments||{};
+
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin-bottom:0">Calendario</h2>
+      <button onclick="G.screen='clubHub';render()" style="background:none;border:1px solid #e0dfd8;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#888">← Hub</button>
+    </div>
+    <p class="sub">Asigna un corredor a cada carrera. Un corredor puede correr varias carreras.</p>
+    ${CLUB_RACES.map(race=>{
+      const assignedId=assignments[race.id];
+      const runner=assignedId?d.plantilla.find(r=>r.id===assignedId):null;
+      const tierColors={local:'#888',regional:'#4a90d9',nacional:'#2d7a2d',elite:'#c0392b'};
+      const tc=tierColors[race.tier]||'#888';
+      return`<div class="club-race-row">
+        <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:13px;font-weight:700">${esc(race.name)}</span>
+              <span style="font-size:10px;background:${tc}18;color:${tc};padding:1px 5px;border-radius:3px;font-weight:600;text-transform:uppercase">${race.tier}</span>
+            </div>
+            <div style="font-size:12px;color:#888">${race.dist}km · ${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][race.month-1]} · ${race.cost>0?`Inscripción €${race.cost}`:'Gratuita'} · Premio €${race.prize}</div>
+            <div style="font-size:11px;color:#aaa;margin-top:1px;font-style:italic">${esc(race.desc)}</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          <div onclick="doClubAssign('${race.id}',null)" class="club-stat-pill" style="cursor:pointer;background:${!assignedId?'#1a1a1a':'#f0ede8'};color:${!assignedId?'#fff':'#555'};padding:4px 8px;font-size:12px">Ninguno</div>
+          ${d.plantilla.map(r=>{
+            const isSel=assignedId===r.id;
+            return`<div onclick="doClubAssign('${race.id}','${r.id}')" class="club-stat-pill" style="cursor:pointer;background:${isSel?'#4a8a2a':'#f0ede8'};color:${isSel?'#fff':'#555'};padding:4px 8px;font-size:12px">${r.flag} ${esc(r.name.split(' ')[0])}</div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('')}
+    <button class="main" style="margin-top:10px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="G.screen='clubHub';render()">← Volver al hub</button>`;
+}
+
+window.doClubAssign=(raceId,runnerId)=>{
+  const d=G.clubModeData;if(!d)return;
+  if(!d.calAssignments)d.calAssignments={};
+  if(runnerId===null||runnerId===undefined||runnerId==='null'){
+    delete d.calAssignments[raceId];
+  } else {
+    d.calAssignments[raceId]=runnerId;
+  }
+  autoSave();render();
+};
+
+window.doClubSimulateSeason=()=>{
+  const d=G.clubModeData;if(!d)return;
+  const results=[];
+  CLUB_RACES.forEach(race=>{
+    const runnerId=d.calAssignments[race.id];
+    if(!runnerId)return;
+    const runner=d.plantilla.find(r=>r.id===runnerId);
+    if(!runner)return;
+    const res=simClubRace(runner,race);
+    // Apply inscription cost
+    if(race.cost>0)d.presupuesto-=race.cost;
+    d.presupuesto+=res.prize;
+    results.push({race,runner,pos:res.pos,perf:res.perf,prize:res.prize,rivals:res.rivals});
+  });
+  d.seasonResults=results;
+  d.seasonSimulated=true;
+  // Update reputation
+  const podiums=results.filter(r=>r.pos<=3).length;
+  const top10=results.filter(r=>r.pos<=10).length;
+  const repGain=podiums*8+top10*3+(results.length>0?2:0);
+  d.reputacion=Math.min(100,(d.reputacion||0)+repGain);
+  autoSave();
+  G.screen='clubSimulate';
+  G._clubSimIdx=0;
+  render();
+};
+
+function renderClubSimulate(){
+  const el=document.getElementById('main');
+  const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const results=d.seasonResults||[];
+  const idx=G._clubSimIdx||0;
+  const isDone=idx>=results.length;
+
+  if(isDone){
+    el.innerHTML=`
+      <div style="text-align:center;padding:20px 0 16px">
+        <div style="font-size:36px;margin-bottom:8px">🏕️</div>
+        <h2>Temporada completa</h2>
+        <p class="sub">Todos los resultados registrados</p>
+      </div>
+      <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="G.screen='clubSeasonEnd';render()">Ver balance de temporada →</button>`;
+    return;
+  }
+
+  const r=results[idx];
+  const posColor=r.pos===1?'#c07a10':r.pos<=3?'#2d7a2d':r.pos<=10?'#4a90d9':'#1a1a1a';
+  const posIcon=r.pos===1?'🥇':r.pos===2?'🥈':r.pos===3?'🥉':r.pos<=10?'🎯':'🏃';
+
+  el.innerHTML=`
+    <div style="font-size:12px;color:#aaa;margin-bottom:12px;text-align:center">Resultado ${idx+1} de ${results.length}</div>
+    <div style="height:3px;background:#e5e4de;border-radius:2px;overflow:hidden;margin-bottom:16px">
+      <div style="width:${Math.round((idx/results.length)*100)}%;height:100%;background:#4a90d9;border-radius:2px"></div>
+    </div>
+    <div class="card" style="text-align:center;padding:24px 16px;margin-bottom:14px">
+      <div style="font-size:40px;margin-bottom:8px">${posIcon}</div>
+      <div style="font-size:24px;font-weight:700;color:${posColor};margin-bottom:4px">#${r.pos} de ${r.rivals}</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px">${esc(r.runner.flag)} ${esc(r.runner.name)}</div>
+      <div style="font-size:13px;color:#888">${esc(r.race.name)} · ${r.race.dist}km</div>
+      ${r.prize>0?`<div style="font-size:13px;color:#2d7a2d;font-weight:600;margin-top:8px">+€${r.prize} premio</div>`:''}
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="sec-title-sm">Detalles</div>
+      <div class="fin-row"><span>Carrera</span><span>${esc(r.race.name)}</span></div>
+      <div class="fin-row"><span>Corredor</span><span>${esc(r.runner.name)}</span></div>
+      <div class="fin-row"><span>Posición</span><span style="font-weight:700;color:${posColor}">#${r.pos} / ${r.rivals}</span></div>
+      <div class="fin-row"><span>Rendimiento</span><span>${r.perf}/100</span></div>
+      ${r.prize>0?`<div class="fin-row"><span>Premio</span><span class="plus">+€${r.prize}</span></div>`:''}
+    </div>
+    <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="G._clubSimIdx=${idx+1};render()">
+      ${idx+1<results.length?'Siguiente resultado →':'Ver balance final →'}
+    </button>`;
+}
+
+function renderClubSeasonEnd(){
+  const el=document.getElementById('main');
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
+  const results=d.seasonResults||[];
+  const podiums=results.filter(r=>r.pos<=3).length;
+  const top10=results.filter(r=>r.pos<=10).length;
+  const wins=results.filter(r=>r.pos===1).length;
+  const totalPrize=results.reduce((s,r)=>s+(r.prize||0),0);
+  const wages=clubMonthlyWage()*12;
+  const socioIncome=d.socios*25*12;
+  const netBalance=socioIncome+totalPrize-wages;
+  // Socios evolution
+  const socioGain=Math.round(podiums*4+top10*1.5+(d.reputacion/20));
+  const socioLoss=results.length===0?3:0;
+  const newSocios=Math.max(3,d.socios+socioGain-socioLoss);
+  const lvlOld=clubLevelByRep();
+
+  el.innerHTML=`
+    <div style="text-align:center;padding:14px 0 16px">
+      <div style="font-size:36px;margin-bottom:6px">${wins>0?'🏆':podiums>0?'🎯':'📋'}</div>
+      <h2>Balance — Temporada ${d.temporada}</h2>
+      <p class="sub">${esc(d.name)}</p>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Resultados de la temporada</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">
+        ${[['Carreras',results.length],['Victorias',wins],['Podios',podiums],['Top 10',top10]].map(([l,v])=>`
+          <div style="background:#f5f4f0;border-radius:8px;padding:8px">
+            <div style="font-size:11px;color:#aaa">${l}</div>
+            <div style="font-size:18px;font-weight:700">${v}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Economía de la temporada</div>
+      <div class="fin-row"><span>Cuotas de socios</span><span class="plus">+€${socioIncome}</span></div>
+      <div class="fin-row"><span>Premios en carrera</span><span class="plus">+€${totalPrize}</span></div>
+      <div class="fin-row"><span>Salarios plantilla</span><span class="minus">−€${wages}</span></div>
+      <div class="fin-row tot"><span>Resultado</span><span class="${netBalance>=0?'plus':'minus'}">${netBalance>=0?'+':''}€${netBalance}</span></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Evolución del club</div>
+      <div class="fin-row"><span>Socios</span><span>${d.socios} → <strong>${newSocios}</strong> ${socioGain>0?`<span class="plus">(+${socioGain})</span>`:''}</span></div>
+      <div class="fin-row"><span>Reputación</span><span><strong>${d.reputacion}/100</strong></span></div>
+      <div class="fin-row"><span>Presupuesto final</span><span><strong>€${d.presupuesto}</strong></span></div>
+    </div>
+
+    ${results.length>0?`
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Mejor resultado</div>
+      ${results.sort((a,b)=>a.pos-b.pos).slice(0,1).map(r=>`
+        <div style="text-align:center;padding:8px 0">
+          <div style="font-size:22px">${r.pos===1?'🥇':r.pos===2?'🥈':r.pos===3?'🥉':'🎯'}</div>
+          <div style="font-size:15px;font-weight:700">${esc(r.runner.name)} — #${r.pos}</div>
+          <div style="font-size:12px;color:#888">${esc(r.race.name)}</div>
+        </div>`).join('')}
+    </div>`:''}
+
+    <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doClubNextSeason(${socioGain},${socioLoss},${netBalance})">Temporada ${d.temporada+1} →</button>
+    <button class="main" style="margin-top:6px;opacity:0.5" onclick="G=freshState();render()">← Menú principal</button>`;
+}
+
+window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
+  const d=G.clubModeData;if(!d)return;
+  d.historial.push({
+    temporada:d.temporada,results:d.seasonResults,socios:d.socios,
+    reputacion:d.reputacion,presupuesto:d.presupuesto
+  });
+  d.socios=Math.max(3,d.socios+socioGain-socioLoss);
+  d.presupuesto=Math.max(0,d.presupuesto+netBalance);
+  d.temporada++;
+  d.calAssignments={};d.seasonResults=[];d.seasonSimulated=false;
+  d.pendingEvent=null;
+  // Grow runners slightly
+  d.plantilla.forEach(r=>{
+    const keys=Object.keys(r.stats);
+    keys.forEach(k=>{if(r.potential==='alto')r.stats[k]=Math.min(90,r.stats[k]+Math.floor(Math.random()*3));
+      else if(r.potential==='medio')r.stats[k]=Math.min(85,r.stats[k]+Math.floor(Math.random()*2));
+      else r.stats[k]=Math.min(80,(r.stats[k]||0)+Math.floor(Math.random()*1));});
+  });
+  generateClubEvent();
+  G.screen='clubHub';autoSave();render();
+};
+
+function renderClubEvent(){
+  const el=document.getElementById('main');
+  const d=G.clubModeData;if(!d||!d.pendingEvent){G.screen='clubHub';render();return;}
+  const ev=d.pendingEvent;
+  el.innerHTML=`
+    <div style="text-align:center;padding:14px 0 10px">
+      <div style="font-size:28px;margin-bottom:6px">📣</div>
+      <h2 style="margin-bottom:4px">Evento del club</h2>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px">${esc(ev.title)}</div>
+      ${ev.options.map((opt,i)=>`
+        <button class="main" style="margin-top:${i===0?'0':'8px'};text-align:left" onclick="doClubEvent(${i})">
+          <div style="font-weight:500">${esc(opt.text)}</div>
+          <div style="font-size:12px;color:#aaa;margin-top:2px">
+            ${opt.repDelta>0?`+${opt.repDelta} rep `:opt.repDelta<0?`${opt.repDelta} rep `:''}
+            ${opt.sociosDelta>0?`+${opt.sociosDelta} socios `:opt.sociosDelta<0?`${opt.sociosDelta} socios `:''}
+            ${opt.cost?`−€${opt.cost} `:''}${opt.income?`+€${opt.income} `:''}
+          </div>
+        </button>`).join('')}
+    </div>`;
+}
+
+window.doClubEvent=idx=>{
+  const d=G.clubModeData;if(!d||!d.pendingEvent)return;
+  const ev=d.pendingEvent;
+  const opt=ev.options[idx];if(!opt)return;
+  if(opt.repDelta)d.reputacion=Math.max(0,Math.min(100,(d.reputacion||0)+opt.repDelta));
+  if(opt.sociosDelta)d.socios=Math.max(3,(d.socios||8)+opt.sociosDelta);
+  if(opt.cost)d.presupuesto=Math.max(0,(d.presupuesto||0)-opt.cost);
+  if(opt.income)d.presupuesto=(d.presupuesto||0)+opt.income;
+  if(opt.addRunner){
+    const inIds=d.plantilla.map(r=>r.id);
+    const avail=CLUB_RUNNER_POOL.filter(r=>!inIds.includes(r.id));
+    if(avail.length&&d.plantilla.length<6){
+      const newR={...avail[0],stats:{...avail[0].stats},currentSalary:avail[0].salary};
+      d.plantilla.push(newR);
+      showToast(`${newR.name} se une al club`,'#4a8a2a');
+    }
+  }
+  if(opt.salaryIncrease&&d.plantilla.length>0){
+    const leavingIdx=Math.floor(Math.random()*d.plantilla.length);
+    d.plantilla[leavingIdx].currentSalary=(d.plantilla[leavingIdx].currentSalary||d.plantilla[leavingIdx].salary)+50;
+  }
+  if(opt.loseRunner&&d.plantilla.length>2){
+    const leavingIdx=Math.floor(Math.random()*d.plantilla.length);
+    const leaving=d.plantilla.splice(leavingIdx,1)[0];
+    showToast(`${leaving.name} se va al club rival`,'#c0392b');
+  }
+  let toastMsg=opt.repDelta>0?`+${opt.repDelta} reputación`:opt.repDelta<0?`${opt.repDelta} reputación`:'Decisión tomada';
+  showToast(toastMsg,opt.repDelta>=0?'#4a8a2a':'#c0392b');
+  d.pendingEvent=null;
+  autoSave();G.screen='clubHub';render();
 };
 
 function renderCoachAthleteTab(){
