@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Juego Trail · v33</title>
+<title>Juego Trail · v37</title>
 <style>
 :root{--color-background-primary:#fff;--color-background-secondary:#f8f7f3;--color-background-tertiary:#f0ede8;--color-text-primary:#1a1a1a;--color-text-secondary:#888;--color-text-tertiary:#aaa;--color-border-tertiary:#e0dfd8;--border-radius-md:8px;--border-radius-lg:12px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -908,13 +908,146 @@ const COACH_ATHLETE_POOL=[
   {id:'marta', name:'Marta Solà',     flag:'🇨🇦',spec:'fondista',   personality:'obediente',age:29,rivalName:'Claire Dubois',
    bio:'Disciplina de hierro. Volvió a Cataluña para dedicarse al trail a tiempo completo.',
    baseStats:{resistencia:60,velocidad:55,subida:50,bajada:50,nutricion:62,mental:60},monthlyFee:260},
+  {id:'iker',  name:'Iker Izaguirre', flag:'🇪🇸',spec:'montanero',  personality:'perfeccionista',age:26,rivalName:'Kilian Jornet',
+   bio:'Analiza cada entrenamiento. Necesita saber el porqué de cada decisión, pero cuando confía en ti rinde al límite.',
+   baseStats:{resistencia:58,velocidad:52,subida:70,bajada:58,nutricion:65,mental:48},monthlyFee:290},
+  {id:'sara',  name:'Sara Torrella',  flag:'🇪🇸',spec:'tecnico',    personality:'quemado',  age:38,rivalName:'Núria Picas',
+   bio:'Leyenda del trail catalán. Tres lesiones graves en cuatro años. Quiere un último ciclo hecho bien.',
+   baseStats:{resistencia:70,velocidad:60,subida:62,bajada:74,nutricion:68,mental:28},monthlyFee:380},
+  {id:'rafa',  name:'Rafa Montero',   flag:'🇪🇸',spec:'todoterreno',personality:'rebelde',  age:21,rivalName:'Yeray Igual',
+   bio:'Recién llegado al trail desde el fútbol. Físico bruto, cabeza a entrenar. Aprende rápido pero no le gustan las normas.',
+   baseStats:{resistencia:50,velocidad:62,subida:55,bajada:50,nutricion:30,mental:55},monthlyFee:150},
 ];
 const PERSONALITY_LABEL={
-  rebelde:  {label:'Rebelde',  color:'#c0392b',emoji:'🔴',desc:'Modifica tus planes. Difícil de controlar pero tiene chispa.'},
-  motivado: {label:'Motivado', color:'#c07a10',emoji:'🟡',desc:'Se entrega al máximo. Puede sobreentrenar si no lo controlas.'},
-  obediente:{label:'Obediente',color:'#2d7a2d',emoji:'🟢',desc:'Sigue tus instrucciones al pie de la letra.'},
-  quemado:  {label:'Quemado',  color:'#888',   emoji:'⚫',desc:'Necesita apoyo emocional. Puede recuperar el nivel con el tiempo.'},
+  rebelde:       {label:'Rebelde',       color:'#c0392b',emoji:'🔴',desc:'Modifica tus planes. Difícil de controlar pero tiene chispa.'},
+  motivado:      {label:'Motivado',      color:'#c07a10',emoji:'🟡',desc:'Se entrega al máximo. Puede sobreentrenar si no lo controlas.'},
+  obediente:     {label:'Obediente',     color:'#2d7a2d',emoji:'🟢',desc:'Sigue tus instrucciones al pie de la letra.'},
+  quemado:       {label:'Quemado',       color:'#888',   emoji:'⚫',desc:'Necesita apoyo emocional. Puede recuperar el nivel con el tiempo.'},
+  perfeccionista:{label:'Perfeccionista',color:'#6c3483',emoji:'🟣',desc:'Exige feedback constante. Muy sensible a los errores, pero crece mucho con confianza alta.'},
 };
+
+// ── Estado emocional evolutivo ──────────────────────────────────────────────
+// Independiente de la personalidad. Cambia según decisiones, carga y resultados.
+const EMOTIONAL_STATES={
+  fresco:    {label:'Fresco',      color:'#4a90d9',emoji:'💙',desc:'Motivado, sin desgaste acumulado.'},
+  confiado:  {label:'Confiado',    color:'#2d7a2d',emoji:'💚',desc:'Resultados positivos. Rinde mejor en carrera.'},
+  dudoso:    {label:'Dudoso',      color:'#c07a10',emoji:'🟡',desc:'Incertidumbre. Necesita un resultado o un gesto de confianza.'},
+  quemado:   {label:'Quemado',     color:'#888',   emoji:'🩶',desc:'Agotado emocionalmente. Riesgo de no renovar.'},
+  recuperado:{label:'Recuperado',  color:'#8e44ad',emoji:'💜',desc:'Volvió de un bache. Comprometido y agradecido.'},
+};
+
+// Transiciones: qué condiciones llevan a cada estado
+// Se evalúa al fin de carrera y en eventos clave
+function updateEmotionalState(){
+  const trust=G.coachTrust||60;
+  const load=G.coachBodyLoad||0;
+  const results=G.coachRaceResults||[];
+  const log=G.coachDecisionLog||[];
+  const prev=G.coachEmotionalState||'fresco';
+
+  // Decisiones positivas en log
+  const posDecisions=log.filter(d=>d.positive).length;
+  const negDecisions=log.filter(d=>!d.positive).length;
+
+  // Racha reciente (últimas 2 carreras)
+  const recent=results.slice(-2);
+  const recentBad=recent.filter(r=>r.dnf||r.pos>15).length;
+  const recentGood=recent.filter(r=>!r.dnf&&r.pos<=5).length;
+
+  let next=prev;
+
+  if(prev==='quemado'){
+    // Puede recuperarse si trust sube y hay decisiones positivas
+    if(trust>=60&&posDecisions>=2)next='recuperado';
+  } else if(prev==='recuperado'){
+    if(recentGood>=1&&trust>=65)next='confiado';
+    else if(load>85||negDecisions>posDecisions)next='dudoso';
+  } else if(prev==='confiado'){
+    if(recentBad>=2||trust<40)next='dudoso';
+    else if(load>90)next='quemado';
+  } else if(prev==='dudoso'){
+    if(trust>=70&&recentGood>=1)next='confiado';
+    else if(trust<30||load>85)next='quemado';
+    else if(posDecisions>=3&&trust>=50)next='fresco';
+  } else { // fresco
+    if(recentGood>=1&&trust>=65)next='confiado';
+    else if(recentBad>=2||trust<35)next='dudoso';
+    else if(load>90)next='quemado';
+  }
+
+  if(next!==prev){
+    G.coachEmotionalState=next;
+    const es=EMOTIONAL_STATES[next];
+    showToast(`${es.emoji} ${G.coachAthlete?.name?.split(' ')[0]||'Atleta'}: estado → ${es.label}`,'#555');
+  }
+}
+// ── Estilos de entrenador (E10) ─────────────────────────────────────────────
+const TRAINER_STYLES={
+  motivador:   {label:'Motivador',   emoji:'🔥', color:'#c07a10',
+    desc:'Discursos, confianza extrema. El atleta rinde más cuando cree en sí mismo.',
+    trustMod:+4, bodyLoadMod:-3, perfMod:+5,
+    trainingBonus:'mental', trainingPenalty:null,
+    reactionGood:'Se le ilumina la cara. "Si tú lo dices, puedo."',
+    reactionBad:'Se nota forzado. No toda la motivación cala igual.'},
+  cientifico:  {label:'Científico',  emoji:'📊', color:'#4a90d9',
+    desc:'Datos, periodización exacta. Cada bloque tiene su porqué.',
+    trustMod:+2, bodyLoadMod:-6, perfMod:+3,
+    trainingBonus:'resistencia', trainingPenalty:null,
+    reactionGood:'"Los números cuadran. Confío en el plan."',
+    reactionBad:'Los atletas emocionales necesitan más que datos.'},
+  conservador: {label:'Conservador', emoji:'🛡', color:'#2d7a2d',
+    desc:'Menos lesiones, progresión lenta pero segura.',
+    trustMod:+3, bodyLoadMod:-10, perfMod:-3,
+    trainingBonus:null, trainingPenalty:'velocidad',
+    reactionGood:'"Me siento protegido. No me has quemado."',
+    reactionBad:'Algunos atletas necesitan ser empujados más.'},
+  agresivo:    {label:'Agresivo',    emoji:'⚡', color:'#c0392b',
+    desc:'Carga alta, resultados rápidos. Mayor riesgo de lesión.',
+    trustMod:-2, bodyLoadMod:+8, perfMod:+8,
+    trainingBonus:'velocidad', trainingPenalty:null,
+    reactionGood:'"Estoy al límite, pero los resultados hablan."',
+    reactionBad:'Demasiada presión. El atleta empieza a dudar.'},
+};
+
+// ── Rasgos emergentes del entrenador (E13) ──────────────────────────────────
+// Se calculan automáticamente del historial de decisiones
+const TRAINER_TRAITS=[
+  {id:'protector',  label:'Protector',   emoji:'🛡', color:'#2d7a2d',
+   desc:'Siempre priorizas la salud del atleta. Se nota.',
+   condition:(log)=>log.filter(d=>d.positive&&(d.type==='taper_used'||d.type==='injury_scare_rest')).length>=3},
+  {id:'ganador',    label:'Ganador',     emoji:'🏆', color:'#c07a10',
+   desc:'Tienes olfato para los podios. Tu historial lo demuestra.',
+   condition:(log,hist)=>(hist||[]).reduce((s,h)=>s+(h.wins||0),0)>=3},
+  {id:'comunicador',label:'Comunicador', emoji:'💬', color:'#4a90d9',
+   desc:'Sabes escuchar. Los atletas confían en ti como persona.',
+   condition:(log)=>log.filter(d=>d.positive&&d.type==='mental_talk').length>=3},
+  {id:'exigente',   label:'Exigente',    emoji:'🔥', color:'#c0392b',
+   desc:'Empujas duro. Los resultados son buenos, pero hay desgaste.',
+   condition:(log)=>log.filter(d=>!d.positive&&d.type==='forced_injury').length>=2},
+  {id:'equilibrado',label:'Equilibrado', emoji:'⚖️', color:'#555',
+   desc:'Ni demasiado blando ni demasiado duro. Consistente.',
+   condition:(log)=>log.filter(d=>d.positive).length>=4&&log.filter(d=>!d.positive).length<=1},
+];
+
+function updateCoachTrait(){
+  if(!G.coachDecisionLog)return;
+  const log=G.coachDecisionLog;
+  const hist=G.coachAthleteHistory||[];
+  for(const t of TRAINER_TRAITS){
+    try{if(t.condition(log,hist)){G.coachTrait=t.id;return;}}catch(e){}
+  }
+}
+// type: string id único | label: texto legible | positive: bool
+function logCoachDecision(type, label, positive){
+  if(!G.coachDecisionLog)G.coachDecisionLog=[];
+  // No duplicar el mismo tipo en la misma temporada
+  const alreadyThisSeason=G.coachDecisionLog.some(d=>d.type===type&&d.season===G.coachSeason);
+  if(alreadyThisSeason)return;
+  G.coachDecisionLog.push({type,label,positive,season:G.coachSeason});
+  // Mantener máximo 12 entradas totales (histórico multi-temporada)
+  if(G.coachDecisionLog.length>12)G.coachDecisionLog.shift();
+}
+
 const COACH_NARRATIVES={
   climb:[
     'Sube con fluidez, respetando el esfuerzo.',
@@ -974,24 +1107,86 @@ const COACH_POST_RACE_DIALOGUES={
     good: ['"Podría haber ido más fuerte, coach."','"Bien, pero la próxima vez confía más en mí."'],
     bad:  ['"El plan era una mierda."','"Hay que cambiar la estrategia. La mía."','"No vuelvo a hacer eso."'],
     dnf:  ['"Hoy no era el día. Y lo sabía desde el principio."'],
+    highTrust:{
+      great:['"Oye... esta vez el plan tuyo no estuvo mal. Lo admito."','"¿Sabes qué? Confío en ti. Y hoy se ha notado."'],
+      good: ['"Bien. Creo que estamos encontrando algo juntos."','"Me gustó la libertad que me diste en los últimos km."'],
+      bad:  ['"No salió, pero sé que lo intentamos bien. Siguiente."'],
+    },
+    lowTrust:{
+      great:['"Salió bien pero no por tu plan, sino a pesar de él."','"¿Ves? Yo tenía razón. Siempre tengo razón."'],
+      good: ['"Eso es todo lo que consigo cuando no me escuchas."'],
+      bad:  ['"No me sorprende. Esto pasa cuando no me dejas ser yo."','"Si hubiera corrido a mi manera, habría ido mejor."'],
+      dnf:  ['"Este abandono es culpa del plan. No mío."'],
+    },
   },
   motivado:{
     great:['"¡Increíble! ¿Cuándo es la siguiente?"','"Esto es lo que quería. ¡Más!"','"¡Coach! ¿Lo viste? ¡Lo viste!"'],
     good: ['"Sé que puedo más. Siguiente vez vamos a por el podio."','"Bien... pero me quedé corto en el final."'],
     bad:  ['"No lo entiendo. Entrené tan duro..."','"Me dejé las piernas en el primer repecho y no pude recuperar."'],
     dnf:  ['"Me duele haberlo dejado. Me duele mucho."'],
+    highTrust:{
+      great:['"¡Lo sabía! ¡Contigo al lado nada es imposible!"','"Equipo imbatible. Esto es solo el comienzo."'],
+      good: ['"Cada vez me siento más fuerte. Y tú tienes mucho que ver."'],
+      bad:  ['"Algo falla, pero sé que juntos lo vamos a resolver. ¡Vamos!"'],
+    },
+    lowTrust:{
+      great:['"Salió bien... aunque no sé muy bien por qué."','"Bien. Pero necesito que te involucres más, coach."'],
+      good: ['"Me siento solo en esto. Necesito más de ti."','"¿Estás ahí? Parece que entreno solo."'],
+      bad:  ['"Esto no puede seguir así. Necesito un coach de verdad."'],
+      dnf:  ['"Abandoné porque no estaba bien mentalmente. Y tú no lo viste."'],
+    },
   },
   obediente:{
     great:['"Gracias, coach. El plan fue perfecto."','"Seguí tus instrucciones y funcionó exactamente como dijiste."'],
     good: ['"¿Lo hice bien? Creo que lo hice bien."','"¿Qué podría mejorar para la siguiente?"'],
     bad:  ['"Intenté hacer lo que me dijiste. ¿Qué salió mal?"','"Dime qué cambiar y lo hago."'],
     dnf:  ['"Lo siento. No quería defraudarte."'],
+    highTrust:{
+      great:['"Contigo me siento capaz de cualquier cosa. Gracias por creer en mí."','"Hemos trabajado mucho para esto. Vale la pena."'],
+      good: ['"Confío en el proceso. Sé que con tu guía vamos a llegar."'],
+      bad:  ['"Fallé, pero sé que lo analizaremos juntos y aprenderé."'],
+    },
+    lowTrust:{
+      great:['"Salió bien... pero me gustaría entender mejor qué hacer."'],
+      good: ['"¿Estoy haciendo bien las cosas? A veces no lo sé."','"Necesito más indicaciones. Me pierdo sin ellas."'],
+      bad:  ['"No sé qué se espera de mí. Necesito más guía."','"Lo hice lo mejor que pude, pero algo no cuadra."'],
+      dnf:  ['"Perdón. No sé en qué me equivoqué. Ayúdame a entenderlo."'],
+    },
   },
   quemado:{
     great:['"...No me lo esperaba. Hace tiempo que no me sentía así."','"Quizás no estoy tan acabado."'],
     good: ['"Pasable."','"No estuvo mal. Podría haber sido peor."'],
     bad:  ['"Ya me lo imaginaba."','"¿Para esto me levanté a las 5 de la mañana?"'],
     dnf:  ['"Mejor. El cuerpo ya no responde como antes."'],
+    highTrust:{
+      great:['"No esperaba sentirme bien. Gracias por no rendirte conmigo."','"Quizás hay algo aún. Seguimos."'],
+      good: ['"Está bien. Me alegra no haberte fallado del todo."'],
+      bad:  ['"Mal resultado, pero me alegra que aún estés ahí."'],
+    },
+    lowTrust:{
+      great:['"Salió bien. Tampoco hace falta tanto drama."'],
+      good: ['"Podría haber salido peor."'],
+      bad:  ['"¿Ves? Para esto no vale la pena el esfuerzo."','"Cada vez me pregunto más para qué sigo."'],
+      dnf:  ['"El cuerpo ya no da para esto. Y así es."'],
+    },
+  },
+  // ── E4: Perfeccionista — personalidad propia ──
+  perfeccionista:{
+    great:['"El tiempo podía haber sido mejor, pero el resultado es bueno."','"Salió según el plan. Casi perfectamente."','"Un podio es un podio. Aunque sé dónde perdí tiempo."'],
+    good: ['"Cometí errores en el km 18. Lo vi venir y no lo corregí a tiempo."','"Técnicamente bien, pero el ritmo en la subida no fue el óptimo."','"Hay que revisar la estrategia de hidratación. Dímelo para la próxima."'],
+    bad:  ['"Analicé la carrera: tres decisiones incorrectas. No puede volver a pasar."','"El plan tenía fallos. Los dos lo sabemos."','"Necesito datos. ¿Qué salió mal exactamente?"'],
+    dnf:  ['"No tenía sentido continuar sin las condiciones mínimas. Lo calculé."','"Abandonar fue la decisión correcta. Pero no debería haber llegado a eso."'],
+    highTrust:{
+      great:['"El análisis es bueno. Y confío en que lo haremos mejor la próxima."','"Con más datos y tu apoyo, la siguiente puede ser perfecta."'],
+      good: ['"Errores corregibles. Y tengo un entrenador que me ayuda a verlos. Eso vale."'],
+      bad:  ['"Mal resultado, pero con tu ayuda encontraremos el fallo. Lo sé."'],
+    },
+    lowTrust:{
+      great:['"Salió bien a pesar de todo. Pero necesito más análisis de tu parte."'],
+      good: ['"No recibo suficiente feedback. Sin datos no puedo mejorar."','"¿Puedes ser más específico? Los comentarios generales no me sirven."'],
+      bad:  ['"No tengo la información que necesito para mejorar. Eso es un problema."','"Si no analizamos esto en profundidad, volverá a pasar."'],
+      dnf:  ['"Si hubiera tenido mejor información previa, no habría llegado a esto."'],
+    },
   },
 };
 
@@ -1028,6 +1223,18 @@ const COACH_SEASON_OBJECTIVES={
     {id:'two_races',  label:'Completar al menos 2 carreras',          reward:+6, penalty:-3,
      desc:'"Que nadie diga que me rendí antes de empezar."',
      check:(r,all)=>all.filter(x=>!x.dnf).length>=2},
+  ],
+  // ── E4: pool propio para la personalidad perfeccionista ──
+  perfeccionista:[
+    {id:'perf_time',   label:'Mejorar el tiempo en al menos una carrera',  reward:+14, penalty:-8,
+     desc:'"No me conformo con la posición. Quiero hacerlo más rápido que la vez anterior."',
+     checkAll:(all)=>{ const prev=(G.coachAthleteHistory||[]).slice(-1)[0]?.bestPos||999; return(all||[]).some(x=>!x.dnf&&x.pos<prev);}},
+    {id:'perf_no_dnf', label:'Terminar todas las carreras — sin abandonos', reward:+10, penalty:-10,
+     desc:'"Un abandono es un fracaso de planificación. No voy a planificar mal."',
+     checkAll:(all)=>(all||[]).every(x=>!x.dnf)},
+    {id:'perf_top5',   label:'Top 5 en una carrera de nivel regional o superior', reward:+12, penalty:-7,
+     desc:'"El top 10 no es suficiente. Quiero estar en el grupo de cabeza."',
+     checkAll:(all)=>(all||[]).some(x=>!x.dnf&&x.pos<=5&&['regional','nacional','elite'].includes(x.tier||''))},
   ],
 };
 
@@ -1141,9 +1348,44 @@ const COACH_BETWEEN_EVENTS=[
   {id:'injury_scare',prob:0.09,icon:'🩹',title:'Susto con una molestia',
    desc:'"Me torció el tobillo en el último entrenamiento. No es grave, pero me preocupa. ¿Corro la siguiente carrera?"',
    choices:[
-     {text:'"Descanso total esta semana. La carrera puede esperar."',trust:+5,bodyLoad:-8},
+     {text:'"Descanso total esta semana. La carrera puede esperar."',trust:+5,bodyLoad:-8,decisionType:'injury_scare_rest',decisionPositive:true},
      {text:'"Ve al fisio. Si da el visto bueno, corres."',trust:+4},
      {text:'"Es una molestia. Corres y punto."',trust:-4,bodyLoad:+5},
+   ]},
+  {id:'fear_after_fall',prob:0.08,icon:'😰',title:'Miedo tras una caída',
+   desc:'"Tuve una caída fea entrenando en bajada técnica. Físicamente estoy bien, pero... me da pánico la bajada ahora. No sé cómo gestionarlo."',
+   choices:[
+     {text:'"Volvemos a la bajada en entrenos controlados. Paso a paso."',trust:+7,bodyLoad:-5,decisionType:'fear_rehab',decisionPositive:true},
+     {text:'"Es psicológico. Tienes que empujarte a ti mismo."',trust:-3},
+     {text:'"Evitamos bajadas técnicas este mes. Nos adaptamos."',trust:+4},
+   ]},
+  {id:'work_conflict',prob:0.09,icon:'💼',title:'Presión laboral',
+   desc:'"Me han ofrecido un ascenso en el trabajo. Más dinero, pero menos tiempo para entrenar. No sé qué hacer, coach."',
+   choices:[
+     {text:'"El trail es tu carrera deportiva. Decide tú, pero sé consciente del coste."',trust:+5},
+     {text:'"Acepta el ascenso y ajustamos el volumen de entrenamiento."',trust:+3,bodyLoad:-8},
+     {text:'"Ahora no es el momento. El rendimiento primero."',trust:-4},
+   ]},
+  {id:'media_pressure',prob:0.07,icon:'📱',title:'Presión en redes',
+   desc:'"Hay comentarios en Instagram diciendo que soy un fraude, que mis resultados son mediocres para mi edad. Me está afectando más de lo que debería."',
+   choices:[
+     {text:'"Desconecta de las redes este mes. Sin excepciones."',trust:+6},
+     {text:'"Úsalos de combustible. Que la rabia te lleve más lejos."',trust:+3},
+     {text:'"No les hagas caso. Lo que importa está en el cronómetro."',trust:+2},
+   ]},
+  {id:'sponsor_pressure',prob:0.07,icon:'💸',title:'Presión del sponsor',
+   desc:'"El sponsor me presiona para que haga más contenido en redes. Dicen que no genero suficiente visibilidad. Me quita mucho tiempo de entreno."',
+   choices:[
+     {text:'"Negociamos juntos con el sponsor. Te respaldo."',trust:+8,decisionType:'sponsor_backup',decisionPositive:true},
+     {text:'"Es parte del trato. Tienes que cumplir."',trust:-5},
+     {text:'"Reduce el contenido a lo mínimo pactado. Explícales que el rendimiento es tu escaparate."',trust:+3},
+   ]},
+  {id:'relationship_tension',prob:0.06,icon:'💔',title:'Tensión personal',
+   desc:'"Mi pareja dice que el trail lo ocupa todo. Que no estoy presente. Está en lo cierto, pero no sé cómo equilibrarlo."',
+   choices:[
+     {text:'"La vida personal es la base de todo. Dales tiempo real esta semana."',trust:+5,bodyLoad:-5},
+     {text:'"Es un momento de sacrificio. El deporte de alto nivel exige eso."',trust:-3},
+     {text:'"Buscamos un equilibrio. Entrenos más cortos, más presencia en casa."',trust:+4,bodyLoad:-8},
    ]},
 ];
 
@@ -1335,6 +1577,118 @@ const CLUB_RUNNER_POOL=[
   {id:'cr12',name:'Itziar Mendiburu',flag:'🇪🇸', spec:'todoterreno',age:25, stats:{resistencia:55,velocidad:58,subida:62,bajada:60}, salary:155, potential:'alto',   bio:'Talento sin pulir. Necesita disciplina de entreno.'},
 ];
 
+// ── Roles de plantilla (C8) ────────────────────────────────────────────────
+const CLUB_ROLES={
+  capitan:    {label:'Capitán',    emoji:'⭐',color:'#c07a10',
+    desc:'Sube la cohesión del equipo en +5 por temporada. Bonus de rendimiento a corredores cercanos.',
+    cohesionBonus:5, perfBonus:4, crewBonus:true},
+  promesa:    {label:'Promesa',    emoji:'🌱',color:'#2d7a2d',
+    desc:'Progresa un 50% más rápido que el resto. Solo menores de 26 años.',
+    growthBonus:1.5, perfBonus:0},
+  especialista:{label:'Especialista',emoji:'🎯',color:'#4a90d9',
+    desc:'Bonus +10 de rendimiento en carreras de su especialidad.',
+    perfBonus:10, specBonus:true},
+  gregario:   {label:'Gregario',  emoji:'🤝',color:'#888',
+    desc:'Reduce el riesgo de DNF del capitán o promesa cuando corren juntos.',
+    perfBonus:-3, dnfShield:true},
+  normal:     {label:'Corredor',  emoji:'🏃',color:'#aaa',
+    desc:'Sin bonus especial.',
+    perfBonus:0},
+};
+
+// ── Filosofía del club (C9) ────────────────────────────────────────────────
+const CLUB_FILOSOFIAS={
+  montanero:  {label:'Montañero',  emoji:'🏔️',color:'#2d7a2d',
+    desc:'Especialistas en desnivel. Corredores de subida crecen más rápido.',
+    specBonus:'montanero', raceBonus:['regional','nacional'], sponsorBonus:'material',
+    statGrowthKey:'subida', cohesionBonus:2},
+  tecnico:    {label:'Técnico',   emoji:'⚡',color:'#4a90d9',
+    desc:'Precisión en descensos técnicos. Más eventos de visibilidad mediática.',
+    specBonus:'tecnico', raceBonus:['local','regional'], sponsorBonus:'tecnologia',
+    statGrowthKey:'bajada', cohesionBonus:0},
+  estrategico:{label:'Estratégico',emoji:'🧠',color:'#8e44ad',
+    desc:'Menos lesiones. Mejor gestión de carga y calendario.',
+    specBonus:null, raceBonus:[], sponsorBonus:'nutricion',
+    injuryReduction:0.3, cohesionBonus:3},
+  comercial:  {label:'Comercial', emoji:'💰',color:'#c07a10',
+    desc:'Más patrocinadores disponibles. Ingresos de socios +20%.',
+    specBonus:null, raceBonus:[], sponsorBonus:'local',
+    socioBonus:1.2, cohesionBonus:0},
+};
+
+// ── Staff técnico (C11) ────────────────────────────────────────────────────
+const CLUB_STAFF_TYPES={
+  fisio:      {label:'Fisioterapeuta',emoji:'🧑‍⚕️',costMonth:200,
+    desc:'Reduce lesiones en un 40% y acelera recuperación.',
+    injuryReduction:0.4},
+  entrenador: {label:'Entrenador',   emoji:'🧑‍🏫',costMonth:300,
+    desc:'Todos los corredores progresan un 30% más rápido.',
+    growthBonus:1.3},
+  marketing:  {label:'Marketing',    emoji:'📣',costMonth:150,
+    desc:'+3 socios automáticos al mes. Mejora visibilidad en eventos.',
+    sociosPerMonth:3},
+  psicologo:  {label:'Psicólogo',    emoji:'🧠',costMonth:180,
+    desc:'Cohesión grupal +8 por temporada. Reduce conflictos internos.',
+    cohesionBonus:8},
+};
+
+// ── Pool de patrocinadores de club (C13) ───────────────────────────────────
+const CLUB_SPONSORS_POOL=[
+  {id:'cs1',name:'TrailShop Local',    cat:'material',  tier:1, monthlyIncome:150,
+   objective:'Top 10 en 3 carreras',   objKey:'top10x3', duration:1},
+  {id:'cs2',name:'Turismo Activo',     cat:'turismo',   tier:1, monthlyIncome:120,
+   objective:'Participar en 5 carreras',objKey:'part5',   duration:1},
+  {id:'cs3',name:'NutriTrail',         cat:'nutricion', tier:1, monthlyIncome:100,
+   objective:'Sin abandonos colectivos',objKey:'no_dnf',  duration:1},
+  {id:'cs4',name:'Suunto Club',        cat:'tecnologia',tier:2, monthlyIncome:280,
+   objective:'Un podio de equipo',     objKey:'podio1',  duration:2},
+  {id:'cs5',name:'Salomon Team',       cat:'material',  tier:2, monthlyIncome:350,
+   objective:'Top 5 en carrera nacional',objKey:'top5nat',duration:2},
+  {id:'cs6',name:'Diputación Foral',   cat:'local',     tier:2, monthlyIncome:400,
+   objective:'50+ socios activos',     objKey:'socios50',duration:2},
+];
+
+// ── Cantera juvenil — pool de jóvenes fichables (C12) ────────────────────
+const CLUB_YOUTH_POOL=[
+  {id:'y1',name:'Mikel Iturbe',   flag:'🇪🇸',spec:'montanero',  age:18,stats:{resistencia:38,velocidad:40,subida:52,bajada:42},salary:60, potential:'alto', bio:'Ganador del campeonato juvenil de Navarra.'},
+  {id:'y2',name:'June Garmendia', flag:'🇪🇸',spec:'fondista',   age:19,stats:{resistencia:45,velocidad:38,subida:40,bajada:38},salary:70, potential:'alto', bio:'Viene del cross. Fondo excepcional para su edad.'},
+  {id:'y3',name:'Ander Zubiaurre',flag:'🇪🇸',spec:'tecnico',    age:17,stats:{resistencia:35,velocidad:44,subida:38,bajada:55},salary:50, potential:'alto', bio:'Natural en la bajada. Nadie le enseñó — es instinto.'},
+  {id:'y4',name:'Irati Aizpurua', flag:'🇪🇸',spec:'todoterreno',age:20,stats:{resistencia:42,velocidad:42,subida:44,bajada:44},salary:80, potential:'alto', bio:'Polivalente. Acabó tercera en su primera carrera senior.'},
+  {id:'y5',name:'Oier Etxabe',    flag:'🇪🇸',spec:'montanero',  age:18,stats:{resistencia:36,velocidad:38,subida:58,bajada:40},salary:55, potential:'alto', bio:'Escalador nato. Sube como un motor.'},
+];
+
+// ── Objetivos de temporada del club (C18) ─────────────────────────────────
+const CLUB_OBJECTIVES=[
+  {id:'subir_nivel',  label:'Subir de nivel de club',
+   desc:'Conseguir suficientes socios para el siguiente nivel.',
+   check:(d,lvl)=>d.socios>lvl.sociosMax,
+   reward:{rep:15,socios:10}, penalty:{rep:-5}},
+  {id:'ganar_circuito',label:'Ganar una carrera del circuito',
+   desc:'Al menos un corredor del club en el primer puesto.',
+   check:(d)=>(d.seasonResults||[]).some(r=>r.pos===1),
+   reward:{rep:12,socios:6}, penalty:{rep:-3}},
+  {id:'tres_podios',  label:'3 podios en la temporada',
+   desc:'El club acumula tres podios entre todos sus corredores.',
+   check:(d)=>(d.seasonResults||[]).filter(r=>r.pos<=3).length>=3,
+   reward:{rep:10,socios:5}, penalty:{rep:-4}},
+  {id:'socios_30',    label:'Llegar a 30 socios activos',
+   desc:'Crecer la base social del club.',
+   check:(d)=>d.socios>=30,
+   reward:{rep:8,socios:8}, penalty:{rep:-2}},
+  {id:'socios_80',    label:'Llegar a 80 socios activos',
+   desc:'Consolidarse como club regional.',
+   check:(d)=>d.socios>=80,
+   reward:{rep:15,socios:12}, penalty:{rep:-5}},
+  {id:'no_abandono',  label:'Temporada sin abandonos colectivos',
+   desc:'Ningún corredor del club abandona este año.',
+   check:(d)=>!(d.seasonResults||[]).some(r=>r.dnf),
+   reward:{rep:8,cohesion:10}, penalty:{rep:-3,cohesion:-5}},
+  {id:'presupuesto',  label:'Cerrar la temporada en positivo',
+   desc:'El presupuesto del club no baja de cero.',
+   check:(d)=>d.presupuesto>0,
+   reward:{rep:5,socios:3}, penalty:{rep:-8}},
+];
+
 const CLUB_LEVELS=[
   {id:'local',    label:'Club Local',    icon:'🏘️', sociosMin:0,   sociosMax:30,  presupuestoBase:800,  color:'#888',    repReq:0},
   {id:'regional', label:'Club Regional', icon:'🏔️', sociosMin:31,  sociosMax:100, presupuestoBase:2000, color:'#4a90d9', repReq:40},
@@ -1343,14 +1697,20 @@ const CLUB_LEVELS=[
 ];
 
 const CLUB_RACES=[
-  {id:'clr1', name:'Trail Local de Primavera',  dist:21, month:4, cost:0,  tier:'local',    prize:300,  desc:'Carrera de club. Ambiente familiar.'},
-  {id:'clr2', name:'Circuito Vasco Trail',      dist:28, month:5, cost:80, tier:'regional', prize:600,  desc:'Circuito con varios clubes del norte.'},
-  {id:'clr3', name:'Vertical del Gorbea',       dist:12, month:6, cost:60, tier:'regional', prize:400,  desc:'Vertical de referencia. Sube sin parar.'},
-  {id:'clr4', name:'Ultra Aralar',              dist:50, month:7, cost:120,tier:'nacional',  prize:1200, desc:'Ultra exigente. Solo los mejores del club.'},
-  {id:'clr5', name:'Vuelta al Txindoki',        dist:35, month:8, cost:90, tier:'regional', prize:700,  desc:'Clásica del Goierri. Mucho desnivel.'},
-  {id:'clr6', name:'Copa de Clubes País Vasco', dist:42, month:9, cost:0,  tier:'regional', prize:800,  desc:'Puntos para el ranking de clubes regional.'},
-  {id:'clr7', name:'Marathon de Montaña',       dist:44, month:10,cost:100,tier:'nacional',  prize:1500, desc:'Nacional. Clasifica para el ranking anual.'},
-  {id:'clr8', name:'Kilómetro Vertical Otoño',  dist:8,  month:11,cost:50, tier:'local',    prize:200,  desc:'Cierre de temporada. Corto pero letal.'},
+  // Locales — siempre disponibles
+  {id:'clr1', name:'Trail Local de Primavera',  dist:21, month:4, cost:0,  tier:'local',    prize:300,  repReq:0,  sociosReq:0,  desc:'Carrera de club. Ambiente familiar.'},
+  {id:'clr8', name:'Kilómetro Vertical Otoño',  dist:8,  month:11,cost:50, tier:'local',    prize:200,  repReq:0,  sociosReq:0,  desc:'Cierre de temporada. Corto pero letal.'},
+  // Regionales — se desbloquean con rep ≥15
+  {id:'clr2', name:'Circuito Vasco Trail',      dist:28, month:5, cost:80, tier:'regional', prize:600,  repReq:15, sociosReq:0,  desc:'Circuito con varios clubes del norte.'},
+  {id:'clr3', name:'Vertical del Gorbea',       dist:12, month:6, cost:60, tier:'regional', prize:400,  repReq:15, sociosReq:0,  desc:'Vertical de referencia. Sube sin parar.'},
+  {id:'clr5', name:'Vuelta al Txindoki',        dist:35, month:8, cost:90, tier:'regional', prize:700,  repReq:25, sociosReq:15, desc:'Clásica del Goierri. Mucho desnivel.'},
+  {id:'clr6', name:'Copa de Clubes País Vasco', dist:42, month:9, cost:0,  tier:'regional', prize:800,  repReq:30, sociosReq:20, desc:'Puntos para el ranking de clubes regional.'},
+  // Nacionales — se desbloquean con rep ≥45
+  {id:'clr4', name:'Ultra Aralar',              dist:50, month:7, cost:120,tier:'nacional',  prize:1200, repReq:45, sociosReq:30, desc:'Ultra exigente. Solo los mejores del club.'},
+  {id:'clr7', name:'Marathon de Montaña',       dist:44, month:10,cost:100,tier:'nacional',  prize:1500, repReq:45, sociosReq:30, desc:'Nacional. Clasifica para el ranking anual.'},
+  // Élite — se desbloquean con rep ≥70
+  {id:'clr9', name:'Campeonato Nacional de Trail',dist:60,month:6, cost:200,tier:'elite',    prize:3000, repReq:70, sociosReq:60, desc:'Lo más alto del trail nacional. Invitación por méritos.'},
+  {id:'clr10',name:'Zegama-Aizkorri Open',      dist:42, month:5, cost:150,tier:'elite',    prize:2500, repReq:80, sociosReq:80, desc:'La carrera más mítica del País Vasco. Pocas plazas de club.'},
 ];
 
 const CLUB_EVENTS=[
@@ -1370,6 +1730,71 @@ const CLUB_EVENTS=[
    options:[{text:'Sí — visibilidad nacional (+rep, +socios)',repDelta:15,sociosDelta:8},{text:'Aún no estamos listos',repDelta:0}]},
   {id:'cle8', title:'Uno de tus corredores quiere irse a un club rival',
    options:[{text:'Ofrecerle una mejora salarial (+€50/mes) para retenerle',repDelta:5,salaryIncrease:true},{text:'Dejarle ir — el club no puede forzar a nadie',repDelta:-4,loseRunner:true}]},
+
+  // ── C3: Eventos condicionales según estado del club ──────────────────────
+
+  // Cohesión baja (< 35)
+  {id:'cle_tension1', title:'Dos corredores de la plantilla han dejado de hablarse',
+   minCohesion:0, maxCohesion:34,
+   options:[
+     {text:'Reunión de equipo urgente — encaras el conflicto (+cohesión, −€150)',repDelta:4,cohesionDelta:12,cost:150},
+     {text:'Dejarles resolver el conflicto solos — puede empeorar',repDelta:0,cohesionDelta:-5},
+   ]},
+  {id:'cle_tension2', title:'El ambiente en los entrenos es muy malo. Nadie habla.',
+   minCohesion:0, maxCohesion:34,
+   options:[
+     {text:'Organizar una salida de equipo (−€200, +cohesión, +rep)',repDelta:6,cohesionDelta:15,cost:200},
+     {text:'Ignorarlo — el rendimiento es lo primero',repDelta:-2,cohesionDelta:-3},
+   ]},
+  {id:'cle_tension3', title:'Un corredor amenaza con no presentarse a la siguiente carrera por el mal ambiente',
+   minCohesion:0, maxCohesion:30,
+   options:[
+     {text:'Hablar con él personalmente (+confianza, +cohesión)',repDelta:5,cohesionDelta:10},
+     {text:'Decirle que es su responsabilidad presentarse',repDelta:-3,cohesionDelta:-4,loseRunner:true},
+   ]},
+
+  // Cohesión alta (> 70)
+  {id:'cle_buena1', title:'El buen ambiente del club ha llegado a oídos de un talento local',
+   minCohesion:70,
+   options:[
+     {text:'Invitarle a entrenar con vosotros — posible fichaje',repDelta:8,addRunner:true},
+     {text:'No tenemos hueco ahora mismo',repDelta:0},
+   ]},
+  {id:'cle_buena2', title:'Un medio deportivo quiere hacer un reportaje sobre vuestra cohesión de equipo',
+   minCohesion:70,
+   options:[
+     {text:'Aceptar — visibilidad enorme (+rep, +socios)',repDelta:18,sociosDelta:10},
+     {text:'Preferimos pasar desapercibidos',repDelta:0},
+   ]},
+
+  // Reputación alta (> 50) — oportunidades de nivel superior
+  {id:'cle_rep1', title:'Una federación regional os invita a un circuito de élite el próximo año',
+   minRep:50,
+   options:[
+     {text:'Aceptar — compromiso de participar (−€300 inscripción, +rep)',repDelta:14,cost:300},
+     {text:'No estamos preparados aún',repDelta:-2},
+   ]},
+  {id:'cle_rep2', title:'Una empresa tecnológica quiere patrocinaros por vuestra imagen de club serio',
+   minRep:55,
+   options:[
+     {text:'Firmar el acuerdo (€600/año, compromiso de imagen)',repDelta:8,income:600},
+     {text:'Preferimos mantener nuestra independencia',repDelta:2},
+   ]},
+
+  // Presupuesto bajo (< 500)
+  {id:'cle_crisis1', title:'El club no llega a fin de mes. Hay que tomar decisiones difíciles.',
+   maxPresupuesto:500,
+   options:[
+     {text:'Organizar una carrera popular para recaudar fondos (+€800, tiempo de prep)',repDelta:5,income:800,sociosDelta:3},
+     {text:'Pedir ayuda al ayuntamiento (trámite lento, +€400)',repDelta:2,income:400},
+     {text:'Reducir el salario del staff temporalmente',repDelta:-5,cohesionDelta:-4},
+   ]},
+  {id:'cle_crisis2', title:'Un patrocinador amenaza con retirarse si los resultados no mejoran',
+   maxPresupuesto:600,
+   options:[
+     {text:'Negociar un plazo — comprometerse a resultados',repDelta:0,cohesionDelta:-2},
+     {text:'Dejarle ir y buscar otro — más libertad, menos ingresos',repDelta:-3,income:-300},
+   ]},
 ];
 
 function clubLevel(){
@@ -1382,29 +1807,78 @@ function clubLevelByRep(){
   return lvls.find(l=>rep>=l.repReq)||CLUB_LEVELS[0];
 }
 
-function simClubRace(runner,race){
+function simClubRace(runner,race,clubData){
+  const d=clubData||G.clubModeData||{};
   const s=runner.stats;
   let base=(s.resistencia*0.35+s.velocidad*0.2+s.subida*0.25+s.bajada*0.2);
+
+  // Bonus por especialidad vs terreno
   if(runner.spec==='montanero')base+=race.dist>30?4:2;
-  if(runner.spec==='fondista')base+=race.dist>40?5:0;
-  if(runner.spec==='tecnico')base+=race.dist<25?3:0;
+  if(runner.spec==='fondista') base+=race.dist>40?5:0;
+  if(runner.spec==='tecnico')  base+=race.dist<25?3:0;
+
+  // C8 Rol
+  const role=CLUB_ROLES[runner.role||'normal']||CLUB_ROLES.normal;
+  base+=role.perfBonus||0;
+  if(role.specBonus&&runner.spec===d.specialty)base+=6;
+
+  // C9 Filosofía: bonus si especialidad coincide
+  const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;
+  if(fil&&fil.specBonus&&runner.spec===fil.specBonus)base+=5;
+  if(fil&&fil.raceBonus&&fil.raceBonus.includes(race.tier))base+=3;
+
+  // C6 Cohesión: ±5% rendimiento
+  const cohMod=((d.cohesion||50)-50)/500; // -0.1 a +0.1
+  base*=(1+cohMod);
+
+  // C11 Staff: entrenador da bonus
+  if(d.staff&&d.staff.entrenador)base+=3;
+
+  // C15 Infraestructura: gimnasio mejora base
+  if(d.instalaciones&&d.instalaciones.gimnasio)base+=2;
+
   const rng=(Math.random()*16)-8;
-  const perf=Math.max(10,Math.min(95,base+rng));
+  const perf=Math.max(10,Math.min(98,base+rng));
   const rivals={local:18,regional:35,nacional:70,elite:110}[race.tier||'local']||25;
   const pos=Math.max(1,Math.round((1-perf/100)*rivals*0.85)+1+Math.floor(Math.random()*3));
   const prize=pos===1?race.prize:pos===2?Math.round(race.prize*0.6):pos===3?Math.round(race.prize*0.4):0;
-  return{pos,perf:Math.round(perf),prize,rivals};
+
+  // C11 Staff fisio reduce DNF
+  const dnfChance=base<30?0.12:0;
+  const injReduction=(d.staff&&d.staff.fisio?CLUB_STAFF_TYPES.fisio.injuryReduction:0)
+    +(fil&&fil.injuryReduction?fil.injuryReduction:0);
+  const isDnf=dnfChance>0&&Math.random()<(dnfChance*(1-injReduction));
+
+  return{pos:isDnf?99:pos, perf:Math.round(perf), prize:isDnf?0:prize, rivals, dnf:isDnf};
 }
 
-function initClubModeData(name,specialty){
+function initClubModeData(name,specialty,filosofia){
+  const fil=filosofia||'montanero';
   const startRunners=CLUB_RUNNER_POOL.filter(r=>r.spec===specialty||specialty==='mixto').slice(0,3);
   const fill=startRunners.length<3?CLUB_RUNNER_POOL.filter(r=>!startRunners.includes(r)).slice(0,3-startRunners.length):[];
+  const plantilla=[...startRunners,...fill].map(r=>({...r,stats:{...r.stats},currentSalary:r.salary,role:'normal'}));
+  // Asignar capitán al primero por defecto
+  if(plantilla.length>0)plantilla[0].role='capitan';
   return{
-    name,specialty,
+    name, specialty, filosofia:fil,
     socios:8, reputacion:10, presupuesto:800, temporada:1,
-    plantilla:[...startRunners,...fill].map(r=>({...r,stats:{...r.stats},currentSalary:r.salary})),
-    calAssignments:{}, seasonResults:[], pendingEvent:null,
-    historial:[], instalaciones:{local:false,fisio:false},
+    cohesion:50,                    // C6 moral grupal
+    plantilla,
+    calAssignments:{},              // C5+C10: {raceId:[runnerId,...]}
+    seasonResults:[], pendingEvent:null,
+    historial:[],
+    instalaciones:{gimnasio:false,clinica:false,residencia:false,marketingHQ:false}, // C15
+    staff:{},                       // C11: {fisio:true, entrenador:true, ...}
+    clubSponsors:[],                // C13
+    cantera:[],                     // C12
+    seasonObjective:null,           // C18
+    seasonObjectiveMet:null,
+    rivalClubs:[                    // C14
+      {name:'Club Montaña Oria',    rep:20,socios:15,level:'local'},
+      {name:'Pirineos Trail Team',  rep:45,socios:55,level:'regional'},
+      {name:'Euskadi Trail Elite',  rep:75,socios:120,level:'nacional'},
+    ],
+    monthlyFocus:null,              // C16 decisión mensual activa
     seasonSimulated:false,
   };
 }
@@ -1414,14 +1888,52 @@ function clubMonthlyWage(){
   return d.plantilla.reduce((s,r)=>s+(r.currentSalary||r.salary),0);
 }
 
+// ── Generar objetivo de temporada del club (C18) ────────────────────────────
+// ── Decisión mensual del club (C16) ─────────────────────────────────────────
+window.doClubMonthlyFocus=(focus)=>{
+  const d=G.clubModeData;if(!d)return;
+  d.monthlyFocus=focus;
+  const msgs={resultados:'🏆 Foco en resultados — rendimiento +5% esta temporada',
+    marketing:'📣 Campaña de marketing activa',formacion:'🌱 Plan de formación de cantera',
+    ahorro:'💰 Control de costes activado'};
+  showToast(msgs[focus]||'Foco mensual establecido','#8e44ad');
+  autoSave();render();
+};
+
+function generateClubObjective(){
+  const d=G.clubModeData;if(!d)return;
+  const socios=d.socios||8;
+  const temporada=d.temporada||1;
+  // Filtrar objetivos apropiados según estado del club
+  const eligible=CLUB_OBJECTIVES.filter(o=>{
+    if(o.id==='socios_80'&&socios<40)return false;
+    if(o.id==='socios_30'&&socios>=30)return false;
+    if(o.id==='subir_nivel'&&socios>200)return false;
+    return true;
+  });
+  const chosen=eligible[Math.floor(Math.random()*eligible.length)];
+  d.seasonObjective=chosen;
+  d.seasonObjectiveMet=null;
+}
+
 function generateClubEvent(){
   const d=G.clubModeData;if(!d)return;
   if(d.pendingEvent)return;
+  const coh=d.cohesion||50;
+  const rep=d.reputacion||0;
+  const presup=d.presupuesto||0;
   const pool=CLUB_EVENTS.filter(e=>{
     if(e.id==='cle3'&&d.plantilla.length>=6)return false;
     if(e.id==='cle8'&&d.plantilla.length<=2)return false;
+    // C3: filtros condicionales
+    if(e.minCohesion!==undefined&&coh<e.minCohesion)return false;
+    if(e.maxCohesion!==undefined&&coh>e.maxCohesion)return false;
+    if(e.minRep!==undefined&&rep<e.minRep)return false;
+    if(e.maxRep!==undefined&&rep>e.maxRep)return false;
+    if(e.maxPresupuesto!==undefined&&presup>e.maxPresupuesto)return false;
     return true;
   });
+  if(!pool.length)return;
   if(Math.random()<0.65)d.pendingEvent=pool[Math.floor(Math.random()*pool.length)];
 }
 
@@ -1492,6 +2004,9 @@ function freshState(){
     coachPool:null,           // 3 atletas presentados al inicio
     coachAthlete:null,        // atleta seleccionado {id,name,flag,spec,personality,age,bio,baseStats,currentStats,monthlyFee}
     coachReputation:0,        // 0-100 reputación como entrenador
+    coachTrainerStyle:null,   // estilo elegido: 'motivador'|'cientifico'|'conservador'|'agresivo'
+    coachTrait:null,          // rasgo emergente calculado automáticamente
+    _lastRaceResult:null,     // datos de la última carrera para pantalla post-carrera
     coachSeason:1,            // temporada con el atleta actual
     coachTrust:60,            // 0-100 confianza del atleta
     coachEarnings:0,          // ingresos acumulados esta temporada
@@ -1511,6 +2026,8 @@ function freshState(){
     coachDayCondition:null,      // condición del día de carrera {text,energyMod,legsMod}
     coachRaceEventPending:null,  // evento a mitad de carrera pendiente
     coachEventLog:[],            // historial de eventos resueltos esta temporada
+    coachEmotionalState:'fresco',// estado emocional del atleta (fresco/confiado/dudoso/quemado/recuperado)
+    coachDecisionLog:[],         // memoria de decisiones clave [{type,label,positive,season}]
     // ── Coach v24 ──
     coachGels:3,                 // geles asignados pre-carrera
     coachGelsUsed:0,             // geles usados en carrera
@@ -1549,7 +2066,8 @@ function coachSlotKeys(){
     'coachLastDialogue','coachDayCondition','coachRaceEventPending','coachEventLog',
     'coachGels','coachGelsUsed','coachRadioUsed','coachAidExtras','coachPreRaceBlock',
     'coachSeasonObjective','coachInjury','coachSponsors','coachSponsorPool',
-    'coachRadioWindowOpen','coachTrainingSelected','coachPool','_coachSlotNotifs'];
+    'coachRadioWindowOpen','coachTrainingSelected','coachPool','_coachSlotNotifs',
+    'coachEmotionalState','coachDecisionLog','coachTrainerStyle','coachTrait'];
 }
 
 function saveCoachSlot(){
@@ -2458,13 +2976,15 @@ function render(){
     expresSeasonStart:renderExpresSeasonStart,expresCalendar:renderExpresCalendar,
     expresSponsors:renderExpresSponsors,expresPrep:renderExpresPrep,
     expresPreRacePrep:renderExpresPreRacePrep,expresSeasonBalance:renderExpresSeasonBalance,
-    coachSelect:renderCoachSelect,coachHome:renderCoachHome,
+    coachSelect:renderCoachSelect,coachStyleSelect:renderCoachStyleSelect,coachHome:renderCoachHome,
     coachTraining:renderCoachTraining,coachCalendar:renderCoachCalendar,
     coachTrainingReaction:renderCoachTrainingReaction,
-    coachRace:renderCoachRace,coachSeasonEnd:renderCoachSeasonEnd,
+    coachRace:renderCoachRace,coachPostRace:renderCoachPostRace,coachSeasonEnd:renderCoachSeasonEnd,
     coachEvent:renderCoachEvent,coachPreRace:renderCoachPreRace,
     coachSponsors:renderCoachSponsors,coachHub:renderCoachHub,
     clubCreate:renderClubCreate,clubHub:renderClubHub,
+    clubStaff:renderClubStaff,clubSponsors:renderClubSponsors,clubMonthly:renderClubMonthly,
+    clubRivals:renderClubRivals,
     clubPlantilla:renderClubPlantilla,clubCalendar:renderClubCalendar,
     clubSimulate:renderClubSimulate,clubSeasonEnd:renderClubSeasonEnd,
     clubEvent:renderClubEvent,
@@ -3016,7 +3536,7 @@ function renderSaveScreen(){
   const autoData=loadFromSlot('auto');
   el.innerHTML=`
     <h1>Juego Trail</h1>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v33</span></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v37</span></div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
       <p class="sub" style="margin-bottom:0;flex:1">Partidas guardadas</p>
       <button onclick="showTutorial()" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid #ddd;border-radius:20px;background:#fff;font-size:12px;font-weight:600;color:#888;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background='#fff'">📖 Tutorial</button>
@@ -3502,7 +4022,7 @@ function renderIntro(){
   el.innerHTML=`
     <h1>Juego Trail</h1>
     <p class="sub">Crea tu corredor y empieza tu carrera deportiva</p>
-    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v33</div>
+    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v37</div>
     ${G.gameMode==='expres'?`<div class="warn" style="margin-bottom:14px">⚡ <strong>Carrera Exprés</strong> — 3 temporadas · sin gestión de jornada · ganancias de entrenamiento ×1.5</div>`:''}
     <label class="field-label">Nombre de la partida</label>
     <input id="runname" type="text" placeholder="Ej: Temporada del reto, Sin trabajo año 1..." value="${esc(G.runName||'')}" maxlength="30" style="margin-bottom:14px"/>
@@ -7381,12 +7901,58 @@ window.doCoachSelect=id=>{
   G.coachGels=3;G.coachGelsUsed=0;G.coachRadioUsed={};G.coachAidExtras={};G.coachPreRaceBlock=null;
   G.coachSeasonObjective=null;G.coachInjury=null;G.coachSponsors=[];G.coachSponsorPool=null;G.coachRadioWindowOpen=false;
   G._coachSlotNotifs=[];
+  G.coachEmotionalState='fresco';G.coachDecisionLog=G.coachDecisionLog||[];
   generateCoachSeasonObjective();
   generateCoachSponsorPool();
-  saveCoachSlot(); // persist to roster
+  saveCoachSlot();
+  if(!G.coachTrainerStyle){G.screen='coachStyleSelect';render();return;}
   G.screen='coachHub';G.activeTab='game';
   autoSave();render();
 };
+
+function renderCoachStyleSelect(){
+  const el=document.getElementById('main');
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
+  const sel=G._pendingTrainerStyle||null;
+  el.innerHTML=`
+    <div style="text-align:center;padding:16px 0 18px">
+      <div style="font-size:32px;margin-bottom:8px">🎯</div>
+      <h2 style="margin-bottom:4px">¿Cómo entrenas?</h2>
+      <p class="sub">Tu estilo define cómo interactúas con el atleta.<br>No se puede cambiar una vez elegido.</p>
+    </div>
+    ${Object.entries(TRAINER_STYLES).map(([id,s])=>{
+      const isSel=sel===id;
+      return`<div class="train-card${isSel?' sel':''}" style="${isSel?'border-color:'+s.color+';background:'+s.color+'11;':''};margin-bottom:10px;cursor:pointer" onclick="G._pendingTrainerStyle='${id}';render()">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <span style="font-size:22px">${s.emoji}</span>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:700;color:${isSel?s.color:'#1a1a1a'}">${s.label}</div>
+            <div style="font-size:12px;color:#888">${s.desc}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;font-size:11px;color:#aaa;flex-wrap:wrap">
+          <span>${s.trustMod>=0?'+':''}${s.trustMod} confianza/carrera</span>
+          <span>${s.bodyLoadMod>=0?'+':''}${s.bodyLoadMod} carga</span>
+          <span>${s.perfMod>=0?'+':''}${s.perfMod}% rendimiento</span>
+          ${s.trainingBonus?`<span style="color:#2d7a2d">↑ ${s.trainingBonus}</span>`:''}
+          ${s.trainingPenalty?`<span style="color:#c0392b">↓ ${s.trainingPenalty}</span>`:''}
+        </div>
+      </div>`;
+    }).join('')}
+    <button class="main" style="margin-top:10px;background:#1a1a1a;color:#fff;border-color:#1a1a1a;${!sel?'opacity:0.4;pointer-events:none':''}" onclick="doConfirmTrainerStyle()">Confirmar estilo →</button>
+    <button class="main" style="margin-top:6px;opacity:0.5" onclick="G._pendingTrainerStyle=null;G.screen='coachSelect';render()">← Volver</button>`;
+}
+
+window.doConfirmTrainerStyle=()=>{
+  if(!G._pendingTrainerStyle)return;
+  G.coachTrainerStyle=G._pendingTrainerStyle;
+  G._pendingTrainerStyle=null;
+  showToast(`Estilo: ${TRAINER_STYLES[G.coachTrainerStyle].emoji} ${TRAINER_STYLES[G.coachTrainerStyle].label}`,'#1a1a1a');
+  G.screen='coachHub';G.activeTab='game';
+  autoSave();render();
+};
+
 
 function renderCoachHome(){
   const el=document.getElementById('main');
@@ -7427,6 +7993,13 @@ function renderCoachHome(){
       <button onclick="G.screen='coachHub';render()" style="background:none;border:1px solid #e0dfd8;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#888">← Hub</button>
       <div style="font-size:12px;color:#aaa">Rep. entrenador: <strong>${G.coachReputation||0}/100</strong></div>
     </div>
+    ${(()=>{
+      const styleHtml=G.coachTrainerStyle?`<span style="background:${TRAINER_STYLES[G.coachTrainerStyle].color}22;color:${TRAINER_STYLES[G.coachTrainerStyle].color};font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">${TRAINER_STYLES[G.coachTrainerStyle].emoji} ${TRAINER_STYLES[G.coachTrainerStyle].label}</span>`:'';
+      const trait=G.coachTrait?TRAINER_TRAITS.find(t=>t.id===G.coachTrait):null;
+      const traitHtml=trait?`<span style="background:${trait.color}22;color:${trait.color};font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px" title="${trait.desc}">${trait.emoji} ${trait.label}</span>`:'';
+      if(!styleHtml&&!traitHtml)return'';
+      return`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${styleHtml}${traitHtml}</div>`;
+    })()}
     ${filledSlots>1?tabsHtml:''}
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
       <div style="width:48px;height:48px;border-radius:50%;background:#f0ede8;border:2px solid #e0dfd8;display:flex;align-items:center;justify-content:center;font-size:24px">${a.flag}</div>
@@ -7434,7 +8007,10 @@ function renderCoachHome(){
         <div style="font-size:17px;font-weight:700">${esc(a.name)}</div>
         <div style="font-size:12px;color:#888">Temporada ${G.coachSeason} · ${SPEC_LABEL[a.spec]||a.spec}</div>
       </div>
-      <span style="background:${pl.color}22;color:${pl.color};font-size:12px;font-weight:600;padding:2px 8px;border-radius:4px">${pl.emoji} ${pl.label}</span>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span style="background:${pl.color}22;color:${pl.color};font-size:12px;font-weight:600;padding:2px 8px;border-radius:4px">${pl.emoji} ${pl.label}</span>
+        ${(()=>{const es=EMOTIONAL_STATES[G.coachEmotionalState||'fresco'];return`<span style="background:${es.color}22;color:${es.color};font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px" title="${es.desc}">${es.emoji} ${es.label}</span>`;})()}
+      </div>
     </div>
     <div class="card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -7784,7 +8360,16 @@ function renderCoachPreRace(){
   const a=G.coachAthlete;
   const gels=G.coachGels||3;
   const dc=G.coachDayCondition||(COACH_DAY_CONDITIONS[Math.floor(Math.random()*COACH_DAY_CONDITIONS.length)]);
-  if(!G.coachDayCondition)G.coachDayCondition=dc;
+  if(!G.coachDayCondition){
+    // Estado emocional modifica los mods del día de carrera
+    const es=G.coachEmotionalState||'fresco';
+    let modDc={...dc};
+    if(es==='confiado'){modDc.energyMod=(modDc.energyMod||0)+4;modDc.legsMod=(modDc.legsMod||0)+3;modDc.text=modDc.text+' (Estado confiado: +ligero extra)';}
+    else if(es==='quemado'){modDc.energyMod=(modDc.energyMod||0)-6;modDc.legsMod=(modDc.legsMod||0)-5;modDc.text='Se le ve apagado en el calentamiento. Llevas demasiadas semanas apretando.';}
+    else if(es==='recuperado'){modDc.energyMod=(modDc.energyMod||0)+3;modDc.text=modDc.text+' (Recuperado: vuelve con ganas)';}
+    else if(es==='dudoso'){modDc.energyMod=(modDc.energyMod||0)-2;modDc.text='Cara seria en el warming up. Algo le ronda la cabeza.';}
+    G.coachDayCondition=modDc;
+  }
   const MONTH_NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
   el.innerHTML=`
@@ -7867,8 +8452,8 @@ window.doCoachLaunchRace=()=>{
   // Apply pre-race choices
   const preBlock=G.coachPreRaceBlock||'nothing';
   let energyBonus=0;
-  if(preBlock==='taper_race')energyBonus=5;
-  if(preBlock==='mental_talk')G.coachTrust=Math.min(100,(G.coachTrust||60)+8);
+  if(preBlock==='taper_race'){energyBonus=5;G._taperUsedThisRace=true;logCoachDecision('taper_used','Aplicaste taper antes de la carrera objetivo',true);}
+  if(preBlock==='mental_talk'){G.coachTrust=Math.min(100,(G.coachTrust||60)+8);logCoachDecision('mental_talk','Conversación de motivación pre-carrera',true);}
   G.coachRaceData=coachBuildRaceData(race,energyBonus);
   G.coachRaceAnimIdx=0;G.coachRaceAidPaused=false;G.coachRaceEventPending=null;
   G.coachGelsUsed=0;G.coachRadioUsed={};G.coachAidExtras={};
@@ -7887,6 +8472,8 @@ function coachBuildRaceData(race, extraEnergyBonus=0){
   let hydration=Math.max(0,Math.min(100,100+(dc.hydMod||0)));
   const overload=(G.coachBodyLoad||0)>70?0.06:0;
   energy-=overload*100;legs-=overload*80;
+  // Aplicar perfMod del estilo del entrenador al tiempo base de carrera
+  const stylePerfMod=G.coachTrainerStyle?((TRAINER_STYLES[G.coachTrainerStyle]?.perfMod||0)/100):0;
   const segs=[];let totalTime=0;let aidCount=0;
 
   // Pick one mid-race event to inject (Tanda 2)
@@ -7906,6 +8493,7 @@ function coachBuildRaceData(race, extraEnergyBonus=0){
     bt*=Math.max(0.80,1.0-(st.resistencia-50)*RESISTANCE_SCALE_PER_KM*s.km);
     if(energy<30)bt*=1.12;if(legs<25)bt*=1.15;
     bt*=(0.97+Math.random()*0.06);
+    bt*=(1-stylePerfMod); // estilo del entrenador mejora/empeora el tiempo
     totalTime+=bt;
     if(s.aid)aidCount++;
     const np=COACH_NARRATIVES[s.type]||COACH_NARRATIVES.flat;
@@ -8011,6 +8599,18 @@ function clearCoachRaceTimer(){
   if(_coachRaceTimer){clearInterval(_coachRaceTimer);_coachRaceTimer=null;}
 }
 
+window.doCoachSkipRace=()=>{
+  const data=G.coachRaceData;if(!data)return;
+  clearCoachRaceTimer();
+  clearCoachRadioPause();
+  // Avanzar todos los segmentos de golpe
+  G.coachRaceAnimIdx=data.segments.length;
+  G.coachRaceAidPaused=false;
+  G.coachRaceEventPending=null;
+  G.coachRadioWindowOpen=false;
+  render();
+};
+
 function renderCoachRace(){
   const el=document.getElementById('main');
   const data=G.coachRaceData;
@@ -8047,9 +8647,12 @@ function renderCoachRace(){
       </div>
       <div style="font-size:12px;background:#f5f4f0;padding:4px 10px;border-radius:6px;flex-shrink:0">${Math.round(kmDone)}/${race.km}km</div>
     </div>
-    <div style="height:5px;background:#e5e4de;border-radius:3px;margin-bottom:12px;overflow:hidden">
+    <div style="height:5px;background:#e5e4de;border-radius:3px;margin-bottom:6px;overflow:hidden">
       <div style="width:${pct}%;height:100%;background:#4a90d9;border-radius:3px;transition:width .4s"></div>
     </div>
+    ${!isDone?`<div style="text-align:right;margin-bottom:10px">
+      <button onclick="doCoachSkipRace()" style="background:none;border:1px solid #e0dfd8;border-radius:6px;padding:3px 10px;font-size:11px;color:#aaa;cursor:pointer">⏭ Saltar al resultado</button>
+    </div>`:''}
 
     ${shown.length===0?`<div style="text-align:center;padding:30px 0;color:#aaa;font-size:14px">⏳ Preparando salida...</div>`:''}
     <div id="coach-race-feed">
@@ -8290,11 +8893,15 @@ window.doCoachRaceFinish=()=>{
   const trustD=pos<=3?+10:pos<=10?+5:pos<=20?+1:-3;
   const repG=pos<=3?8:pos<=10?3:pos<=20?1:0;
 
-  // Generate post-race dialogue (Tanda 1)
+  // Generate post-race dialogue (E1: cruzado con trust)
   const pers=G.coachAthlete.personality;
   const dlgPool=COACH_POST_RACE_DIALOGUES[pers]||{};
-  const cat=pos<=3?'great':pos<=10?'good':data.finalPos>data.totalParticipants*0.7?'bad':'bad';
-  const pool=dlgPool[cat]||dlgPool.bad||['"..."'];
+  const cat=pos<=3?'great':pos<=10?'good':'bad';
+  const trustNow=G.coachTrust||60;
+  const trustKey=trustNow>=75?'highTrust':trustNow<=30?'lowTrust':null;
+  const trustPool=trustKey&&dlgPool[trustKey]&&dlgPool[trustKey][cat];
+  const basePool=dlgPool[cat]||dlgPool.bad||['"..."'];
+  const pool=(trustPool&&trustPool.length&&Math.random()<0.6)?trustPool:basePool;
   G.coachLastDialogue=pool[Math.floor(Math.random()*pool.length)];
 
   // Nemesis tracking (Tanda 1) — rival who beats athlete most
@@ -8312,8 +8919,18 @@ window.doCoachRaceFinish=()=>{
     G.coachEarnings=(G.coachEarnings||0)+monthly;
   });
   G.coachTrust=Math.max(0,Math.min(100,G.coachTrust+trustD));
+  // Aplicar modificador de confianza del estilo del entrenador
+  if(G.coachTrainerStyle){
+    const st=TRAINER_STYLES[G.coachTrainerStyle];
+    G.coachTrust=Math.max(0,Math.min(100,G.coachTrust+(st.trustMod||0)));
+  }
   G.coachReputation=Math.min(100,(G.coachReputation||0)+repG);
   G.coachBodyLoad=bodyLoadAfterRace(race.km);
+  // Aplicar bodyLoadMod del estilo
+  if(G.coachTrainerStyle){
+    const st=TRAINER_STYLES[G.coachTrainerStyle];
+    G.coachBodyLoad=Math.max(0,Math.min(100,G.coachBodyLoad+(st.bodyLoadMod||0)));
+  }
 
   // Injury check based on bodyLoad
   if(!G.coachInjury){
@@ -8328,6 +8945,7 @@ window.doCoachRaceFinish=()=>{
           G.coachAthlete.currentStats[k]=Math.max(10,G.coachAthlete.currentStats[k]+v);
       });
       G.coachTrust=Math.max(0,G.coachTrust-4); // coach pushed too hard
+      logCoachDecision('forced_injury','Forzaste al atleta hasta la lesión',false);
       showToast(`⚠️ ${inj.label} — ${inj.racesOut} carrera${inj.racesOut>1?'s':''} de baja`,'#c0392b');
     }
   } else {
@@ -8339,12 +8957,107 @@ window.doCoachRaceFinish=()=>{
   G.coachRaceIdx++;G.coachRaceData=null;
   G.coachRaceEventPending=null;G.coachDayCondition=null;
 
+  // Registrar decisión positiva si hubo podio
+  if(pos<=3&&!isDnf)logCoachDecision('podio_logrado','El atleta consiguió podio',true);
+  if(isDnf)logCoachDecision('dnf_carrera','El atleta abandonó una carrera',false);
+
+  // Actualizar estado emocional tras carrera
+  updateEmotionalState();
+  updateCoachTrait();
+
   // Generate a between-race event for next coachHome visit (Tanda 1)
   generateCoachBetweenEvent();
 
-  showToast(pos<=3?`🏆 ¡Podio! #${pos}`:`Resultado: #${pos}`,pos<=3?'#c07a10':'#1a1a1a');
-  G.screen='coachHome';autoSave();render();
+  // Guardar datos de la carrera acabada para usarlos en postRace
+  G._lastRaceResult={pos,isDnf:false,raceName:race.name,prize,coachCut,dialogue:G.coachLastDialogue};
+  autoSave();
+  G.screen='coachPostRace';render();
 };
+
+// ══════════════════════════════════════
+//  POST-CARRERA UNIFICADA (E16)
+// ══════════════════════════════════════
+function renderCoachPostRace(){
+  const el=document.getElementById('main');
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const a=G.coachAthlete;if(!a){G.screen='coachHome';render();return;}
+  const r=G._lastRaceResult||{pos:0,raceName:'Carrera',prize:0,coachCut:0};
+  const es=EMOTIONAL_STATES[G.coachEmotionalState||'fresco'];
+  const isAllDone=(G.coachRaceIdx>=(G.coachSelectedRaces||[]).length);
+  const nextRace=!isAllDone?(G.coachSelectedRaces||[])[G.coachRaceIdx]:null;
+
+  // Reacción del atleta según estilo del entrenador
+  const style=G.coachTrainerStyle?TRAINER_STYLES[G.coachTrainerStyle]:null;
+  const styleReaction=style?(r.pos<=5?style.reactionGood:style.reactionBad):null;
+
+  // Propuesta de bloque de entrenamiento para después
+  const suggestedBlock=G.coachBodyLoad>70?'Recuperación activa — la carga está alta'
+    :r.pos<=3?'Mantén el ritmo — estás en buena forma'
+    :r.pos>15?'Bloque de resistencia — hay margen de mejora'
+    :'Entrenamiento técnico — afina los puntos débiles';
+  const taperWasUsed=G._taperUsedThisRace||false;
+  G._taperUsedThisRace=false; // reset para próxima carrera
+
+  el.innerHTML=`
+    <div style="text-align:center;padding:16px 0 14px">
+      <div style="font-size:40px;margin-bottom:8px">${r.pos===1?'🥇':r.pos<=3?'🏆':r.pos<=10?'🎯':'📋'}</div>
+      <h2 style="margin-bottom:2px">#${r.pos} — ${esc(r.raceName)}</h2>
+      <p class="sub">${a.name} · Temporada ${G.coachSeason}</p>
+    </div>
+
+    ${G.coachLastDialogue?`
+    <div class="card" style="margin-bottom:12px;border-left:3px solid ${es.color}">
+      <div style="font-size:12px;color:#aaa;margin-bottom:4px">${a.name} dice:</div>
+      <div style="font-size:14px;color:#333;font-style:italic">"${G.coachLastDialogue}"</div>
+      <div style="font-size:11px;color:#aaa;margin-top:6px">${es.emoji} Estado: <strong style="color:${es.color}">${es.label}</strong></div>
+    </div>`:''}
+
+    ${styleReaction?`
+    <div class="hint" style="margin-bottom:12px">
+      <div style="font-size:11px;color:#aaa;margin-bottom:2px">Reacción a tu estilo ${TRAINER_STYLES[G.coachTrainerStyle].emoji}:</div>
+      <div style="font-size:13px;color:#555;font-style:italic">${styleReaction}</div>
+    </div>`:''}
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Balance de la carrera</div>
+      <div class="fin-row"><span>Posición</span><span style="font-weight:700;color:${r.pos<=3?'#c07a10':'#1a1a1a'}">#${r.pos}</span></div>
+      ${r.prize>0?`<div class="fin-row"><span>Premio</span><span class="plus">+€${r.prize}</span></div>`:''}
+      ${r.coachCut>0?`<div class="fin-row"><span>Tu comisión (20%)</span><span class="plus">+€${r.coachCut}</span></div>`:''}
+      <div class="fin-row"><span>Confianza del atleta</span><span style="font-weight:700;color:${G.coachTrust>=60?'#2d7a2d':G.coachTrust>=30?'#c07a10':'#c0392b'}">${G.coachTrust}/100</span></div>
+      <div class="fin-row"><span>Carga corporal</span><span style="color:${G.coachBodyLoad>70?'#c0392b':G.coachBodyLoad>50?'#c07a10':'#2d7a2d'}">${Math.round(G.coachBodyLoad)}%</span></div>
+    </div>
+
+    ${G.coachPendingEvent?`
+    <div class="card" style="margin-bottom:12px;border-color:#c07a10;border-width:1.5px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:22px">${G.coachPendingEvent.icon||'📋'}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:#c07a10">${G.coachPendingEvent.title}</div>
+          <div style="font-size:12px;color:#888">Hay algo pendiente de resolver</div>
+        </div>
+      </div>
+    </div>`:''}
+
+    ${taperWasUsed?`
+    <div style="background:#f2faf0;border:1px solid #b8ddb8;border-radius:10px;padding:11px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">⚡</span>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#2d7a2d">Descarga previa aplicada</div>
+        <div style="font-size:12px;color:#555;margin-top:2px">El taper de esta semana aportó +5% de energía/piernas al inicio. ${r.pos<=5?'Los datos confirman que llegaste más fresco.':'Aunque el resultado no fue el esperado, el cuerpo estaba a punto.'}</div>
+      </div>
+    </div>`:''}
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="sec-title-sm">Siguiente paso</div>
+      <div style="font-size:13px;color:#555;margin-bottom:8px">💡 ${suggestedBlock}</div>
+      ${nextRace?`<div style="font-size:12px;color:#888">Próxima carrera: <strong>${esc(nextRace.name)}</strong></div>`:'<div style="font-size:12px;color:#2d7a2d">✅ Temporada completada — puedes ver el balance.</div>'}
+    </div>
+
+    ${isAllDone
+      ?`<button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="G.screen='coachSeasonEnd';render()">Ver balance de temporada →</button>`
+      :`<button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="G._lastRaceResult=null;G.screen='coachHome';render()">Continuar →</button>`
+    }`;
+}
 
 function renderCoachSeasonEnd(){
   const el=document.getElementById('main');
@@ -8356,14 +9069,12 @@ function renderCoachSeasonEnd(){
   const dnfs=results.filter(r=>r.dnf).length;
   const totalCut=results.reduce((s,r)=>s+(r.coachCut||0),0);
   const mFees=(a.monthlyFee||250)*12;
-  // Sponsor income
   const sponsorIncome=(G.coachSponsors||[]).reduce((s,sp)=>s+Math.round((sp.salary||0)*(sp.coachCut||0.15)),0);
   const total=totalCut+mFees+sponsorIncome;
-  const trustColor=G.coachTrust>=60?'#2d7a2d':G.coachTrust>=30?'#c07a10':'#c0392b';
+  const bestPos=results.filter(r=>!r.dnf).reduce((best,r)=>Math.min(best,r.pos),999);
 
-  // Check objective
   const obj=G.coachSeasonObjective;
-  let objMet=false, objTrustDelta=0;
+  let objMet=false,objTrustDelta=0;
   if(obj){
     try{objMet=obj.checkAll?obj.checkAll(results):results.some(r=>obj.check(r,results));}catch(e){objMet=false;}
     G.coachSeasonObjective={...obj,met:objMet};
@@ -8371,7 +9082,6 @@ function renderCoachSeasonEnd(){
     G.coachTrust=Math.max(0,Math.min(100,G.coachTrust+objTrustDelta));
   }
 
-  // Check sponsor objectives
   const sponsorResults=(G.coachSponsors||[]).map(sp=>{
     let met=false;
     if(sp.objKey==='finish2')met=results.filter(r=>!r.dnf).length>=2;
@@ -8383,16 +9093,98 @@ function renderCoachSeasonEnd(){
     return{...sp,met};
   });
 
-  const willRenew=G.coachTrust>=40;
   const completedSeasons=((G.coachAthleteHistory||[]).filter(h=>h.completed).length)+(G.coachSeason-1);
   const clubUnlock=completedSeasons>=2;
-  const bestPos=results.filter(r=>!r.dnf).reduce((best,r)=>Math.min(best,r.pos),999);
+  const trust=G.coachTrust||0;
+  const log=G.coachDecisionLog||[];
+  const posDecisions=log.filter(d=>d.positive).length;
+  const negDecisions=log.filter(d=>!d.positive).length;
+  const es=EMOTIONAL_STATES[G.coachEmotionalState||'fresco'];
+  const thisSeasonLog=log.filter(d=>d.season===G.coachSeason);
+
+  const isEnthusiastic=trust>=70&&posDecisions>=2&&negDecisions===0;
+  const isBreakup=trust<40;
+
+  const endingConfig=isEnthusiastic?{
+    headerEmoji:'🏆',
+    headerBg:'linear-gradient(135deg,#f2faf0,#e8f4e8)',
+    headerBorder:'#2d7a2d',
+    titleColor:'#2d7a2d',
+    titleText:'Temporada extraordinaria',
+    subtitleText:`Una relación que crece. ${esc(a.name)} confía en ti completamente.`,
+    athleteQuote:wins>=2
+      ?`"Esto lo hemos construido juntos. No me imagino trabajando con otro entrenador."`
+      :podiums>=1
+      ?`"Cada decisión que tomaste este año tenía sentido. Gracias por creer en mí."`
+      :`"No han sido los resultados que queríamos, pero el proceso ha sido de los mejores de mi carrera."`,
+    quoteBorder:'#2d7a2d',
+    narrativeFn:()=>{
+      if(wins>=2)return`Temporada brillante. ${esc(a.name)} llegó al podio ${wins} veces y el trabajo conjunto se nota.`;
+      if(wins===1)return`Una victoria y la confianza por las nubes. La progresión es real y el atleta lo sabe.`;
+      if(podiums>=1)return`Sin victorias, pero la relación es el activo más valioso. Una base sólida para el año que viene.`;
+      return`Los resultados no acompañaron, pero la confianza se ha construido. Eso vale más que cualquier posición.`;
+    },
+  }:isBreakup?{
+    headerEmoji:negDecisions>=2?'💔':G.coachEmotionalState==='quemado'?'🩶':'😶',
+    headerBg:'linear-gradient(135deg,#fff5f5,#fde8e8)',
+    headerBorder:'#c0392b',
+    titleColor:'#c0392b',
+    titleText:'Temporada que termina mal',
+    subtitleText:`${esc(a.name)} no seguirá. Hay que analizar qué falló.`,
+    athleteQuote:negDecisions>=2
+      ?`"Hubo decisiones que no entendí. Necesito un entrenador que confíe en mí de otra manera."`
+      :G.coachEmotionalState==='quemado'
+      ?`"Estoy agotado. No físicamente — por dentro. Necesito empezar de cero con alguien."`
+      :`"No hemos conectado este año. No es culpa de nadie, pero necesito un cambio."`,
+    quoteBorder:'#c0392b',
+    narrativeFn:()=>{
+      if(negDecisions>=2)return`Las tensiones acumuladas fueron demasiado. ${esc(a.name)} recuerda decisiones que le pesaron.`;
+      if(G.coachEmotionalState==='quemado')return`El desgaste emocional fue excesivo. La temporada terminó antes de terminar.`;
+      if(dnfs>=2)return`Demasiados abandonos. La confianza se erosionó carrera a carrera.`;
+      return`La confianza nunca llegó a construirse. Dos personas que no encontraron su ritmo juntos.`;
+    },
+  }:{
+    headerEmoji:wins>=1?'🎯':podiums>=1?'📈':'📋',
+    headerBg:'linear-gradient(135deg,#fefcf8,#f5f3ef)',
+    headerBorder:'#e0dfd8',
+    titleColor:'#1a1a1a',
+    titleText:'Balance de temporada',
+    subtitleText:`Temporada ${G.coachSeason} con ${esc(a.name)}`,
+    athleteQuote:trust>=60
+      ?`"Ha sido una temporada correcta. Creo que podemos hacer más el año que viene."`
+      :`"No ha sido fácil. Seguimos, pero hay cosas que mejorar entre los dos."`,
+    quoteBorder:'#e0dfd8',
+    narrativeFn:()=>{
+      if(wins>=1)return`Una victoria. La temporada tiene valor aunque no llegara a todo lo esperado.`;
+      if(podiums>=1)return`Varios podios. La base es buena — queda margen para crecer.`;
+      if(dnfs>=2)return`Demasiados abandonos. Hay que revisar la carga y el calendario.`;
+      if(G.coachInjury)return`La lesión marcó la temporada. Lo que importa ahora es la recuperación completa.`;
+      return`Una temporada discreta pero honesta. Hay base para construir algo mejor.`;
+    },
+  };
 
   el.innerHTML=`
-    <div style="text-align:center;padding:16px 0 18px">
-      <div style="font-size:32px;margin-bottom:6px">${wins>0?'🏆':podiums>0?'🎯':'📋'}</div>
-      <h2>Balance de temporada</h2>
-      <p class="sub">Temporada ${G.coachSeason} con ${esc(a.name)}</p>
+    <div style="background:${endingConfig.headerBg};border:1.5px solid ${endingConfig.headerBorder};border-radius:14px;padding:20px 16px;margin-bottom:14px;text-align:center">
+      <div style="font-size:40px;margin-bottom:8px">${endingConfig.headerEmoji}</div>
+      <h2 style="color:${endingConfig.titleColor};margin-bottom:4px">${endingConfig.titleText}</h2>
+      <p class="sub" style="margin-bottom:0">${endingConfig.subtitleText}</p>
+    </div>
+
+    <div class="card" style="margin-bottom:12px;border-left:3px solid ${endingConfig.quoteBorder}">
+      <div style="font-size:12px;color:#aaa;margin-bottom:4px">${esc(a.name)} al final de temporada:</div>
+      <div style="font-size:14px;color:#333;font-style:italic">${endingConfig.athleteQuote}</div>
+      <div style="font-size:11px;color:#aaa;margin-top:6px">${es.emoji} Estado: <strong style="color:${es.color}">${es.label}</strong></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px;border-left:3px solid ${endingConfig.quoteBorder}">
+      <div style="font-size:13px;color:#555;font-style:italic;margin-bottom:${thisSeasonLog.length?'10px':'0'}">"${endingConfig.narrativeFn()}"</div>
+      ${thisSeasonLog.length?`
+        <div style="font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Tu huella esta temporada</div>
+        ${thisSeasonLog.map(d=>`
+          <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #f5f4f0">
+            <span style="font-size:13px">${d.positive?'✅':'⚠️'}</span>
+            <span style="font-size:12px;color:#555">${esc(d.label)}</span>
+          </div>`).join('')}`:''}
     </div>
 
     ${obj?`
@@ -8402,8 +9194,9 @@ function renderCoachSeasonEnd(){
         <div style="flex:1">
           <div style="font-size:12px;color:#888;margin-bottom:2px">Objetivo de ${esc(a.name)}</div>
           <div style="font-size:13px;font-weight:600">${obj.label}</div>
+          ${obj.fromHistory?`<div style="font-size:11px;color:#4a90d9;margin-top:2px">Basado en tu historial juntos</div>`:''}
         </div>
-        <span style="font-size:13px;font-weight:700;color:${objTrustDelta>=0?'#2d7a2d':'#c0392b'}">${objTrustDelta>=0?'+':''}${objTrustDelta} conf.</span>
+        <span style="font-size:13px;font-weight:700;color:${objTrustDelta>=0?'#2d7a2d':'#c0392b'}">${objTrustDelta>=0?'+':''}`+`${objTrustDelta} conf.</span>
       </div>
     </div>`:''}
 
@@ -8424,7 +9217,7 @@ function renderCoachSeasonEnd(){
       <div class="fin-row"><span>Bonus podios (20%)</span><span class="plus">+€${totalCut}</span></div>
       ${sponsorIncome>0?`<div class="fin-row"><span>Comisión sponsors</span><span class="plus">+€${sponsorIncome}</span></div>`:''}
       <div class="fin-row tot"><span>Total temporada</span><span class="plus">+€${total}</span></div>
-      <div style="font-size:12px;color:#aaa;margin-top:6px">Reputación: ${G.coachReputation}/100</div>
+      <div style="font-size:12px;color:#aaa;margin-top:6px">Reputación entrenador: ${G.coachReputation}/100</div>
     </div>
 
     ${sponsorResults.length>0?`
@@ -8440,24 +9233,54 @@ function renderCoachSeasonEnd(){
         </div>`).join('')}
     </div>`:''}
 
-    <div class="card" style="margin-bottom:14px">
+    <div class="card" style="margin-bottom:14px;border-color:${isEnthusiastic?'#2d7a2d':isBreakup?'#c0392b':'#e0dfd8'};border-width:${isEnthusiastic||isBreakup?'1.5px':'1px'}">
       <div class="sec-title-sm">Decisión del atleta</div>
-      ${willRenew?`
-        <div class="note">
-          <strong>${esc(a.name)} quiere renovar.</strong><br>Confianza: ${G.coachTrust}/100.
+      ${isEnthusiastic?`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0">
+          <span style="font-size:22px">🤝</span>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#2d7a2d">${esc(a.name)} quiere renovar con más ambición</div>
+            <div style="font-size:12px;color:#555;margin-top:2px">Confía plenamente. Propone mejorar condiciones.</div>
+          </div>
         </div>
-        <button class="main" style="margin-top:10px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doCoachNextSeason()">Temporada ${G.coachSeason+1} →</button>
-      `:`
-        <div class="danger">
-          <strong>${esc(a.name)} no renueva.</strong><br>Confianza: ${G.coachTrust}/100.
+        <button class="main" style="margin-top:8px;background:#2d7a2d;color:#fff;border-color:#2d7a2d" onclick="doCoachRenewEnthusiastic()">Renovar — condiciones mejoradas →</button>
+        <button class="main" style="margin-top:6px;opacity:0.5" onclick="doCoachNewAthlete()">Buscar nuevo atleta en su lugar</button>`
+      :isBreakup?`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0">
+          <span style="font-size:22px">🚪</span>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#c0392b">${esc(a.name)} no renueva</div>
+            <div style="font-size:12px;color:#555;margin-top:2px">${negDecisions>=2?'Demasiadas decisiones que le perjudicaron.':G.coachEmotionalState==='quemado'?'Necesita un cambio de aire tras el desgaste.':'La confianza no llegó a construirse.'}</div>
+          </div>
         </div>
-        <button class="main" style="margin-top:10px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doCoachNewAthlete()">Buscar nuevo atleta →</button>
-      `}
+        <button class="main" style="margin-top:8px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doCoachNewAthlete()">Buscar nuevo atleta →</button>`
+      :`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0">
+          <span style="font-size:22px">📋</span>
+          <div>
+            <div style="font-size:14px;font-weight:600">${esc(a.name)} ${trust>=60?'quiere renovar':'está dispuesto a renovar'}</div>
+            <div style="font-size:12px;color:#888;margin-top:2px">Confianza: ${trust}/100 · ${trust>=60?'La relación funciona.':'No ha sido fácil, pero sigue.'}</div>
+          </div>
+        </div>
+        <button class="main" style="margin-top:8px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doCoachNextSeason()">Renovar — Temporada ${G.coachSeason+1} →</button>
+        <button class="main" style="margin-top:6px;opacity:0.5" onclick="doCoachNewAthlete()">Buscar nuevo atleta en su lugar</button>`}
     </div>
-    ${clubUnlock?`<div class="note" style="margin-bottom:12px">🏕️ <strong>Modo Club — próximamente</strong> — ${completedSeasons} temporadas completadas.</div>`:''}
+
+    ${clubUnlock?`<div class="note" style="margin-bottom:12px">🏕️ <strong>Modo Club disponible</strong> — ${completedSeasons} temporadas completadas como entrenador.</div>`:''}
     <button class="main" style="margin-top:6px;opacity:0.5" onclick="saveCoachSlot();G.screen='coachHub';render()">← Volver al hub</button>
     <button class="main" style="margin-top:6px;opacity:0.4" onclick="G=freshState();render()">← Menú principal</button>`;
 }
+
+// Renovación entusiasta: el atleta propone mejoras de condiciones
+window.doCoachRenewEnthusiastic=()=>{
+  const a=G.coachAthlete;
+  Object.keys(a.currentStats).forEach(k=>{
+    a.currentStats[k]=Math.min(98,a.currentStats[k]+Math.floor(Math.random()*4)+2);
+  });
+  a.monthlyFee=Math.round((a.monthlyFee||250)*1.10);
+  showToast(`🤝 Renovación entusiasta — honorarios +10%`,'#2d7a2d');
+  doCoachNextSeason();
+};
 
 window.doCoachNextSeason=()=>{
   if(!G.coachAthleteHistory)G.coachAthleteHistory=[];
@@ -8465,7 +9288,7 @@ window.doCoachNextSeason=()=>{
     wins:(G.coachRaceResults||[]).filter(r=>r.pos===1&&!r.dnf).length,
     podiums:(G.coachRaceResults||[]).filter(r=>r.pos<=3&&!r.dnf).length,
     bestPos:(G.coachRaceResults||[]).filter(r=>!r.dnf).reduce((b,r)=>Math.min(b,r.pos),999),
-    trust:G.coachTrust,completed:true});
+    trust:G.coachTrust,completed:true,emotionalState:G.coachEmotionalState});
   G.coachSeason++;G.coachSelectedRaces=[];G.coachRaceIdx=0;
   G.coachRaceResults=[];G.coachLastTraining=null;
   G.coachBodyLoad=Math.max(0,(G.coachBodyLoad||0)-20);
@@ -8473,9 +9296,10 @@ window.doCoachNextSeason=()=>{
   G.coachRaceEventPending=null;G.coachEventLog=[];
   G.coachGels=3;G.coachGelsUsed=0;G.coachRadioUsed={};G.coachAidExtras={};G.coachPreRaceBlock=null;
   G.coachSeasonObjective=null;G.coachInjury=null;G.coachSponsors=[];G.coachSponsorPool=null;G.coachRadioWindowOpen=false;
+  if(G.coachEmotionalState==='quemado')G.coachEmotionalState='dudoso';
+  else if(G.coachEmotionalState==='confiado'||G.coachEmotionalState==='recuperado')G.coachEmotionalState='fresco';
   generateCoachSeasonObjective();
   generateCoachSponsorPool();
-  // Athlete grows slightly between seasons
   const a=G.coachAthlete;
   Object.keys(a.currentStats).forEach(k=>{
     a.currentStats[k]=Math.min(95,a.currentStats[k]+Math.floor(Math.random()*3));
@@ -8508,6 +9332,17 @@ function renderCoachHub(){
   saveCoachSlot();
   const roster=G.coachRoster||[];
   const rep=G.coachReputation||0;
+  // E2: detectar desbloqueo de slot y celebrar
+  const prevRep=G._prevCoachRep||0;
+  if(prevRep<40&&rep>=40&&!G._slot1Celebrated){
+    G._slot1Celebrated=true;
+    setTimeout(()=>showToast('🎉 ¡Slot 2 desbloqueado! Ya puedes entrenar a un segundo atleta','#c07a10'),400);
+  }
+  if(prevRep<70&&rep>=70&&!G._slot2Celebrated){
+    G._slot2Celebrated=true;
+    setTimeout(()=>showToast('🌟 ¡Slot 3 desbloqueado! Agencia de tres atletas','#c0392b'),400);
+  }
+  G._prevCoachRep=rep;
   const repTier=rep<20?{label:'Entrenador novato',color:'#aaa'}:rep<40?{label:'Entrenador regional',color:'#4a90d9'}:rep<60?{label:'Entrenador conocido',color:'#2d7a2d'}:rep<80?{label:'Entrenador nacional',color:'#c07a10'}:{label:'Entrenador élite 🌟',color:'#c0392b'};
   const filledSlots=roster.filter(s=>s&&s.coachAthlete).length;
 
@@ -8608,6 +9443,13 @@ function renderCoachHub(){
       ${rep<40?`<div style="font-size:11px;color:#aaa;margin-top:4px;text-align:center">Reputación ≥40 para un 2º atleta · ≥70 para un 3º</div>`:''}
     </div>
 
+    ${(G._slot1Celebrated&&rep>=40&&rep<70)||(G._slot2Celebrated&&rep>=70)?`
+    <div style="background:linear-gradient(135deg,#fffbf0,#fff8e8);border:1.5px solid #c07a10;border-radius:12px;padding:14px 16px;margin-bottom:14px;text-align:center">
+      <div style="font-size:28px;margin-bottom:4px">${rep>=70?'🌟':'🎉'}</div>
+      <div style="font-size:14px;font-weight:700;color:#c07a10">${rep>=70?'¡Slot 3 desbloqueado!':'¡Slot 2 desbloqueado!'}</div>
+      <div style="font-size:12px;color:#888;margin-top:3px">${rep>=70?'Puedes llevar hasta 3 atletas simultáneamente.':'Puedes añadir un segundo atleta a tu agencia.'}</div>
+    </div>`:''}
+
     <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Mis atletas</div>
     ${slotCards}
 
@@ -8650,7 +9492,8 @@ window.addCoachSlot=idx=>{
       coachRaceEventPending:null,coachEventLog:[],coachGels:3,coachGelsUsed:0,
       coachRadioUsed:{},coachAidExtras:{},coachPreRaceBlock:null,coachSeasonObjective:null,
       coachInjury:null,coachSponsors:[],coachSponsorPool:null,coachRadioWindowOpen:false,
-      coachTrainingSelected:null,coachPool:null,_coachSlotNotifs:[]};
+      coachTrainingSelected:null,coachPool:null,_coachSlotNotifs:[],
+      coachEmotionalState:'fresco',coachDecisionLog:[]};
     if(k in defaults)G[k]=defaults[k];
   });
   const coached=(G.coachAthleteHistory||[]).map(h=>h.name);
@@ -8687,11 +9530,15 @@ window.doCoachDelegateRace=()=>{
   const coachCut=Math.round(prize*0.2);
   const trustD=pos<=3?+6:pos<=10?+3:pos<=20?0:-3;
   const repG=pos<=3?4:pos<=10?2:0;
-  // Post-race dialogue
+  // Post-race dialogue (E1: con variantes de trust)
   const pers=a.personality;
   const dlgPool=COACH_POST_RACE_DIALOGUES[pers]||{};
   const cat=pos<=3?'great':pos<=10?'good':'bad';
-  const pool=dlgPool[cat]||['"..."'];
+  const trustNow2=G.coachTrust||60;
+  const tKey=trustNow2>=75?'highTrust':trustNow2<=30?'lowTrust':null;
+  const tPool=tKey&&dlgPool[tKey]&&dlgPool[tKey][cat];
+  const bPool=dlgPool[cat]||['"..."'];
+  const pool=(tPool&&tPool.length&&Math.random()<0.6)?tPool:bPool;
   const dialogue=pool[Math.floor(Math.random()*pool.length)];
   // Store result
   G.coachRaceResults.push({pos,dnf:false,prize,coachCut,raceName:race.name,tier,delegated:true});
@@ -8718,27 +9565,39 @@ function renderClubCreate(){
   const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
   const name=G._clubNameDraft||'';
   const spec=G._clubSpecDraft||'mixto';
+  const fil=G._clubFilDraft||'montanero';
   const specs=[
-    {id:'montanero', label:'🏔️ Montaña',    desc:'Mejor en subidas y ultras de montaña'},
-    {id:'fondista',  label:'🏃 Fondo',       desc:'Resistencia larga. Ultras y maratones'},
-    {id:'tecnico',   label:'⚡ Técnico',     desc:'Corredores rápidos en terrenos difíciles'},
-    {id:'mixto',     label:'🌐 Mixto',       desc:'Sin especialidad — plantilla variada'},
+    {id:'montanero', label:'🏔️ Montaña',   desc:'Mejor en subidas y ultras de montaña'},
+    {id:'fondista',  label:'🏃 Fondo',      desc:'Resistencia larga. Ultras y maratones'},
+    {id:'tecnico',   label:'⚡ Técnico',    desc:'Corredores rápidos en terrenos difíciles'},
+    {id:'mixto',     label:'🌐 Mixto',      desc:'Sin especialidad — plantilla variada'},
   ];
   el.innerHTML=`
     <div style="text-align:center;padding:14px 0 16px">
       <div style="font-size:32px;margin-bottom:6px">🏕️</div>
       <h2>Crear tu club</h2>
-      <p class="sub">Dale un nombre y elige la especialidad. Define el carácter del club.</p>
+      <p class="sub">Define el nombre, especialidad y filosofía del club.</p>
     </div>
     <label class="field-label">Nombre del club</label>
     <input id="club-name-inp" type="text" placeholder="Ej: Gorbea Trail Club, Txindoki Runners..." maxlength="32" value="${esc(name)}" oninput="G._clubNameDraft=this.value;"/>
-    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Especialidad del club</div>
+    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Especialidad de la plantilla</div>
     ${specs.map(s=>`
-      <div class="work-card${spec===s.id?' sel':''}" onclick="G._clubSpecDraft='${s.id}';render()" style="margin-bottom:8px${spec===s.id?';border-color:#1a1a1a;background:#f5f4f0':''}">
+      <div class="work-card${spec===s.id?' sel':''}" onclick="G._clubSpecDraft='${s.id}';render()" style="margin-bottom:6px${spec===s.id?';border-color:#1a1a1a;background:#f5f4f0':''}">
         <div style="font-size:14px;font-weight:600">${s.label}</div>
         <div style="font-size:12px;color:#888">${s.desc}</div>
       </div>`).join('')}
-    <div class="hint" style="margin-top:8px;margin-bottom:14px">Empiezas con 3 corredores de la especialidad elegida, 8 socios y €800 de presupuesto.</div>
+    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 10px">Filosofía del club (C9)</div>
+    ${Object.entries(CLUB_FILOSOFIAS).map(([id,f])=>`
+      <div class="work-card${fil===id?' sel':''}" onclick="G._clubFilDraft='${id}';render()" style="margin-bottom:6px${fil===id?`;border-color:${f.color};background:${f.color}11`:''};cursor:pointer">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:18px">${f.emoji}</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:${fil===id?f.color:'#1a1a1a'}">${f.label}</div>
+            <div style="font-size:12px;color:#888">${f.desc}</div>
+          </div>
+        </div>
+      </div>`).join('')}
+    <div class="hint" style="margin-top:10px;margin-bottom:14px">Empiezas con 3 corredores, 8 socios, €800 de presupuesto y cohesión 50/100.</div>
     <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doClubCreate()">Fundar el club →</button>
     <button class="main" style="margin-top:6px;opacity:0.5" onclick="G.screen='modeSelect';render()">← Volver</button>`;
 }
@@ -8747,9 +9606,11 @@ window.doClubCreate=()=>{
   const nameEl=document.getElementById('club-name-inp');
   const name=(nameEl?nameEl.value:G._clubNameDraft||'').trim()||'Mi Club Trail';
   const spec=G._clubSpecDraft||'mixto';
-  G.clubModeData=initClubModeData(name,spec);
-  G._clubNameDraft=null;G._clubSpecDraft=null;
+  const fil=G._clubFilDraft||'montanero';
+  G.clubModeData=initClubModeData(name,spec,fil);
+  G._clubNameDraft=null;G._clubSpecDraft=null;G._clubFilDraft=null;
   generateClubEvent();
+  generateClubObjective();
   G.screen='clubHub';autoSave();render();
 };
 
@@ -8761,39 +9622,56 @@ function renderClubHub(){
   const lvl=clubLevelByRep();
   const wages=clubMonthlyWage();
   const annualWages=wages*12;
-  const annualIncome=Math.round(d.socios*25*12);
-  const annualNet=annualIncome-annualWages;
-  const assigned=Object.values(d.calAssignments||{}).filter(v=>v).length;
-  const totalRaces=CLUB_RACES.length;
-  const allAssigned=d.plantilla.length>0&&Object.keys(d.calAssignments||{}).length>0;
+  const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;
+  const staffCost=Object.keys(d.staff||{}).reduce((s,k)=>s+(CLUB_STAFF_TYPES[k]?CLUB_STAFF_TYPES[k].costMonth:0),0)*12;
+  const sponsorIncome=(d.clubSponsors||[]).reduce((s,sp)=>s+(sp.monthlyIncome||0),0)*12;
+  const annualIncome=Math.round(d.socios*25*12*(fil&&fil.socioBonus?fil.socioBonus:1));
+  const annualNet=annualIncome+sponsorIncome-annualWages-staffCost;
+  const assigned=Object.values(d.calAssignments||{}).filter(v=>v&&v.length>0).length;
+  const allAssigned=d.plantilla.length>0&&assigned>0;
+  const cohColor=d.cohesion>=70?'#2d7a2d':d.cohesion>=40?'#c07a10':'#c0392b';
+  const obj=d.seasonObjective;
 
   el.innerHTML=`
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
       <div style="font-size:32px">${lvl.icon}</div>
       <div style="flex:1">
         <div style="font-size:18px;font-weight:700">${esc(d.name)}</div>
-        <span class="club-level-badge" style="background:${lvl.color}22;color:${lvl.color}">${lvl.label}</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+          <span class="club-level-badge" style="background:${lvl.color}22;color:${lvl.color}">${lvl.label}</span>
+          ${fil?`<span style="background:${fil.color}22;color:${fil.color};font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px">${fil.emoji} ${fil.label}</span>`:''}
+        </div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:12px;color:#aaa">Temporada</div>
+        <div style="font-size:11px;color:#aaa">Temporada</div>
         <div style="font-size:18px;font-weight:700">${d.temporada}</div>
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
-      ${[['👥 Socios',d.socios],['⭐ Rep.',`${d.reputacion}/100`],['💶 Presup.',`€${d.presupuesto}`]].map(([l,v])=>`
-        <div class="stat" style="background:#fff;border:1px solid #e0dfd8">
-          <div class="stat-label">${l}</div>
-          <div class="stat-val" style="font-size:13px">${v}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:12px">
+      ${[['👥',d.socios,'Socios'],['⭐',`${d.reputacion}`,'Rep.'],['💶',`€${d.presupuesto}`,'Presup.'],['🤝',`${d.cohesion}/100`,'Cohesión']].map(([ic,v,l])=>`
+        <div style="background:#fff;border:1px solid #e0dfd8;border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:14px">${ic}</div>
+          <div style="font-size:13px;font-weight:700">${v}</div>
+          <div style="font-size:10px;color:#aaa">${l}</div>
         </div>`).join('')}
     </div>
 
-    <div class="card" style="margin-bottom:12px">
-      <div class="sec-title-sm">Economía anual estimada</div>
-      <div class="fin-row"><span>Cuotas de socios (${d.socios} × €25/mes)</span><span class="plus">+€${annualIncome}</span></div>
-      <div class="fin-row"><span>Salarios plantilla</span><span class="minus">−€${annualWages}</span></div>
-      <div class="fin-row tot"><span>Balance neto</span><span class="${annualNet>=0?'plus':'minus'}">${annualNet>=0?'+':''}€${annualNet}</span></div>
+    <div style="height:6px;background:#e5e4de;border-radius:3px;margin-bottom:12px;overflow:hidden">
+      <div style="width:${d.cohesion}%;height:100%;background:${cohColor};border-radius:3px;transition:width .4s"></div>
     </div>
+
+    ${obj?`
+    <div class="card" style="margin-bottom:12px;border-color:${d.seasonObjectiveMet===true?'#4a8a2a':d.seasonObjectiveMet===false?'#f5b8b8':'#c07a10'};border-width:1.5px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px">${d.seasonObjectiveMet===true?'✅':d.seasonObjectiveMet===false?'❌':'🎯'}</span>
+        <div style="flex:1">
+          <div style="font-size:11px;color:#aaa;text-transform:uppercase;letter-spacing:.4px">Objetivo de temporada</div>
+          <div style="font-size:13px;font-weight:600">${obj.label}</div>
+          <div style="font-size:12px;color:#aaa;font-style:italic">${obj.desc}</div>
+        </div>
+      </div>
+    </div>`:''}
 
     ${d.pendingEvent?`
     <div class="card" style="margin-bottom:12px;border-color:#c07a10;border-width:1.5px;cursor:pointer" onclick="G.screen='clubEvent';render()">
@@ -8808,181 +9686,357 @@ function renderClubHub(){
     </div>`:''}
 
     <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Economía anual estimada</div>
+      <div class="fin-row"><span>Cuotas de socios</span><span class="plus">+€${annualIncome}</span></div>
+      ${sponsorIncome>0?`<div class="fin-row"><span>Sponsors del club</span><span class="plus">+€${sponsorIncome}</span></div>`:''}
+      <div class="fin-row"><span>Salarios plantilla</span><span class="minus">−€${annualWages}</span></div>
+      ${staffCost>0?`<div class="fin-row"><span>Staff técnico</span><span class="minus">−€${staffCost}</span></div>`:''}
+      <div class="fin-row tot"><span>Balance neto</span><span class="${annualNet>=0?'plus':'minus'}">${annualNet>=0?'+':''}€${annualNet}</span></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
       <div class="sec-title-sm">Estado de la temporada</div>
       <div style="font-size:13px;color:#555">
         ${d.seasonSimulated
-          ?`✅ Temporada completada — ${(d.seasonResults||[]).length} carreras corridas`
+          ?`✅ Temporada completada — ${(d.seasonResults||[]).length} participaciones`
           :allAssigned
-            ?`🏁 ${assigned} carrera${assigned!==1?'s':''} asignada${assigned!==1?'s':''}. Listo para simular.`
+            ?`🏁 ${assigned} carrera${assigned!==1?'s':''} con equipo asignado. Listo para simular.`
             :`📅 Asigna corredores a las carreras para empezar`}
       </div>
     </div>
 
     ${d.seasonSimulated
       ?`<button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="G.screen='clubSeasonEnd';render()">Ver balance de temporada →</button>`
-      :`<button class="main" onclick="G.screen='clubCalendar';render()">📅 Asignar corredores a carreras</button>
+      :`${!d.monthlyFocus&&!d.seasonSimulated?`
+        <div class="card" style="margin-bottom:10px;border-color:#8e44ad;border-width:1.5px">
+          <div class="sec-title-sm" style="color:#8e44ad">🗓️ Decisión mensual (C16)</div>
+          <p style="font-size:12px;color:#555;margin-bottom:8px">¿En qué enfoca el club este mes?</p>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${[['resultados','🏆','Resultados','Entrenamiento intensivo — rendimiento +5% esta temporada'],['marketing','📣','Marketing','Campaña de visibilidad — +4 socios extra al cerrar temporada'],['formacion','🌱','Formación','Desarrollo de jóvenes — cantera crece un 20% más rápido'],['ahorro','💰','Gestión','Control de costes — ahorro de €200 en gastos de inscripción']].map(([id,emoji,label,desc])=>`
+              <button class="main" style="text-align:left;padding:8px 12px" onclick="doClubMonthlyFocus('${id}')">
+                <strong>${emoji} ${label}</strong><br><span style="font-size:11px;color:#888">${desc}</span>
+              </button>`).join('')}
+          </div>
+        </div>`:''}
+       <button class="main" ${!d.monthlyFocus?'style="opacity:0.5"':''} onclick="G.screen='clubCalendar';render()">📅 Asignar equipo a carreras${d.monthlyFocus?` — foco: ${d.monthlyFocus}`:''}</button>
        ${allAssigned?`<button class="main" style="margin-top:6px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doClubSimulateSeason()">🏁 Simular temporada →</button>`:''}`}
-    <button class="main" style="margin-top:6px" onclick="G.screen='clubPlantilla';render()">👥 Plantilla (${d.plantilla.length} corredores)</button>
+    <button class="main" style="margin-top:6px" onclick="G.screen='clubPlantilla';render()">👥 Plantilla (${d.plantilla.length}) ${d.cantera&&d.cantera.length>0?`· 🌱 Cantera (${d.cantera.length})`:''}</button>
+    <button class="main" style="margin-top:6px" onclick="G.screen='clubStaff';render()">🧑‍⚕️ Staff técnico (${Object.keys(d.staff||{}).length} contratados)</button>
+    <button class="main" style="margin-top:6px" onclick="G.screen='clubSponsors';render()">🤝 Sponsors del club (${(d.clubSponsors||[]).length})</button>
+    <button class="main" style="margin-top:6px;opacity:0.6" onclick="G.screen='clubRivals';render()">⚔️ Clubes rivales</button>
+    <button class="main" style="margin-top:6px;opacity:0.7" onclick="G.screen='clubMonthly';render()">📅 Decisión mensual del club</button>
     <button class="main" style="margin-top:6px;opacity:0.5" onclick="G=freshState();render()">← Menú principal</button>`;
 }
+
+
 
 function renderClubPlantilla(){
   const el=document.getElementById('main');
   const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
   const wages=clubMonthlyWage();
-  // Available to sign (not already in plantilla)
   const inIds=d.plantilla.map(r=>r.id);
-  const available=CLUB_RUNNER_POOL.filter(r=>!inIds.includes(r.id));
+  const cantIds=(d.cantera||[]).map(r=>r.id);
+  const available=CLUB_RUNNER_POOL.filter(r=>!inIds.includes(r.id)&&!cantIds.includes(r.id));
+  const youthAvail=CLUB_YOUTH_POOL.filter(r=>!inIds.includes(r.id)&&!cantIds.includes(r.id));
   const potColors={alto:'#2d7a2d',medio:'#c07a10',bajo:'#888'};
+  const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;
+  const hasEntrenador=d.staff&&d.staff.entrenador;
+
+  const runnerCard=(r,i,isCantera)=>{
+    const pc=potColors[r.potential]||'#888';
+    const role=CLUB_ROLES[r.role||'normal'];
+    const growthBonus=hasEntrenador?CLUB_STAFF_TYPES.entrenador.growthBonus:1;
+    const specMatch=fil&&r.spec===fil.specBonus;
+    return`<div class="club-runner-card" style="${specMatch?'border-color:'+fil.color+';':''};margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:22px">${r.flag}</div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+            <div style="font-size:14px;font-weight:700">${esc(r.name)}</div>
+            <span style="font-size:11px;color:${pc};background:${pc}18;padding:1px 5px;border-radius:3px;font-weight:600">${r.potential}</span>
+            <span style="font-size:11px;background:${role.color}22;color:${role.color};padding:1px 6px;border-radius:3px;font-weight:600">${role.emoji} ${role.label}</span>
+            ${isCantera?`<span style="font-size:10px;background:#e8f4e8;color:#2d7a2d;padding:1px 5px;border-radius:3px">🌱 Cantera</span>`:''}
+          </div>
+          <div style="font-size:12px;color:#888;margin-bottom:4px">${r.age} años · ${SPEC_LABEL[r.spec]||r.spec} · €${r.currentSalary||r.salary}/mes${hasEntrenador?' · ↑ +30% crecimiento':''}</div>
+          <div>${['Res','Vel','Sub','Baj'].map((k,ki)=>{
+            const keys=['resistencia','velocidad','subida','bajada'];
+            return`<span class="club-stat-pill">${k} ${r.stats[keys[ki]]}</span>`;
+          }).join('')}</div>
+          <div style="font-size:11px;color:#aaa;margin-top:3px;font-style:italic">${esc(r.bio)}</div>
+          ${(()=>{
+            // C1: etiquetas dinámicas según historial acumulado
+            const tags=[];
+            if((r.seasonsInClub||0)>=3)tags.push({label:'Veterano 🏅',color:'#c07a10'});
+            if((r.careerWins||0)>=2)tags.push({label:`${r.careerWins} victorias ⭐`,color:'#2d7a2d'});
+            else if((r.careerPodiums||0)>=3)tags.push({label:`${r.careerPodiums} podios`,color:'#4a90d9'});
+            if(r.age>=35)tags.push({label:'Última etapa',color:'#888'});
+            if((r.careerDnfs||0)>=3)tags.push({label:'Propenso a DNF ⚠️',color:'#c0392b'});
+            if(r.seasonsInClub===1&&(r.careerPodiums||0)>0)tags.push({label:'Promesa confirmada 🌱',color:'#2d7a2d'});
+            if(!tags.length)return'';
+            return`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${tags.map(t=>`<span style="font-size:10px;background:${t.color}18;color:${t.color};padding:1px 6px;border-radius:3px;font-weight:600">${t.label}</span>`).join('')}</div>`;
+          })()}
+          <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
+            ${Object.entries(CLUB_ROLES).map(([rid,rl])=>`
+              <button onclick="doClubSetRole(${isCantera?`'cantera'`:`'plantilla'`},${isCantera?cantIds.indexOf(r.id):i},'${rid}')" style="font-size:11px;padding:2px 7px;border-radius:4px;border:1px solid ${(r.role||'normal')===rid?rl.color:'#e0dfd8'};background:${(r.role||'normal')===rid?rl.color+'22':'#fff'};color:${(r.role||'normal')===rid?rl.color:'#888'};cursor:pointer">${rl.emoji}</button>`).join('')}
+          </div>
+        </div>
+        ${d.plantilla.length>2&&!isCantera?`<button onclick="doClubRelease(${i})" style="border:1px solid #f5b8b8;border-radius:6px;padding:4px 8px;background:#fff;color:#c0392b;font-size:11px;cursor:pointer;flex-shrink:0">Liberar</button>`:''}
+      </div>
+    </div>`;
+  };
 
   el.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <h2 style="margin-bottom:0">Plantilla</h2>
       <button onclick="G.screen='clubHub';render()" style="background:none;border:1px solid #e0dfd8;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#888">← Hub</button>
     </div>
-    <div class="hint" style="margin-bottom:12px">Salarios: <strong>€${wages}/mes · €${wages*12}/año</strong> · Presupuesto disponible: €${d.presupuesto}</div>
+    <div class="hint" style="margin-bottom:10px">€${wages}/mes · €${wages*12}/año · Presupuesto: €${d.presupuesto}</div>
 
-    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Mi plantilla</div>
-    ${d.plantilla.map((r,i)=>{
-      const pc=potColors[r.potential]||'#888';
-      return`<div class="club-runner-card">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="font-size:22px">${r.flag}</div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Infraestructura (C15)</div>
+      ${[['gimnasio','🏋️','Gimnasio',500,'Todos los corredores +2 rendimiento'],['clinica','🏥','Clínica',800,'Reduce lesiones -30%'],['residencia','🏠','Residencia',1200,'Permite plantilla de hasta 8 corredores'],['marketingHQ','📣','Marketing HQ',600,'+5 socios automáticos al mes']].map(([id,emoji,label,cost,desc])=>{
+        const owned=d.instalaciones&&d.instalaciones[id];
+        return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f5f4f0">
+          <span style="font-size:16px">${emoji}</span>
           <div style="flex:1">
-            <div style="display:flex;align-items:center;gap:6px">
-              <div style="font-size:14px;font-weight:700">${esc(r.name)}</div>
-              <span style="font-size:11px;color:${pc};background:${pc}18;padding:1px 5px;border-radius:3px;font-weight:600">Potencial ${r.potential}</span>
-            </div>
-            <div style="font-size:12px;color:#888;margin-bottom:4px">${r.age} años · ${SPEC_LABEL[r.spec]||r.spec} · €${r.currentSalary||r.salary}/mes</div>
-            <div>${['Res','Vel','Sub','Baj'].map((k,ki)=>{
-              const keys=['resistencia','velocidad','subida','bajada'];
-              return`<span class="club-stat-pill">${k} ${r.stats[keys[ki]]}</span>`;
-            }).join('')}</div>
-            <div style="font-size:11px;color:#aaa;margin-top:3px;font-style:italic">${esc(r.bio)}</div>
+            <div style="font-size:13px;font-weight:600">${label}</div>
+            <div style="font-size:11px;color:#888">${desc}</div>
           </div>
-          ${d.plantilla.length>2?`<button onclick="doClubRelease(${i})" style="border:1px solid #f5b8b8;border-radius:6px;padding:4px 8px;background:#fff;color:#c0392b;font-size:11px;cursor:pointer;flex-shrink:0">Liberar</button>`:''}
-        </div>
-      </div>`;
-    }).join('')}
+          ${owned
+            ?`<span style="font-size:11px;color:#2d7a2d;font-weight:600">✓ Activo</span>`
+            :`<button onclick="doClubBuyInstalacion('${id}',${cost})" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid #ddd;background:#fff;cursor:pointer;flex-shrink:0">€${cost}</button>`}
+        </div>`;
+      }).join('')}
+    </div>
 
-    ${available.length>0&&d.plantilla.length<6?`
-    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Fichar corredor</div>
+    <div class="sec-title-sm" style="margin-bottom:8px">Plantilla principal (${d.plantilla.length})</div>
+    ${d.plantilla.map((r,i)=>runnerCard(r,i,false)).join('')}
+
+    ${(d.cantera||[]).length>0?`
+    <div class="sec-title-sm" style="margin:12px 0 8px">Cantera (${d.cantera.length})</div>
+    ${d.cantera.map((r,i)=>runnerCard(r,i,true)).join('')}`:''}
+
+    ${available.length>0&&d.plantilla.length<(d.instalaciones&&d.instalaciones.residencia?8:6)?`
+    <div class="sec-title-sm" style="margin:12px 0 8px">Fichar corredor</div>
     ${available.slice(0,4).map(r=>{
       const pc=potColors[r.potential]||'#888';
       const canAfford=d.presupuesto>=r.salary*3;
-      return`<div class="club-runner-card${canAfford?'':' locked-work'}" ${canAfford?`onclick="doClubSign('${r.id}')"`:''}  style="${!canAfford?'opacity:0.45;cursor:default':''}">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="font-size:22px">${r.flag}</div>
-          <div style="flex:1">
-            <div style="display:flex;align-items:center;gap:6px">
-              <div style="font-size:14px;font-weight:700">${esc(r.name)}</div>
-              <span style="font-size:11px;color:${pc};background:${pc}18;padding:1px 5px;border-radius:3px;font-weight:600">Pot. ${r.potential}</span>
-            </div>
-            <div style="font-size:12px;color:#888;margin-bottom:4px">${r.age} años · ${SPEC_LABEL[r.spec]||r.spec} · <strong>€${r.salary}/mes</strong></div>
-            <div>${['Res','Vel','Sub','Baj'].map((k,ki)=>{
-              const keys=['resistencia','velocidad','subida','bajada'];
-              return`<span class="club-stat-pill">${k} ${r.stats[keys[ki]]}</span>`;
-            }).join('')}</div>
-            <div style="font-size:11px;color:#aaa;margin-top:3px;font-style:italic">${esc(r.bio)}</div>
-          </div>
-          <div style="font-size:11px;color:${canAfford?'#4a8a2a':'#c0392b'};flex-shrink:0">${canAfford?'+ Fichar':'Sin fondos'}</div>
+      return`<div class="club-runner-card" style="${!canAfford?'opacity:0.45':''};margin-bottom:6px" ${canAfford?`onclick="doClubSign('${r.id}')"`:''}><div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:20px">${r.flag}</div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:5px"><div style="font-size:13px;font-weight:700">${esc(r.name)}</div><span style="font-size:11px;color:${pc};background:${pc}18;padding:1px 5px;border-radius:3px">${r.potential}</span></div>
+          <div style="font-size:12px;color:#888">${r.age}a · ${SPEC_LABEL[r.spec]||r.spec} · €${r.salary}/mes</div>
         </div>
-      </div>`;
+        <div style="font-size:11px;color:${canAfford?'#4a8a2a':'#c0392b'};flex-shrink:0">${canAfford?'+ Fichar':'Sin fondos'}</div>
+      </div></div>`;
+    }).join('')}`:''
+
+    }
+
+    ${youthAvail.length>0?`
+    <div class="sec-title-sm" style="margin:12px 0 8px">🌱 Cantera disponible</div>
+    <p style="font-size:12px;color:#888;margin-bottom:8px">Jóvenes con potencial alto. Crecen un 50% más rápido pero rinden menos al inicio.</p>
+    ${youthAvail.slice(0,3).map(r=>{
+      const canAfford=d.presupuesto>=r.salary*2;
+      return`<div class="club-runner-card" style="${!canAfford?'opacity:0.45':''};margin-bottom:6px" ${canAfford?`onclick="doClubSignYouth('${r.id}')"`:''}><div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:20px">${r.flag}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">${esc(r.name)} <span style="font-size:11px;color:#2d7a2d">🌱 Joven</span></div>
+          <div style="font-size:12px;color:#888">${r.age}a · ${SPEC_LABEL[r.spec]||r.spec} · €${r.salary}/mes</div>
+          <div style="font-size:11px;color:#aaa;font-style:italic">${esc(r.bio)}</div>
+        </div>
+        <div style="font-size:11px;color:${canAfford?'#2d7a2d':'#c0392b'};flex-shrink:0">${canAfford?'+ Cantera':'Sin fondos'}</div>
+      </div></div>`;
     }).join('')}`:''}`;
 }
+
+window.doClubSetRole=(pool,idx,role)=>{
+  const d=G.clubModeData;if(!d)return;
+  const arr=pool==='cantera'?d.cantera:d.plantilla;
+  if(!arr||idx<0||idx>=arr.length)return;
+  // Solo un capitán a la vez
+  if(role==='capitan'){
+    d.plantilla.forEach(r=>{if(r.role==='capitan')r.role='normal';});
+    if(d.cantera)d.cantera.forEach(r=>{if(r.role==='capitan')r.role='normal';});
+  }
+  arr[idx].role=role;
+  showToast(`${arr[idx].name.split(' ')[0]}: ${CLUB_ROLES[role].emoji} ${CLUB_ROLES[role].label}`,'#555');
+  autoSave();render();
+};
+
+window.doClubBuyInstalacion=(id,cost)=>{
+  const d=G.clubModeData;if(!d)return;
+  if(d.presupuesto<cost){showToast('Presupuesto insuficiente','#c0392b');return;}
+  d.instalaciones[id]=true;
+  d.presupuesto-=cost;
+  showToast(`✅ ${id} — instalación activa`,'#2d7a2d');
+  autoSave();render();
+};
 
 window.doClubSign=id=>{
   const d=G.clubModeData;if(!d)return;
   const r=CLUB_RUNNER_POOL.find(x=>x.id===id);if(!r)return;
-  if(d.plantilla.length>=6){showToast('Plantilla completa — máx. 6','#c07a10');return;}
-  d.plantilla.push({...r,stats:{...r.stats},currentSalary:r.salary});
-  d.presupuesto-=r.salary*3; // 3 months signing fee
+  const maxSize=d.instalaciones&&d.instalaciones.residencia?8:6;
+  if(d.plantilla.length>=maxSize){showToast(`Plantilla completa — máx. ${maxSize}`,'#c07a10');return;}
+  d.plantilla.push({...r,stats:{...r.stats},currentSalary:r.salary,role:'normal'});
+  d.presupuesto-=r.salary*3;
   showToast(`${r.name} fichado — coste inicial €${r.salary*3}`,'#4a8a2a');
   autoSave();render();
 };
+
+window.doClubSignYouth=id=>{
+  const d=G.clubModeData;if(!d)return;
+  const r=CLUB_YOUTH_POOL.find(x=>x.id===id);if(!r)return;
+  if(!d.cantera)d.cantera=[];
+  if(d.cantera.length>=3){showToast('Cantera completa — máx. 3','#c07a10');return;}
+  d.cantera.push({...r,stats:{...r.stats},currentSalary:r.salary,role:'promesa'});
+  d.presupuesto-=r.salary*2;
+  showToast(`🌱 ${r.name} a la cantera — €${r.salary*2}`,'#2d7a2d');
+  autoSave();render();
+};
+
 window.doClubRelease=idx=>{
   const d=G.clubModeData;if(!d)return;
   if(d.plantilla.length<=2){showToast('Necesitas al menos 2 corredores','#c07a10');return;}
   const r=d.plantilla[idx];
   if(!confirm(`¿Liberar a ${r.name}?`))return;
   d.plantilla.splice(idx,1);
-  // Remove any assignments for this runner
-  Object.keys(d.calAssignments||{}).forEach(k=>{if(d.calAssignments[k]===r.id)delete d.calAssignments[k];});
+  Object.keys(d.calAssignments||{}).forEach(k=>{
+    if(Array.isArray(d.calAssignments[k]))d.calAssignments[k]=d.calAssignments[k].filter(id=>id!==r.id);
+  });
   showToast(`${r.name} liberado`,'#888');
   autoSave();render();
 };
-
 function renderClubCalendar(){
   const el=document.getElementById('main');
   const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
   const assignments=d.calAssignments||{};
-
+  const tierColors={local:'#888',regional:'#4a90d9',nacional:'#2d7a2d',elite:'#c0392b'};
   el.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <h2 style="margin-bottom:0">Calendario</h2>
       <button onclick="G.screen='clubHub';render()" style="background:none;border:1px solid #e0dfd8;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#888">← Hub</button>
     </div>
-    <p class="sub">Asigna un corredor a cada carrera. Un corredor puede correr varias carreras.</p>
-    ${CLUB_RACES.map(race=>{
-      const assignedId=assignments[race.id];
-      const runner=assignedId?d.plantilla.find(r=>r.id===assignedId):null;
-      const tierColors={local:'#888',regional:'#4a90d9',nacional:'#2d7a2d',elite:'#c0392b'};
-      const tc=tierColors[race.tier]||'#888';
-      return`<div class="club-race-row">
-        <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">
-          <div style="flex:1">
-            <div style="display:flex;align-items:center;gap:6px">
-              <span style="font-size:13px;font-weight:700">${esc(race.name)}</span>
-              <span style="font-size:10px;background:${tc}18;color:${tc};padding:1px 5px;border-radius:3px;font-weight:600;text-transform:uppercase">${race.tier}</span>
+    <p class="sub">Asigna 1–4 corredores por carrera. Toca su nombre para añadir o quitar.</p>
+    ${(()=>{
+      const clubRep=d.reputacion||0;
+      const clubSocios=d.socios||8;
+      const unlocked=CLUB_RACES.filter(r=>(r.repReq||0)<=clubRep&&(r.sociosReq||0)<=clubSocios);
+      const locked=CLUB_RACES.filter(r=>(r.repReq||0)>clubRep||(r.sociosReq||0)>clubSocios);
+      return`
+      ${unlocked.map(race=>{
+        const assigned=assignments[race.id]||[];
+        const tc=tierColors[race.tier]||'#888';
+        return`<div class="club-race-row" style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:13px;font-weight:700">${esc(race.name)}</span>
+                <span style="font-size:10px;background:${tc}18;color:${tc};padding:1px 5px;border-radius:3px;font-weight:600;text-transform:uppercase">${race.tier}</span>
+              </div>
+              <div style="font-size:12px;color:#888">${race.dist}km · ${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][race.month-1]} · ${race.cost>0?`€${race.cost} inscripción`:'Gratuita'} · Premio €${race.prize}</div>
             </div>
-            <div style="font-size:12px;color:#888">${race.dist}km · ${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][race.month-1]} · ${race.cost>0?`Inscripción €${race.cost}`:'Gratuita'} · Premio €${race.prize}</div>
-            <div style="font-size:11px;color:#aaa;margin-top:1px;font-style:italic">${esc(race.desc)}</div>
+            <span style="font-size:12px;color:${assigned.length>0?'#2d7a2d':'#aaa'}">${assigned.length}/4</span>
           </div>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:5px">
-          <div onclick="doClubAssign('${race.id}',null)" class="club-stat-pill" style="cursor:pointer;background:${!assignedId?'#1a1a1a':'#f0ede8'};color:${!assignedId?'#fff':'#555'};padding:4px 8px;font-size:12px">Ninguno</div>
-          ${d.plantilla.map(r=>{
-            const isSel=assignedId===r.id;
-            return`<div onclick="doClubAssign('${race.id}','${r.id}')" class="club-stat-pill" style="cursor:pointer;background:${isSel?'#4a8a2a':'#f0ede8'};color:${isSel?'#fff':'#555'};padding:4px 8px;font-size:12px">${r.flag} ${esc(r.name.split(' ')[0])}</div>`;
-          }).join('')}
-        </div>
-      </div>`;
-    }).join('')}
+          <div style="display:flex;flex-wrap:wrap;gap:5px">
+            ${d.plantilla.concat(d.cantera||[]).map(r=>{
+              const isSel=assigned.includes(r.id);
+              const role=CLUB_ROLES[r.role||'normal'];
+              return`<div onclick="doClubToggleAssign('${race.id}','${r.id}')" style="cursor:pointer;padding:4px 9px;border-radius:6px;font-size:12px;border:1px solid ${isSel?'#2d7a2d':'#e0dfd8'};background:${isSel?'#f2faf0':'#fafaf8'};color:${isSel?'#2d7a2d':'#555'}">${role.emoji} ${esc(r.name.split(' ')[0])}</div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+      ${locked.length>0?`
+      <div style="margin-top:14px;margin-bottom:6px">
+        <div style="font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">🔒 Carreras bloqueadas</div>
+        ${locked.map(race=>{
+          const tc=tierColors[race.tier]||'#888';
+          const needRep=race.repReq>clubRep;
+          const needSocios=race.sociosReq>clubSocios;
+          return`<div style="opacity:0.5;padding:10px 12px;border:1px dashed #ddd;border-radius:8px;margin-bottom:6px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:13px;font-weight:600">${esc(race.name)}</span>
+              <span style="font-size:10px;background:${tc}18;color:${tc};padding:1px 5px;border-radius:3px;text-transform:uppercase">${race.tier}</span>
+            </div>
+            <div style="font-size:11px;color:#aaa;margin-top:3px">
+              ${needRep?`Rep. ≥${race.repReq} (actual: ${clubRep}) `:''}${needSocios?`· Socios ≥${race.sociosReq} (actual: ${clubSocios})`:''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`:''}`;
+    })()}
     <button class="main" style="margin-top:10px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="G.screen='clubHub';render()">← Volver al hub</button>`;
 }
 
-window.doClubAssign=(raceId,runnerId)=>{
+window.doClubToggleAssign=(raceId,runnerId)=>{
   const d=G.clubModeData;if(!d)return;
   if(!d.calAssignments)d.calAssignments={};
-  if(runnerId===null||runnerId===undefined||runnerId==='null'){
-    delete d.calAssignments[raceId];
-  } else {
-    d.calAssignments[raceId]=runnerId;
-  }
+  if(!d.calAssignments[raceId])d.calAssignments[raceId]=[];
+  const arr=d.calAssignments[raceId];
+  const idx=arr.indexOf(runnerId);
+  if(idx>=0)arr.splice(idx,1);
+  else if(arr.length<4)arr.push(runnerId);
+  else{showToast('Máximo 4 corredores por carrera','#c07a10');return;}
   autoSave();render();
 };
 
 window.doClubSimulateSeason=()=>{
   const d=G.clubModeData;if(!d)return;
   const results=[];
+  const clubRep=d.reputacion||0;
+  const clubSocios=d.socios||8;
   CLUB_RACES.forEach(race=>{
-    const runnerId=d.calAssignments[race.id];
-    if(!runnerId)return;
-    const runner=d.plantilla.find(r=>r.id===runnerId);
-    if(!runner)return;
-    const res=simClubRace(runner,race);
-    // Apply inscription cost
-    if(race.cost>0)d.presupuesto-=race.cost;
-    d.presupuesto+=res.prize;
-    results.push({race,runner,pos:res.pos,perf:res.perf,prize:res.prize,rivals:res.rivals});
+    if((race.repReq||0)>clubRep||(race.sociosReq||0)>clubSocios)return; // C4: carrera bloqueada
+    const runnerIds=d.calAssignments[race.id]||[];
+    if(!runnerIds.length)return;
+    const allRunners=[...d.plantilla,...(d.cantera||[])];
+    // Coste de inscripción × número de corredores
+    if(race.cost>0)d.presupuesto-=race.cost*runnerIds.length;
+    runnerIds.forEach(rid=>{
+      const runner=allRunners.find(r=>r.id===rid);
+      if(!runner)return;
+      const res=simClubRace(runner,race,d);
+      if(!res.dnf)d.presupuesto+=res.prize;
+      results.push({race,runner,pos:res.pos,perf:res.perf,prize:res.dnf?0:res.prize,rivals:res.rivals,dnf:res.dnf});
+    });
   });
+  // C16 Aplicar foco mensual
+  if(d.monthlyFocus==='resultados')results.forEach(r=>{if(!r.dnf)r.pos=Math.max(1,r.pos-1);});
+  if(d.monthlyFocus==='marketing')d.socios=Math.min(999,(d.socios||8)+4);
+  if(d.monthlyFocus==='ahorro')d.presupuesto+=200;
+
   d.seasonResults=results;
   d.seasonSimulated=true;
-  // Update reputation
-  const podiums=results.filter(r=>r.pos<=3).length;
-  const top10=results.filter(r=>r.pos<=10).length;
-  const repGain=podiums*8+top10*3+(results.length>0?2:0);
-  d.reputacion=Math.min(100,(d.reputacion||0)+repGain);
+
+  // Actualizar reputación
+  const podiums=results.filter(r=>r.pos<=3&&!r.dnf).length;
+  const top10=results.filter(r=>r.pos<=10&&!r.dnf).length;
+  d.reputacion=Math.min(100,(d.reputacion||0)+podiums*8+top10*3+(results.length>0?2:0));
+
+  // C6 Cohesión: sube con victorias, baja con DNFs
+  const wins=results.filter(r=>r.pos===1).length;
+  const dnfs=results.filter(r=>r.dnf).length;
+  const capitan=d.plantilla.find(r=>r.role==='capitan');
+  const capBonus=capitan?CLUB_ROLES.capitan.cohesionBonus:0;
+  const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;
+  const filBonus=fil?fil.cohesionBonus:0;
+  const staffPsi=d.staff&&d.staff.psicologo?CLUB_STAFF_TYPES.psicologo.cohesionBonus:0;
+  d.cohesion=Math.max(0,Math.min(100,(d.cohesion||50)+wins*4-dnfs*6+capBonus+filBonus+staffPsi));
+
+  // C11 Staff marketing suma socios
+  if(d.staff&&d.staff.marketing)d.socios=Math.min(999,d.socios+CLUB_STAFF_TYPES.marketing.sociosPerMonth*12);
+
+  // Comprobar objetivo de temporada C18
+  if(d.seasonObjective){
+    const obj=d.seasonObjective;
+    const lvl=clubLevelByRep();
+    try{d.seasonObjectiveMet=obj.check(d,lvl);}catch(e){d.seasonObjectiveMet=false;}
+  }
+
+  // Ingresos de sponsors de club
+  (d.clubSponsors||[]).forEach(sp=>{d.presupuesto+=sp.monthlyIncome*12;});
+
   autoSave();
   G.screen='clubSimulate';
   G._clubSimIdx=0;
@@ -9037,35 +10091,307 @@ function renderClubSimulate(){
     </button>`;
 }
 
+// ── STAFF TÉCNICO (C11) ────────────────────────────────────────────────────
+function renderClubStaff(){
+  const el=document.getElementById('main');
+  const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin-bottom:0">Staff Técnico</h2>
+      <button onclick="G.screen='clubHub';render()" style="background:none;border:1px solid #e0dfd8;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#888">← Hub</button>
+    </div>
+    <p class="sub">Contrata personal de apoyo. Cada miembro del staff tiene un coste mensual y mejora un aspecto del club.</p>
+    ${Object.entries(CLUB_STAFF_TYPES).map(([id,s])=>{
+      const hired=d.staff&&d.staff[id];
+      return`<div class="card" style="margin-bottom:10px;${hired?'border-color:#2d7a2d;':''}">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <span style="font-size:22px">${s.emoji}</span>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:700">${s.label}</div>
+            <div style="font-size:12px;color:#888">${s.desc}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:13px;font-weight:700;color:#c07a10">€${s.costMonth}/mes</div>
+            ${hired?`<div style="font-size:11px;color:#2d7a2d">✓ Contratado</div>`:''}
+          </div>
+        </div>
+        ${hired
+          ?`<button class="main" style="margin-top:4px;border-color:#c0392b;color:#c0392b;font-size:12px" onclick="doClubFireStaff('${id}')">Despedir</button>`
+          :`<button class="main" style="margin-top:4px;font-size:12px" onclick="doClubHireStaff('${id}',${s.costMonth})">Contratar — €${s.costMonth}/mes</button>`}
+      </div>`;
+    }).join('')}`;
+}
+window.doClubHireStaff=(id,cost)=>{
+  const d=G.clubModeData;if(!d)return;
+  if(d.presupuesto<cost*3){showToast('Presupuesto insuficiente','#c0392b');return;}
+  if(!d.staff)d.staff={};
+  d.staff[id]=true;
+  showToast(`${CLUB_STAFF_TYPES[id].emoji} ${CLUB_STAFF_TYPES[id].label} contratado`,'#2d7a2d');
+  autoSave();render();
+};
+window.doClubFireStaff=(id)=>{
+  const d=G.clubModeData;if(!d)return;
+  if(d.staff)delete d.staff[id];
+  showToast(`${CLUB_STAFF_TYPES[id].label} despedido`,'#888');
+  autoSave();render();
+};
+
+// ── PATROCINIO DE CLUB (C13) ───────────────────────────────────────────────
+function renderClubSponsors(){
+  const el=document.getElementById('main');
+  const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const activeIds=(d.clubSponsors||[]).map(s=>s.id);
+  const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;
+  // Más sponsors disponibles según filosofía comercial
+  const available=CLUB_SPONSORS_POOL.filter(s=>
+    d.reputacion>=(s.tier===2?40:0)&&
+    (fil&&fil.sponsorBonus===s.cat?true:s.tier<=1||(d.clubSponsors||[]).length<2)
+  );
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin-bottom:0">Sponsors del Club</h2>
+      <button onclick="G.screen='clubHub';render()" style="background:none;border:1px solid #e0dfd8;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#888">← Hub</button>
+    </div>
+    <p class="sub">Los sponsors del club pagan mensualmente a cambio de objetivos de equipo.</p>
+    ${(d.clubSponsors||[]).length>0?`
+    <div class="sec-title-sm" style="margin-bottom:8px">Sponsors activos</div>
+    ${(d.clubSponsors||[]).map(sp=>`
+      <div class="card" style="margin-bottom:8px;border-color:#2d7a2d">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:700">${esc(sp.name)}</div>
+            <div style="font-size:12px;color:#888">${sp.objective}</div>
+          </div>
+          <span style="font-size:14px;font-weight:700;color:#2d7a2d">+€${sp.monthlyIncome}/mes</span>
+        </div>
+        <button class="main" style="margin-top:6px;border-color:#c0392b;color:#c0392b;font-size:12px" onclick="doClubRemoveSponsor('${sp.id}')">Rescindir contrato</button>
+      </div>`).join('')}`:''}
+    <div class="sec-title-sm" style="margin-bottom:8px;margin-top:${(d.clubSponsors||[]).length?'14px':'0'}">Disponibles</div>
+    ${available.filter(s=>!activeIds.includes(s.id)).map(sp=>`
+      <div class="card" style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="font-size:13px;font-weight:700">${esc(sp.name)}</div>
+          <span style="font-size:14px;font-weight:700;color:#c07a10">+€${sp.monthlyIncome}/mes</span>
+        </div>
+        <div style="font-size:12px;color:#888;margin-bottom:6px">Objetivo: ${sp.objective}</div>
+        <button class="main" style="font-size:12px" onclick="doClubAddSponsor('${sp.id}')">Firmar contrato</button>
+      </div>`).join('')||'<div class="hint">Sin sponsors disponibles aún. Sube tu reputación para desbloquear más.</div>'}`;
+}
+window.doClubAddSponsor=(id)=>{
+  const d=G.clubModeData;if(!d)return;
+  const sp=CLUB_SPONSORS_POOL.find(s=>s.id===id);if(!sp)return;
+  if(!d.clubSponsors)d.clubSponsors=[];
+  d.clubSponsors.push({...sp});
+  showToast(`🤝 ${sp.name} — contrato firmado`,'#2d7a2d');
+  autoSave();render();
+};
+window.doClubRemoveSponsor=(id)=>{
+  const d=G.clubModeData;if(!d)return;
+  d.clubSponsors=(d.clubSponsors||[]).filter(s=>s.id!==id);
+  showToast('Contrato rescindido','#888');
+  autoSave();render();
+};
+
+// ── CLUBES RIVALES (C14) ───────────────────────────────────────────────────
+function renderClubRivals(){
+  const el=document.getElementById('main');
+  const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const lvl=clubLevelByRep();
+  // Rivales crecen con el tiempo
+  const rivals=(d.rivalClubs||[]).map(r=>({
+    ...r,
+    rep:Math.min(100,(r.rep||20)+(d.temporada||1)*3),
+    socios:Math.min(500,(r.socios||10)+(d.temporada||1)*5),
+  }));
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin-bottom:0">Clubes Rivales</h2>
+      <button onclick="G.screen='clubHub';render()" style="background:none;border:1px solid #e0dfd8;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#888">← Hub</button>
+    </div>
+    <div class="card" style="margin-bottom:12px;border-color:#4a90d9">
+      <div style="font-size:11px;color:#aaa;margin-bottom:4px">TU CLUB</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:14px;font-weight:700">${esc(d.name)}</div>
+        <span style="font-size:12px;background:${lvl.color}22;color:${lvl.color};padding:2px 8px;border-radius:4px">${lvl.label}</span>
+      </div>
+      <div style="font-size:12px;color:#888;margin-top:4px">Rep: ${d.reputacion}/100 · Socios: ${d.socios} · Cohesión: ${d.cohesion}/100</div>
+    </div>
+    ${rivals.map(r=>{
+      const isAhead=r.rep>d.reputacion;
+      return`<div class="card" style="margin-bottom:8px;${isAhead?'border-color:#c07a10':''}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="font-size:13px;font-weight:700">${esc(r.name)}</div>
+          <span style="font-size:11px;color:${isAhead?'#c07a10':'#2d7a2d'}">${isAhead?'▲ Por delante':'▼ Por detrás'}</span>
+        </div>
+        <div style="font-size:12px;color:#888">Rep: ${r.rep}/100 · Socios: ${r.socios} · Nivel: ${r.level}</div>
+      </div>`;
+    }).join('')}
+    <div class="hint" style="margin-top:10px">Los rivales crecen cada temporada. Si un rival supera tu reputación puede intentar ficharte corredores.</div>`;
+}
+
+// ── DECISIONES MENSUALES COMPLETAS (C16) ──────────────────────────────────
+function renderClubMonthly(){
+  const el=document.getElementById('main');
+  const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const sel=G._monthlySelections||{};
+  const decDefs=[
+    {id:'training',label:'Foco de entrenamiento',icon:'💪',options:[
+      {id:'intensivo',  emoji:'🔥',text:'Intensivo',   desc:'+3 stats a toda la plantilla'},
+      {id:'conservador',emoji:'🛡',text:'Conservador', desc:'+4 cohesión grupal'},
+      {id:'tecnico',    emoji:'⚡',text:'Técnico',     desc:'+5 stat especialidad + 2 cohesión'},
+    ]},
+    {id:'focus',label:'Foco del club',icon:'🎯',options:[
+      {id:'resultados', emoji:'🏆',text:'Resultados',  desc:'+4 rendimiento en próxima simulación'},
+      {id:'marketing',  emoji:'📣',text:'Marketing',   desc:'+4 socios, +3 reputación'},
+      {id:'formacion',  emoji:'🌱',text:'Formación',   desc:'Cantera +2 stats extra'},
+    ]},
+    {id:'budget',label:'Gestión presupuesto',icon:'💶',options:[
+      {id:'invertir',   emoji:'💶',text:'Invertir',    desc:'€200 → +2 cohesión +2 stats',    cost:200},
+      {id:'ahorrar',    emoji:'🏦',text:'Ahorrar',     desc:'+€150 reserva'},
+      {id:'evento',     emoji:'🎪',text:'Evento social',desc:'€100 → +6 cohesión +2 socios',   cost:100},
+    ]},
+  ];
+  const allChosen=decDefs.every(d=>sel[d.id]);
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin-bottom:0">Decisión mensual</h2>
+      <button onclick="G.screen='clubHub';render()" style="background:none;border:1px solid #e0dfd8;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#888">← Hub</button>
+    </div>
+    <p class="sub">Elige una opción en cada área y confirma. Los efectos se aplican inmediatamente.</p>
+    ${decDefs.map(dec=>`
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">${dec.icon} ${dec.label}</div>
+        ${dec.options.map(opt=>{
+          const isSel=sel[dec.id]===opt.id;
+          return`<div onclick="G._monthlySelections=Object.assign(G._monthlySelections||{},{'${dec.id}':'${opt.id}'});render()" style="cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid ${isSel?'#4a90d9':'#e0dfd8'};background:${isSel?'#f0f6ff':'#fafaf8'};margin-bottom:6px;display:flex;align-items:center;gap:10px">
+            <span style="font-size:18px">${opt.emoji}</span>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:${isSel?'700':'500'};color:${isSel?'#4a90d9':'#1a1a1a'}">${opt.text}</div>
+              <div style="font-size:12px;color:#888">${opt.desc}${opt.cost?` · −€${opt.cost}`:''}</div>
+            </div>
+            ${isSel?`<span style="font-size:16px;color:#4a90d9">✓</span>`:''}
+          </div>`;
+        }).join('')}
+      </div>`).join('')}
+    <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a${!allChosen?';opacity:0.4;pointer-events:none':''}" onclick="doClubApplyMonthlyFull()">Confirmar decisiones →</button>`;
+}
+
+window.doClubApplyMonthlyFull=()=>{
+  const d=G.clubModeData;if(!d)return;
+  const sel=G._monthlySelections||{};
+  const effects={
+    training:{
+      intensivo:  (d)=>d.plantilla.forEach(r=>Object.keys(r.stats).forEach(k=>r.stats[k]=Math.min(95,(r.stats[k]||40)+3))),
+      conservador:(d)=>{d.cohesion=Math.min(100,(d.cohesion||50)+4);},
+      tecnico:    (d)=>{const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;const key=fil?.statGrowthKey;if(key)d.plantilla.forEach(r=>{r.stats[key]=Math.min(95,(r.stats[key]||40)+5);});d.cohesion=Math.min(100,(d.cohesion||50)+2);},
+    },
+    focus:{
+      resultados: (d)=>{d._monthlyFocusBonus=(d._monthlyFocusBonus||0)+4;},
+      marketing:  (d)=>{d.socios=Math.min(999,(d.socios||8)+4);d.reputacion=Math.min(100,(d.reputacion||0)+3);},
+      formacion:  (d)=>{(d.cantera||[]).forEach(r=>Object.keys(r.stats).forEach(k=>r.stats[k]=Math.min(90,(r.stats[k]||30)+2)));},
+    },
+    budget:{
+      invertir:   (d,cost)=>{if(d.presupuesto<cost){showToast('Sin fondos','#c0392b');return false;}d.presupuesto-=cost;d.cohesion=Math.min(100,(d.cohesion||50)+2);d.plantilla.forEach(r=>Object.keys(r.stats).forEach(k=>r.stats[k]=Math.min(95,(r.stats[k]||40)+2)));},
+      ahorrar:    (d)=>{d.presupuesto=(d.presupuesto||0)+150;},
+      evento:     (d,cost)=>{if(d.presupuesto<cost){showToast('Sin fondos','#c0392b');return false;}d.presupuesto-=cost;d.cohesion=Math.min(100,(d.cohesion||50)+6);d.socios=Math.min(999,(d.socios||8)+2);},
+    },
+  };
+  const costs={invertir:200,evento:100};
+  let msgs=[];
+  ['training','focus','budget'].forEach(area=>{
+    const optId=sel[area];if(!optId)return;
+    const fn=effects[area]?.[optId];if(!fn)return;
+    const result=fn(d,costs[optId]||0);
+    if(result!==false)msgs.push(optId);
+  });
+  G._monthlySelections={};
+  showToast(`✅ Decisiones aplicadas`,'#2d7a2d');
+  autoSave();G.screen='clubHub';render();
+};
+
 function renderClubSeasonEnd(){
   const el=document.getElementById('main');
   const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
   const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
   const results=d.seasonResults||[];
-  const podiums=results.filter(r=>r.pos<=3).length;
-  const top10=results.filter(r=>r.pos<=10).length;
-  const wins=results.filter(r=>r.pos===1).length;
+  const podiums=results.filter(r=>r.pos<=3&&!r.dnf).length;
+  const top10=results.filter(r=>r.pos<=10&&!r.dnf).length;
+  const wins=results.filter(r=>r.pos===1&&!r.dnf).length;
+  const dnfs=results.filter(r=>r.dnf).length;
   const totalPrize=results.reduce((s,r)=>s+(r.prize||0),0);
+  const staffCost=Object.keys(d.staff||{}).reduce((s,k)=>s+(CLUB_STAFF_TYPES[k]?CLUB_STAFF_TYPES[k].costMonth*12:0),0);
+  const sponsorIncome=(d.clubSponsors||[]).reduce((s,sp)=>s+(sp.monthlyIncome||0)*12,0);
+  const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;
   const wages=clubMonthlyWage()*12;
-  const socioIncome=d.socios*25*12;
-  const netBalance=socioIncome+totalPrize-wages;
-  // Socios evolution
+  const socioIncome=Math.round(d.socios*25*12*(fil&&fil.socioBonus?fil.socioBonus:1));
+  const netBalance=socioIncome+totalPrize+sponsorIncome-wages-staffCost;
   const socioGain=Math.round(podiums*4+top10*1.5+(d.reputacion/20));
   const socioLoss=results.length===0?3:0;
   const newSocios=Math.max(3,d.socios+socioGain-socioLoss);
-  const lvlOld=clubLevelByRep();
+
+  // C18 — Resultado del objetivo
+  const obj=d.seasonObjective;
+  const objMet=d.seasonObjectiveMet===true;
+  let objRepDelta=0,objSociosDelta=0,objCohesionDelta=0;
+  if(obj){
+    const r=objMet?obj.reward:obj.penalty;
+    objRepDelta=r.rep||0;
+    objSociosDelta=r.socios||0;
+    objCohesionDelta=r.cohesion||0;
+    d.reputacion=Math.max(0,Math.min(100,(d.reputacion||0)+objRepDelta));
+    if(objCohesionDelta)d.cohesion=Math.max(0,Math.min(100,(d.cohesion||50)+objCohesionDelta));
+  }
+
+  // C17 — Narrativa de temporada
+  const correvelacion=results.filter(r=>!r.dnf).sort((a,b)=>a.pos-b.pos)[0];
+  const corrdecepcion=results.filter(r=>r.dnf).sort((a,b)=>b.pos-a.pos)[0];
+  let narrative='';
+  if(wins>=2) narrative=`Un año para recordar. ${esc(d.name)} firmó ${wins} victorias y se consolida como referencia del circuito.`;
+  else if(wins===1) narrative=`Una victoria que cambia la narrativa del club. El trabajo empieza a dar frutos.`;
+  else if(podiums>=3) narrative=`Sin victorias pero con constancia. Tres podios que demuestran que el nivel está ahí.`;
+  else if(dnfs>=2) narrative=`Una temporada irregular. Los abandonos pesaron más que los buenos resultados.`;
+  else if(d.cohesion>=70) narrative=`Resultados discretos, pero el vestuario nunca estuvo tan unido. La cohesión es el activo del año.`;
+  else if(d.cohesion<35) narrative=`El grupo está fragmentado. Sin cohesión interna, los resultados difícilmente pueden mejorar.`;
+  else narrative=`Una temporada de transición. Se siembra ahora para recoger en los próximos años.`;
 
   el.innerHTML=`
-    <div style="text-align:center;padding:14px 0 16px">
-      <div style="font-size:36px;margin-bottom:6px">${wins>0?'🏆':podiums>0?'🎯':'📋'}</div>
-      <h2>Balance — Temporada ${d.temporada}</h2>
-      <p class="sub">${esc(d.name)}</p>
+    <div style="background:linear-gradient(135deg,#fefcf8,#f5f3ef);border:1px solid #e0dfd8;border-radius:14px;padding:20px 16px;margin-bottom:14px;text-align:center">
+      <div style="font-size:40px;margin-bottom:8px">${wins>0?'🏆':podiums>0?'🎯':d.cohesion>=70?'🤝':'📋'}</div>
+      <h2 style="margin-bottom:4px">Temporada ${d.temporada} — ${esc(d.name)}</h2>
     </div>
 
+    <div class="card" style="margin-bottom:12px;border-left:3px solid #4a90d9">
+      <div style="font-size:13px;color:#555;font-style:italic;margin-bottom:8px">"${narrative}"</div>
+      <div style="display:flex;gap:12px;font-size:12px;color:#888;flex-wrap:wrap">
+        ${correvelacion?`<span>⭐ Revelación: <strong>${esc(correvelacion.runner.name.split(' ')[0])}</strong> (#${correvelacion.pos})</span>`:''}
+        ${corrdecepcion?`<span>😞 Decepción: <strong>${esc(corrdecepcion.runner.name.split(' ')[0])}</strong> (DNF)</span>`:''}
+        <span>🤝 Cohesión final: <strong>${d.cohesion}/100</strong></span>
+      </div>
+    </div>
+
+    ${obj?`
+    <div class="card" style="margin-bottom:12px;border-color:${objMet?'#4a8a2a':'#f5b8b8'};border-width:1.5px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:20px">${objMet?'✅':'❌'}</span>
+        <div style="flex:1">
+          <div style="font-size:12px;color:#888">Objetivo de temporada</div>
+          <div style="font-size:13px;font-weight:600">${obj.label}</div>
+        </div>
+        <div style="text-align:right;font-size:12px">
+          ${objRepDelta?`<div style="color:${objRepDelta>0?'#2d7a2d':'#c0392b'};font-weight:700">${objRepDelta>0?'+':''}${objRepDelta} rep</div>`:''}
+          ${objSociosDelta?`<div style="color:${objSociosDelta>0?'#2d7a2d':'#c0392b'};font-weight:700">${objSociosDelta>0?'+':''}${objSociosDelta} socios</div>`:''}
+        </div>
+      </div>
+    </div>`:''}
+
     <div class="card" style="margin-bottom:12px">
-      <div class="sec-title-sm">Resultados de la temporada</div>
+      <div class="sec-title-sm">Resultados</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">
-        ${[['Carreras',results.length],['Victorias',wins],['Podios',podiums],['Top 10',top10]].map(([l,v])=>`
+        ${[['Carreras',results.length],['Victorias',wins],['Podios',podiums],['DNF',dnfs]].map(([l,v])=>`
           <div style="background:#f5f4f0;border-radius:8px;padding:8px">
             <div style="font-size:11px;color:#aaa">${l}</div>
             <div style="font-size:18px;font-weight:700">${v}</div>
@@ -9074,30 +10400,22 @@ function renderClubSeasonEnd(){
     </div>
 
     <div class="card" style="margin-bottom:12px">
-      <div class="sec-title-sm">Economía de la temporada</div>
+      <div class="sec-title-sm">Economía</div>
       <div class="fin-row"><span>Cuotas de socios</span><span class="plus">+€${socioIncome}</span></div>
       <div class="fin-row"><span>Premios en carrera</span><span class="plus">+€${totalPrize}</span></div>
+      ${sponsorIncome>0?`<div class="fin-row"><span>Sponsors del club</span><span class="plus">+€${sponsorIncome}</span></div>`:''}
       <div class="fin-row"><span>Salarios plantilla</span><span class="minus">−€${wages}</span></div>
-      <div class="fin-row tot"><span>Resultado</span><span class="${netBalance>=0?'plus':'minus'}">${netBalance>=0?'+':''}€${netBalance}</span></div>
+      ${staffCost>0?`<div class="fin-row"><span>Staff técnico</span><span class="minus">−€${staffCost}</span></div>`:''}
+      <div class="fin-row tot"><span>Balance neto</span><span class="${netBalance>=0?'plus':'minus'}">${netBalance>=0?'+':''}€${netBalance}</span></div>
     </div>
 
-    <div class="card" style="margin-bottom:12px">
+    <div class="card" style="margin-bottom:14px">
       <div class="sec-title-sm">Evolución del club</div>
       <div class="fin-row"><span>Socios</span><span>${d.socios} → <strong>${newSocios}</strong> ${socioGain>0?`<span class="plus">(+${socioGain})</span>`:''}</span></div>
-      <div class="fin-row"><span>Reputación</span><span><strong>${d.reputacion}/100</strong></span></div>
+      <div class="fin-row"><span>Reputación</span><span><strong>${d.reputacion}/100</strong>${objRepDelta?` <span class="${objRepDelta>0?'plus':'minus'}">${objRepDelta>0?'+':''}${objRepDelta}</span>`:''}</span></div>
       <div class="fin-row"><span>Presupuesto final</span><span><strong>€${d.presupuesto}</strong></span></div>
+      <div class="fin-row"><span>Cohesión</span><span style="color:${d.cohesion>=70?'#2d7a2d':d.cohesion>=40?'#c07a10':'#c0392b'}"><strong>${d.cohesion}/100</strong></span></div>
     </div>
-
-    ${results.length>0?`
-    <div class="card" style="margin-bottom:12px">
-      <div class="sec-title-sm">Mejor resultado</div>
-      ${results.sort((a,b)=>a.pos-b.pos).slice(0,1).map(r=>`
-        <div style="text-align:center;padding:8px 0">
-          <div style="font-size:22px">${r.pos===1?'🥇':r.pos===2?'🥈':r.pos===3?'🥉':'🎯'}</div>
-          <div style="font-size:15px;font-weight:700">${esc(r.runner.name)} — #${r.pos}</div>
-          <div style="font-size:12px;color:#888">${esc(r.race.name)}</div>
-        </div>`).join('')}
-    </div>`:''}
 
     <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doClubNextSeason(${socioGain},${socioLoss},${netBalance})">Temporada ${d.temporada+1} →</button>
     <button class="main" style="margin-top:6px;opacity:0.5" onclick="G=freshState();render()">← Menú principal</button>`;
@@ -9106,22 +10424,102 @@ function renderClubSeasonEnd(){
 window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
   const d=G.clubModeData;if(!d)return;
   d.historial.push({
-    temporada:d.temporada,results:d.seasonResults,socios:d.socios,
-    reputacion:d.reputacion,presupuesto:d.presupuesto
+    temporada:d.temporada,socios:d.socios,
+    reputacion:d.reputacion,presupuesto:d.presupuesto,
+    cohesion:d.cohesion,
+    wins:(d.seasonResults||[]).filter(r=>r.pos===1).length,
+    podiums:(d.seasonResults||[]).filter(r=>r.pos<=3&&!r.dnf).length,
   });
   d.socios=Math.max(3,d.socios+socioGain-socioLoss);
+  // Bonus socios por instalación marketingHQ
+  if(d.instalaciones&&d.instalaciones.marketingHQ)d.socios=Math.min(999,d.socios+60);
   d.presupuesto=Math.max(0,d.presupuesto+netBalance);
   d.temporada++;
   d.calAssignments={};d.seasonResults=[];d.seasonSimulated=false;
-  d.pendingEvent=null;
-  // Grow runners slightly
-  d.plantilla.forEach(r=>{
-    const keys=Object.keys(r.stats);
-    keys.forEach(k=>{if(r.potential==='alto')r.stats[k]=Math.min(90,r.stats[k]+Math.floor(Math.random()*3));
-      else if(r.potential==='medio')r.stats[k]=Math.min(85,r.stats[k]+Math.floor(Math.random()*2));
-      else r.stats[k]=Math.min(80,(r.stats[k]||0)+Math.floor(Math.random()*1));});
+  d.pendingEvent=null;d.seasonObjective=null;d.seasonObjectiveMet=null;
+
+  // C7 — Progresión real según potencial, edad y staff
+  const hasEntrenador=d.staff&&d.staff.entrenador;
+  const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;
+  // C1: actualizar historial de corredor
+  const seasonRes=d.seasonResults||[];
+  const growAll=[...d.plantilla,...(d.cantera||[])];
+  growAll.forEach(r=>{
+    r.age=(r.age||20)+1;
+    r.seasonsInClub=(r.seasonsInClub||0)+1;
+    const rWins=seasonRes.filter(x=>x.runner&&x.runner.id===r.id&&x.pos===1&&!x.dnf).length;
+    const rPodiums=seasonRes.filter(x=>x.runner&&x.runner.id===r.id&&x.pos<=3&&!x.dnf).length;
+    const rDnfs=seasonRes.filter(x=>x.runner&&x.runner.id===r.id&&x.dnf).length;
+    r.careerWins=(r.careerWins||0)+rWins;
+    r.careerPodiums=(r.careerPodiums||0)+rPodiums;
+    r.careerDnfs=(r.careerDnfs||0)+rDnfs;
+    const isYouth=r.age<=22;
+    const base=r.potential==='alto'?(isYouth?4:3):r.potential==='medio'?2:0;
+    const isCantera=r.role==='promesa';
+    const coef=(isCantera||isYouth)?CLUB_ROLES.promesa.growthBonus:1;
+    const staffCoef=hasEntrenador?CLUB_STAFF_TYPES.entrenador.growthBonus:1;
+    const cap=r.potential==='alto'?95:r.potential==='medio'?88:82;
+    Object.keys(r.stats).forEach(k=>{
+      let delta=Math.floor(Math.random()*(base+1))*coef*staffCoef;
+      // Filosofía: extra en el stat clave
+      if(fil&&k===fil.statGrowthKey)delta+=1;
+      // Declive para veteranos (+35 años)
+      if(r.age>35)delta-=Math.floor(Math.random()*2);
+      r.stats[k]=Math.max(10,Math.min(cap,(r.stats[k]||40)+Math.round(delta)));
+    });
+    // Promover cantera a plantilla si son suficientemente buenos
+    if(isCantera&&r.age>=22){
+      const avgStat=Object.values(r.stats).reduce((s,v)=>s+v,0)/Object.values(r.stats).length;
+      if(avgStat>=55){
+        d.plantilla.push({...r,role:'normal'});
+        d.cantera=d.cantera.filter(c=>c.id!==r.id);
+        showToast(`🎓 ${r.name} sube a la plantilla principal`,'#2d7a2d');
+      }
+    }
   });
-  generateClubEvent();
+
+  // C14 — Rivales crecen y pueden generar eventos
+  if(d.rivalClubs){
+    d.rivalClubs.forEach(r=>{
+      r.rep=Math.min(100,(r.rep||20)+Math.floor(Math.random()*5)+2);
+      r.socios=Math.min(500,(r.socios||10)+Math.floor(Math.random()*8)+3);
+    });
+    // ¿Algún rival intenta llevarse a un corredor?
+    const topRival=d.rivalClubs.find(r=>r.rep>d.reputacion+15);
+    if(topRival&&d.plantilla.length>2&&Math.random()<0.3){
+      const target=d.plantilla.find(r=>r.potential==='alto');
+      if(target){
+        d.pendingEvent={
+          title:`${topRival.name} quiere ficharte a ${target.name}`,
+          options:[
+            {text:`Ofrecerle renovación (+€${Math.round(target.currentSalary*0.2)}/mes)`,repDelta:5,salaryIncrease:true,cost:target.currentSalary*0.2*12},
+            {text:'Dejarle ir — el club no puede retenerle a cualquier precio',repDelta:-8,loseRunner:true},
+          ]
+        };
+      }
+    }
+  }
+
+  // C2: renegociación salarial — corredores con ≥1 temporada en el club
+  if(!d.pendingEvent){
+    const renegCandidates=d.plantilla.filter(r=>(r.seasonsInClub||0)>=1&&(r.careerPodiums||0)>0);
+    const chosen=renegCandidates.length?renegCandidates[Math.floor(Math.random()*renegCandidates.length)]:null;
+    if(chosen&&Math.random()<0.4){
+      const increase=Math.round((chosen.currentSalary||chosen.salary)*0.2/10)*10;
+      const risk=chosen.potential==='alto'?'alto':'medio';
+      d.pendingEvent={
+        title:`${chosen.name.split(' ')[0]} pide una revisión salarial`,
+        body:`Lleva ${chosen.seasonsInClub} temporada${chosen.seasonsInClub>1?'s':''} en el club y ha conseguido ${chosen.careerPodiums} podio${chosen.careerPodiums>1?'s':''}. Pide +€${increase}/mes. Riesgo de marcharse: ${risk}.`,
+        options:[
+          {text:`Aceptar (+€${increase}/mes para ${chosen.name.split(' ')[0]})`,repDelta:3,cohesionDelta:4,salarySpecificIncrease:true,targetId:chosen.id,increaseAmount:increase},
+          {text:'Negociar — solo la mitad (+€${Math.round(increase/2)}/mes)',repDelta:1,cohesionDelta:0,salarySpecificIncrease:true,targetId:chosen.id,increaseAmount:Math.round(increase/2)},
+          {text:'Rechazar — el presupuesto no da para más',repDelta:-3,cohesionDelta:-6,loseRunnerById:chosen.id,loseChance:risk==='alto'?0.5:0.2},
+        ]
+      };
+    }
+  }
+  if(!d.pendingEvent)generateClubEvent();
+  generateClubObjective();
   G.screen='clubHub';autoSave();render();
 };
 
@@ -9136,6 +10534,7 @@ function renderClubEvent(){
     </div>
     <div class="card" style="margin-bottom:14px">
       <div style="font-size:15px;font-weight:700;margin-bottom:10px">${esc(ev.title)}</div>
+      ${ev.body?`<div style="font-size:13px;color:#666;margin-bottom:12px;line-height:1.55">${esc(ev.body)}</div>`:''}
       ${ev.options.map((opt,i)=>`
         <button class="main" style="margin-top:${i===0?'0':'8px'};text-align:left" onclick="doClubEvent(${i})">
           <div style="font-weight:500">${esc(opt.text)}</div>
@@ -9154,8 +10553,9 @@ window.doClubEvent=idx=>{
   const opt=ev.options[idx];if(!opt)return;
   if(opt.repDelta)d.reputacion=Math.max(0,Math.min(100,(d.reputacion||0)+opt.repDelta));
   if(opt.sociosDelta)d.socios=Math.max(3,(d.socios||8)+opt.sociosDelta);
+  if(opt.cohesionDelta)d.cohesion=Math.max(0,Math.min(100,(d.cohesion||50)+opt.cohesionDelta));
   if(opt.cost)d.presupuesto=Math.max(0,(d.presupuesto||0)-opt.cost);
-  if(opt.income)d.presupuesto=(d.presupuesto||0)+opt.income;
+  if(opt.income)d.presupuesto=Math.max(0,(d.presupuesto||0)+opt.income);
   if(opt.addRunner){
     const inIds=d.plantilla.map(r=>r.id);
     const avail=CLUB_RUNNER_POOL.filter(r=>!inIds.includes(r.id));
@@ -9169,10 +10569,20 @@ window.doClubEvent=idx=>{
     const leavingIdx=Math.floor(Math.random()*d.plantilla.length);
     d.plantilla[leavingIdx].currentSalary=(d.plantilla[leavingIdx].currentSalary||d.plantilla[leavingIdx].salary)+50;
   }
+  if(opt.salarySpecificIncrease&&opt.targetId){
+    const tr=d.plantilla.find(r=>r.id===opt.targetId);
+    if(tr){tr.currentSalary=(tr.currentSalary||tr.salary)+(opt.increaseAmount||0);showToast(`${tr.name.split(' ')[0]}: +€${opt.increaseAmount}/mes`,'#2d7a2d');}
+  }
   if(opt.loseRunner&&d.plantilla.length>2){
     const leavingIdx=Math.floor(Math.random()*d.plantilla.length);
     const leaving=d.plantilla.splice(leavingIdx,1)[0];
     showToast(`${leaving.name} se va al club rival`,'#c0392b');
+  }
+  if(opt.loseRunnerById&&d.plantilla.length>2){
+    if(Math.random()<(opt.loseChance||0.3)){
+      const idx=d.plantilla.findIndex(r=>r.id===opt.loseRunnerById);
+      if(idx>=0){const leaving=d.plantilla.splice(idx,1)[0];showToast(`${leaving.name} se va — no aceptó la oferta`,'#c0392b');}
+    }
   }
   let toastMsg=opt.repDelta>0?`+${opt.repDelta} reputación`:opt.repDelta<0?`${opt.repDelta} reputación`:'Decisión tomada';
   showToast(toastMsg,opt.repDelta>=0?'#4a8a2a':'#c0392b');
@@ -9187,13 +10597,19 @@ function renderCoachAthleteTab(){
   const pl=PERSONALITY_LABEL[a.personality];
   const trustColor=G.coachTrust>=60?'#2d7a2d':G.coachTrust>=30?'#c07a10':'#c0392b';
   const load=G.coachBodyLoad||0;
+  const es=EMOTIONAL_STATES[G.coachEmotionalState||'fresco'];
+  const decisionLog=(G.coachDecisionLog||[]).slice(-6); // últimas 6 decisiones
   el.innerHTML=`
     <div class="runner-header" style="margin-bottom:16px">
       <div class="runner-avatar">${a.flag}</div>
       <div>
         <div style="font-size:16px;font-weight:700">${esc(a.name)}</div>
         <div style="font-size:12px;color:#888">${a.age} años · ${SPEC_LABEL[a.spec]||a.spec}</div>
-        <span style="background:${pl.color}22;color:${pl.color};font-size:12px;font-weight:600;padding:2px 8px;border-radius:4px;display:inline-block;margin-top:4px">${pl.emoji} ${pl.label}</span>
+        <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
+          <span style="background:${pl.color}22;color:${pl.color};font-size:12px;font-weight:600;padding:2px 8px;border-radius:4px">${pl.emoji} ${pl.label}</span>
+          <span style="background:${es.color}22;color:${es.color};font-size:12px;font-weight:600;padding:2px 8px;border-radius:4px" title="${es.desc}">${es.emoji} ${es.label}</span>
+        </div>
+        <div style="font-size:11px;color:#aaa;margin-top:4px;font-style:italic">${es.desc}</div>
       </div>
     </div>
     <div class="card" style="margin-bottom:12px">
@@ -9206,6 +10622,43 @@ function renderCoachAthleteTab(){
       </div>
     </div>
     <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Perfil de rendimiento</div>
+      ${(()=>{
+        const stats=Object.entries(a.currentStats);
+        const sorted=[...stats].sort((x,y)=>y[1]-x[1]);
+        const top=sorted[0];const weak=sorted[sorted.length-1];
+        // Tendencia: comparar con baseStats
+        const improving=stats.filter(([k,v])=>v>(a.baseStats[k]||v)).length;
+        const declining=stats.filter(([k,v])=>v<(a.baseStats[k]||v)).length;
+        const trendLabel=improving>declining?'↗ Mejorando':declining>improving?'↘ Bajando':'→ Estable';
+        const trendColor=improving>declining?'#2d7a2d':declining>improving?'#c0392b':'#888';
+        // Alertas
+        const alerts=[];
+        if((G.coachBodyLoad||0)>75)alerts.push({icon:'🔥',text:'Carga alta — riesgo de lesión',color:'#c0392b'});
+        if(G.coachTrust<35)alerts.push({icon:'⚠️',text:'Confianza crítica — revisa tu relación con el atleta',color:'#c07a10'});
+        if(weak[1]<40)alerts.push({icon:'📉',text:`Punto débil: ${weak[0]} (${weak[1]}) — considera trabajarlo`,color:'#c07a10'});
+        if(G.coachEmotionalState==='quemado')alerts.push({icon:'🩶',text:'Atleta quemado — prioriza recuperación emocional',color:'#888'});
+        return`
+          <div style="display:flex;gap:12px;margin-bottom:10px">
+            <div style="flex:1;background:#f2faf0;border-radius:8px;padding:8px 10px;text-align:center">
+              <div style="font-size:10px;color:#888;margin-bottom:2px">PUNTO FUERTE</div>
+              <div style="font-size:13px;font-weight:700;color:#2d7a2d">${top[0].charAt(0).toUpperCase()+top[0].slice(1)}</div>
+              <div style="font-size:12px;color:#2d7a2d">${top[1]}</div>
+            </div>
+            <div style="flex:1;background:#fff8f0;border-radius:8px;padding:8px 10px;text-align:center">
+              <div style="font-size:10px;color:#888;margin-bottom:2px">PUNTO DÉBIL</div>
+              <div style="font-size:13px;font-weight:700;color:#c07a10">${weak[0].charAt(0).toUpperCase()+weak[0].slice(1)}</div>
+              <div style="font-size:12px;color:#c07a10">${weak[1]}</div>
+            </div>
+            <div style="flex:1;background:#f5f4f0;border-radius:8px;padding:8px 10px;text-align:center">
+              <div style="font-size:10px;color:#888;margin-bottom:2px">TENDENCIA</div>
+              <div style="font-size:13px;font-weight:700;color:${trendColor}">${trendLabel}</div>
+            </div>
+          </div>
+          ${alerts.map(al=>`<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:${al.color};padding:4px 0;border-bottom:1px solid #f5f4f0">${al.icon} ${al.text}</div>`).join('')}`;
+      })()}
+    </div>
+    <div class="card" style="margin-bottom:12px">
       <div class="sec-title-sm">Stats actuales</div>
       ${Object.entries(a.currentStats).map(([k,v])=>`
         <div class="bar-row">
@@ -9214,7 +10667,7 @@ function renderCoachAthleteTab(){
           <div class="bar-pct">${v}</div>
         </div>`).join('')}
     </div>
-    <div class="card">
+    <div class="card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <div class="sec-title-sm" style="margin-bottom:0">Carga corporal</div>
         <span style="font-size:12px;font-weight:600;color:${load>70?'#c0392b':load>50?'#c07a10':'#4a8a2a'}">${Math.round(load)}%</span>
@@ -9223,7 +10676,19 @@ function renderCoachAthleteTab(){
         <div style="width:${load}%;height:100%;background:${load>70?'#c0392b':load>50?'#c07a10':'#4a8a2a'};border-radius:4px;transition:width .4s"></div>
       </div>
       <div style="font-size:12px;color:#aaa;margin-top:6px">${load>70?'Alta — riesgo de lesión':load>50?'Moderada — ojo con el volumen':'En buena forma'}</div>
-    </div>`;
+    </div>
+    ${decisionLog.length>0?`
+    <div class="card">
+      <div class="sec-title-sm">Lo que recuerda de ti</div>
+      ${decisionLog.map(d=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f5f4f0">
+          <span style="font-size:13px">${d.positive?'✅':'⚠️'}</span>
+          <div>
+            <div style="font-size:12px;color:#555">${esc(d.label)}</div>
+            <div style="font-size:11px;color:#bbb">T${d.season}</div>
+          </div>
+        </div>`).join('')}
+    </div>`:''}`;
 }
 
 function renderCoachRepTab(){
@@ -9402,32 +10867,86 @@ window.doCoachEventChoice=choiceIdx=>{
   if(c.bodyLoad)G.coachBodyLoad=Math.max(0,Math.min(100,(G.coachBodyLoad||0)+(c.bodyLoad||0)));
   if(c.money)G.money=(G.money||0)+(c.money||0);
   if(c.reputation)G.coachReputation=Math.min(100,(G.coachReputation||0)+(c.reputation||0));
+  // Registrar decisión si el evento la define
+  if(c.decisionType)logCoachDecision(c.decisionType, c.text.replace(/"/g,'').slice(0,60), c.decisionPositive===true);
   const delta=c.trust||0;
   showToast(delta>0?`+${delta} confianza`:delta<0?`${delta} confianza`:'Evento resuelto',delta>0?'#2d7a2d':delta<0?'#c0392b':'#888');
   if(!G.coachEventLog)G.coachEventLog=[];
   G.coachEventLog.push({evtId:ev.id,choice:c.text,trust:c.trust||0});
   G.coachPendingEvent=null;
+  updateEmotionalState();
   G.screen='coachHome';render();
 };
 
 // ── Generate season objective ──
 function generateCoachSeasonObjective(){
   const a=G.coachAthlete;if(!a)return;
-  const pool=COACH_SEASON_OBJECTIVES[a.personality]||COACH_SEASON_OBJECTIVES.obediente;
+  const hist=G.coachAthleteHistory||[];
+  const season=G.coachSeason||1;
+  const lastSeason=hist[hist.length-1];
+  const totalDnfs=(hist.reduce((s,h)=>{
+    const r=h.raceResults||[];return s+r.filter(x=>x.dnf).length;},0));
+  const prevBest=lastSeason?.bestPos||999;
+  const hadInjury=lastSeason&&G.coachInjury;
+
+  // Pool base por personalidad
+  const basePool=COACH_SEASON_OBJECTIVES[a.personality]||COACH_SEASON_OBJECTIVES.obediente;
+
+  // Pool extra basado en historial (solo temporada 2+)
+  const historyPool=[];
+  if(season>=2){
+    if(lastSeason&&lastSeason.wins===0&&lastSeason.podiums===0){
+      historyPool.push({id:'first_podio',label:'Consigue tu primer podio con este atleta',
+        desc:`"El año pasado sin podios. Este año cambiamos eso."`,reward:+15,penalty:-8,
+        checkAll:(all)=>(all||[]).some(r=>r.pos<=3&&!r.dnf)});
+    }
+    if(lastSeason&&(lastSeason.dnfs||0)>=2){
+      historyPool.push({id:'no_dnf_season',label:'Temporada completa sin abandonos',
+        desc:`"${a.name.split(' ')[0]} abandonó demasiado el año pasado. Esta vez llegamos al final."`,
+        reward:+10,penalty:-6,
+        checkAll:(all)=>(all||[]).every(r=>!r.dnf)});
+    }
+    if(prevBest<999&&prevBest>5){
+      historyPool.push({id:'beat_pb',label:`Superar la mejor posición del año pasado (#${prevBest})`,
+        desc:`"El año pasado, el mejor fue #${prevBest}. Este año hay que hacerlo mejor."`,
+        reward:+12,penalty:-5,
+        checkAll:(all)=>{const b=Math.min(...(all||[]).filter(x=>!x.dnf).map(x=>x.pos)||[999]);return b<prevBest;}});
+    }
+    if(lastSeason&&lastSeason.trust<50){
+      historyPool.push({id:'rebuild_trust',label:'Reconstruir la relación — terminar con confianza ≥60',
+        desc:`"La temporada pasada acabó tensa. Hay que reconstruir desde dentro."`,
+        reward:+14,penalty:-4,
+        checkAll:()=>G.coachTrust>=60});
+    }
+    if(season>=3&&a.personality==='perfeccionista'){
+      historyPool.push({id:'zegama_time',label:`Clasificar para Zegama o carrera nacional`,
+        desc:`"${a.name.split(' ')[0]} ya está listo para dar el salto. Es el momento."`,
+        reward:+18,penalty:-10,
+        checkAll:(all)=>(all||[]).some(r=>['nacional','elite'].includes(r.tier||'')&&!r.dnf&&r.pos<=15)});
+    }
+  }
+
+  // Elegir: si hay historial relevante, 60% de probabilidad de usarlo
+  const useHistory=historyPool.length>0&&Math.random()<0.6;
+  const pool=useHistory?historyPool:basePool;
   const chosen=pool[Math.floor(Math.random()*pool.length)];
+
   G.coachSeasonObjective={
     id:chosen.id,label:chosen.label,desc:chosen.desc,
     reward:chosen.reward,penalty:chosen.penalty,met:false,
+    fromHistory:useHistory,
     checkAll:(all)=>{
+      if(chosen.checkAll)return chosen.checkAll(all);
+      // fallback para objetivos base sin checkAll propio
       const id=chosen.id;
-      if(id==='win_elite')  return(all||[]).some(r=>r.pos===1&&['elite','nacional'].includes(r.tier||''));
-      if(id==='no_abandon') return(all||[]).every(r=>!r.dnf);
-      if(id==='podio_x2')   return(all||[]).filter(x=>x.pos<=3&&!x.dnf).length>=2;
-      if(id==='top10_all')  return(all||[]).every(x=>x.dnf||x.pos<=10);
-      if(id==='finish_all') return(all||[]).filter(x=>!x.dnf).length>=(G.coachSelectedRaces||[]).length;
-      if(id==='improve_pb'){const prev=(G.coachAthleteHistory||[]).slice(-1)[0]?.bestPos||999;return(all||[]).some(x=>!x.dnf&&x.pos<prev);}
-      if(id==='no_injury')  return!G.coachInjury||(G.coachInjury?.severity||0)<2;
-      if(id==='two_races')  return(all||[]).filter(x=>!x.dnf).length>=2;
+      if(id==='win_elite')   return(all||[]).some(r=>r.pos===1&&['elite','nacional'].includes(r.tier||''));
+      if(id==='no_abandon')  return(all||[]).every(r=>!r.dnf);
+      if(id==='podio_x2')    return(all||[]).filter(x=>x.pos<=3&&!x.dnf).length>=2;
+      if(id==='top10_all')   return(all||[]).every(x=>x.dnf||x.pos<=10);
+      if(id==='finish_all')  return(all||[]).filter(x=>!x.dnf).length>=(G.coachSelectedRaces||[]).length;
+      if(id==='improve_pb')  {const prev=(G.coachAthleteHistory||[]).slice(-1)[0]?.bestPos||999;return(all||[]).some(x=>!x.dnf&&x.pos<prev);}
+      if(id==='no_injury')   return!G.coachInjury||(G.coachInjury?.severity||0)<2;
+      if(id==='two_races')   return(all||[]).filter(x=>!x.dnf).length>=2;
       return false;
     }
   };
