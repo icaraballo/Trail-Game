@@ -177,13 +177,7 @@ function clubRepLabel(){
   if(r>=20) return {text:'Miembro reciente',color:'#888'};
   return {text:'Recién llegado',color:'#aaa'};
 }
-// Carrera exclusiva desbloqueada con rep ≥75
-const EXCLUSIVE_CLUB_RACE={
-  id:'copa_clubes',name:'Copa de Clubes Trail',dist:42,month:9,cost:0,
-  minYear:1,spec:'all',circuit:null,
-  desc:'Carrera exclusiva para miembros con alta reputación en su club. Rivales top, sin inscripción.',
-  prize:300,isExclusive:true
-};
+
 function monthlyNet(){
   if(G.gameMode==='expres')return monthlySponsorIncome();
   return monthlyWorkIncome()+monthlySponsorIncome()+monthlyBrandIncome()-FIXED_COSTS.total-monthlyClubCost();
