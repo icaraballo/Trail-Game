@@ -20,6 +20,7 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
+const GAME_BUILD=44; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
@@ -100,7 +101,9 @@ function sanitizeState(raw){
 
 function saveToSlot(slot){
   try{
-    const data={v:SAVE_VERSION,ts:Date.now(),state:serializableState()};
+    const state=serializableState();
+    state._build=GAME_BUILD;
+    const data={v:SAVE_VERSION,ts:Date.now(),state};
     LS.set(SAVE_KEY+slot, JSON.stringify(data));
     return true;
   }catch(e){return false;}

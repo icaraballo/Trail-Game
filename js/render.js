@@ -607,7 +607,7 @@ function renderSaveScreen(){
   const autoData=loadFromSlot('auto');
   el.innerHTML=`
     <h1>Juego Trail</h1>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v43</span></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v44</span></div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
       <p class="sub" style="margin-bottom:0;flex:1">Partidas guardadas</p>
       <button onclick="showTutorial()" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid #ddd;border-radius:20px;background:#fff;font-size:12px;font-weight:600;color:#888;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background='#fff'">📖 Tutorial</button>
@@ -643,6 +643,16 @@ function renderSaveScreen(){
     <div style="border-top:1px solid #e8e6e0;margin-top:16px;padding-top:16px">
       <div style="font-size:13px;font-weight:600;color:#888;margin-bottom:8px">Importar partida</div>
       <div style="font-size:12px;color:#aaa;margin-bottom:8px">Pega aquí el texto exportado y elige en qué ranura guardarla</div>
+      <div style="font-size:11px;color:#b8a88a;background:#fdf8f2;
+  border:1px solid #e8dfc8;border-radius:6px;padding:8px 10px;
+  margin-bottom:10px">
+        💡 <strong>Consejo:</strong> Para que las partidas persistan
+    entre actualizaciones, guarda el archivo siempre como
+    <code style="background:#f0e8d8;padding:1px 4px;
+    border-radius:3px">juego_trail.html</code> (sin número de
+    versión). El navegador vincula los guardados al nombre
+    del archivo.
+      </div>
       <textarea class="import-area" id="import-txt" placeholder="Pega aquí el texto TRAIL_SAVE_V2::..."></textarea>
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
         ${slots.map(({slot})=>`<button class="save-btn" onclick="doImport(${slot})">→ Ranura ${slot+1}</button>`).join('')}
@@ -653,15 +663,24 @@ function renderSaveScreen(){
 }
 
 window.loadSlot=slot=>{
-  const data=loadFromSlot(slot);
-  if(!data||!data.state){alert('Ranura vacía.');return;}
-  if(!validateState(data.state)){alert('Partida corrupta.');return;}
-  Object.assign(G,freshState(),data.state);
-  // Si está en solapamiento, mostrar el hub de modo antes de workSetup
-  if(G.carreraVida&&G.lifecyclePhase==='overlap'&&G.lifeAthlete){
-    G.screen='overlapHub';
+  try{
+    const data=loadFromSlot(slot);
+    if(!data||!data.state){alert('Ranura vacía o no se pudo leer.');return;}
+    const savedBuild=data.state._build||0;
+    Object.assign(G,freshState(),data.state);
+    if(G.carreraVida&&G.lifecyclePhase==='overlap'&&G.lifeAthlete){
+      G.screen='overlapHub';
+    }
+    render();
+    if(savedBuild>0&&savedBuild<GAME_BUILD){
+      setTimeout(()=>showToast(`Partida de v${savedBuild} actualizada a v${GAME_BUILD} ✓`,'#4a90d9'),300);
+    } else if(savedBuild===0){
+      setTimeout(()=>showToast('Partida antigua cargada — datos actualizados automáticamente ✓','#4a90d9'),300);
+    }
+  }catch(err){
+    console.error('[loadSlot] Error al cargar ranura',slot,err);
+    alert('Error inesperado al cargar la partida. Prueba a importar desde texto.');
   }
-  render();
 };
 window.saveCurrentToSlot=slot=>{
   if(RACE_SCREENS.includes(G.screen)){alert('No puedes guardar durante una carrera. Termina o abandona primero.');return;}
