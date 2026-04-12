@@ -918,6 +918,57 @@ const COACH_ATHLETE_POOL=[
    bio:'Recién llegado al trail desde el fútbol. Físico bruto, cabeza a entrenar. Aprende rápido pero no le gustan las normas.',
    baseStats:{resistencia:50,velocidad:62,subida:55,bajada:50,nutricion:30,mental:55},monthlyFee:150},
 ];
+// ── Pool de atletas para el arco narrativo (Carrera de Vida) ──────────────────
+const LIFE_ATHLETE_POOL=[
+  {id:'txus',  name:'Txus Olaizola',   flag:'🇪🇸', spec:'montanero',   personality:'rebelde',
+   age:22, potential:'bruto',
+   bio:'Pastoreaba ovejas en el Pirineo navarro hasta los 20 años. Físico excepcional, cero técnica. Nadie le ha dicho todavía que puede ser bueno.',
+   baseStats:{resistencia:60,velocidad:48,subida:70,bajada:44,nutricion:32,mental:52}},
+  {id:'noa',   name:'Noa Ferragut',    flag:'🇪🇸', spec:'fondista',    personality:'motivado',
+   age:21, potential:'prometedor',
+   bio:'Campeona de cross universitario. Quiere dar el salto al trail pero no conoce a nadie del mundillo.',
+   baseStats:{resistencia:62,velocidad:58,subida:50,bajada:48,nutricion:50,mental:65}},
+  {id:'kepa',  name:'Kepa Etxeberria', flag:'🇪🇸', spec:'todoterreno', personality:'obediente',
+   age:23, potential:'talento_oculto',
+   bio:'Ciclista de XCO reconvertido. Sus datos de potencia son los mejores que has visto en un aficionado. Él no lo sabe.',
+   baseStats:{resistencia:55,velocidad:65,subida:62,bajada:56,nutricion:58,mental:48}},
+  {id:'celia', name:'Celia Bravo',     flag:'🇪🇸', spec:'tecnico',     personality:'perfeccionista',
+   age:24, potential:'prometedor',
+   bio:'Trabaja de fisio. Conoce su cuerpo mejor que nadie. Analiza todo, confía en poco. Necesita a alguien que entienda su forma de pensar.',
+   baseStats:{resistencia:52,velocidad:50,subida:52,bajada:68,nutricion:64,mental:44}},
+  {id:'unai',  name:'Unai Goikoetxea', flag:'🇪🇸', spec:'montanero',  personality:'quemado',
+   age:20, potential:'talento_oculto',
+   bio:'Ganó tres carreras juveniles y desapareció. Algo pasó ese último año. Tiene ganas de volver pero no sabe si puede confiar en un entrenador.',
+   baseStats:{resistencia:58,velocidad:52,subida:66,bajada:58,nutricion:46,mental:28}},
+  {id:'mireia',name:'Mireia Puigdomènech',flag:'🇪🇸',spec:'fondista', personality:'motivado',
+   age:21, potential:'bruto',
+   bio:'Llega del atletismo de pista. Resistente como pocas, pero el monte le da vértigo todavía. Aprende rápido.',
+   baseStats:{resistencia:68,velocidad:60,subida:44,bajada:40,nutricion:52,mental:58}},
+];
+const LIFE_POTENTIAL_LABEL={
+  bruto:         {label:'Talento bruto',  color:'#c07a10', desc:'Base física excepcional, sin pulir.'},
+  prometedor:    {label:'Prometedor',     color:'#185FA5', desc:'Perfil equilibrado con margen de mejora claro.'},
+  talento_oculto:{label:'Talento oculto', color:'#534AB7', desc:'Nadie lo ha visto todavía. Podría sorprenderte.'},
+};
+
+const LIFE_EXTRA_ATHLETES=[
+  {id:'aritz', name:'Aritz Zubeldia',  flag:'🇪🇸', spec:'montanero',  personality:'perfeccionista',
+   age:20, potential:'talento_oculto',
+   bio:'Lo descubres en una carrera local. Lleva cuatro meses entrenando. Ya gana a gente con diez años de experiencia.',
+   baseStats:{resistencia:52,velocidad:50,subida:68,bajada:50,nutricion:35,mental:55}},
+  {id:'laia',  name:'Laia Sistach',    flag:'🇪🇸', spec:'fondista',   personality:'motivado',
+   age:22, potential:'prometedor',
+   bio:'Maratoniana reconvertida. Su agente te llama directamente — algo no cuadra con el anterior entrenador.',
+   baseStats:{resistencia:66,velocidad:62,subida:46,bajada:44,nutricion:58,mental:60}},
+  {id:'bixente',name:'Bixente Larrañaga',flag:'🇪🇸',spec:'tecnico', personality:'rebelde',
+   age:19, potential:'bruto',
+   bio:'Su padre fue trail runner en los 90. El chico tiene el físico pero ninguna de la disciplina.',
+   baseStats:{resistencia:58,velocidad:56,subida:58,bajada:70,nutricion:28,mental:48}},
+  {id:'sara2', name:'Sara Mas',        flag:'🇪🇸', spec:'todoterreno',personality:'obediente',
+   age:24, potential:'prometedor',
+   bio:'Guardabosques. Pasa más horas en el monte que nadie. Solo necesita que alguien le ponga estructura.',
+   baseStats:{resistencia:64,velocidad:52,subida:60,bajada:58,nutricion:55,mental:62}},
+];
 const PERSONALITY_LABEL={
   rebelde:       {label:'Rebelde',       color:'#c0392b',emoji:'🔴',desc:'Modifica tus planes. Difícil de controlar pero tiene chispa.'},
   motivado:      {label:'Motivado',      color:'#c07a10',emoji:'🟡',desc:'Se entrega al máximo. Puede sobreentrenar si no lo controlas.'},
@@ -1797,10 +1848,6 @@ const CLUB_EVENTS=[
    ]},
 ];
 
-function clubLevel(){
-  const socios=(G.clubModeData&&G.clubModeData.socios)||8;
-  return CLUB_LEVELS.find(l=>socios>=l.sociosMin&&socios<=l.sociosMax)||CLUB_LEVELS[0];
-}
 function clubLevelByRep(){
   const rep=(G.clubModeData&&G.clubModeData.reputacion)||0;
   const lvls=[...CLUB_LEVELS].reverse();
@@ -2000,6 +2047,15 @@ function freshState(){
     warmedUp:false,           // calentamiento hecho esta carrera
     _raceInitialized:false,   // guard para initRace()
     _warmupApplied:false,     // guard para revertir warmup
+    // ── Tanda B/C — campos antes lazy-init ──
+    unlockedAchievements:[],     // logros desbloqueados (acumulado partida)
+    nemesisLog:{},               // {rivalName: {wins, gapSum, gapCount}}
+    _xpTimerInterval:null,       // handle del timer de Express mode
+    dayConditionGenerated:false, // flag: condición del día ya generada esta carrera
+    paceLog:[],                  // registro de pace por segmento
+    workChangePenalties:{},      // penalizaciones por cambio de jornada por trimestre
+    yearObjective:null,          // objetivo de temporada activo
+    _expressSponsorPool:null,    // pool de sponsors generado para esta temporada Express
     // ── Modo Entrenador ──────────────────
     coachPool:null,           // 3 atletas presentados al inicio
     coachAthlete:null,        // atleta seleccionado {id,name,flag,spec,personality,age,bio,baseStats,currentStats,monthlyFee}
@@ -2052,6 +2108,18 @@ function freshState(){
     // ── Clasificación Zegama ──
     zegamaQual:false,            // true = acceso garantizado a Zegama esta temporada (tiempo del año anterior)
     zegamaQualNext:false,        // true = terminó Zegama bajo el corte este año → pasa a zegamaQual el año siguiente
+    // ── Carrera de Vida ──────────────────
+    carreraVida:false,           // interruptor maestro del modo Carrera de Vida
+    lifecyclePhase:'runner',     // 'runner' → 'overlap' → 'coach' → 'club'
+    lifeAthlete:null,            // atleta del arco narrativo {id,name,age,specialty,personality,potential,bio,currentStats}
+    lifePendingAthletes:[],      // pool de atletas rechazados (vuelven más adelante)
+    lifeAthleteHours:0,          // horas semanales dedicadas al atleta en fase overlap
+    rivalRetirements:{},         // {rivalId: {season, childName, childStats}} — rivales retirados
+    pendingLifeAthleteOffer:null,// atleta pendiente de aceptar/rechazar en la pantalla de oferta
+    lifeAthleteOfferCount:0,     // cuántas veces se ha ofrecido un atleta (para texto urgente año 7)
+    rivalChildren:[],            // [{name, flag, spec, parentName, parentWins, baseStats}]
+    _clubOfferSeen:false,        // ya se mostró la oferta del club (no repetir)
+    _clubOfferDelay:0,           // temporada a partir de la cual vuelve a intentarlo tras rechazo
   };
 }
 let G=freshState();
@@ -2398,7 +2466,8 @@ function effForWork(){
   const vacBonus=vacTrainingHBonus(G.currentQuarter||1);
   const brandH=brandHoursPerWeek(); // 6h/sem si marca activa sin empleado
   const h=Math.max(0,(wo?.trainingH||5)+vacBonus-brandH);
-  return trainingEffFromH(h)*(G.spending.entrenador?1.2:1.0)*G.trainingEff;
+  const overlapMult=(G.carreraVida&&G.lifecyclePhase==='overlap')?lifeAthleteEffMult(G.lifeAthleteHours||0):1.0;
+  return trainingEffFromH(h)*(G.spending.entrenador?1.2:1.0)*G.trainingEff*overlapMult;
 }
 function getSpecRaces(){return SPEC_RACES[G.runner.specialty]||[];}
 function isInCircuit(raceId){return G.joinedCircuits.some(cid=>CIRCUITS_DB.find(c=>c.id===cid)?.raceIds.includes(raceId));}
@@ -2437,7 +2506,7 @@ function getExpressSponsors(){
   // One per category variety
   const cats=['zapatillas','ropa','nutricion','tecnologia'];
   const picked=[];
-  const shuffled=[...pool].sort(()=>Math.random()-0.5);
+  const shuffled=shuffle(pool);
   for(const s of shuffled){
     if(!picked.find(p=>p.cat===s.cat))picked.push(s);
     if(picked.length>=2)break;
@@ -2940,7 +3009,20 @@ function showToast(msg,color='#1a1a1a'){
 // ══════════════════════════════════════
 //  RENDER PRINCIPAL
 // ══════════════════════════════════════
+// Fisher-Yates unbiased shuffle (replaces sort(()=>Math.random()-0.5))
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
 function render(){
+  // Defensive timer cleanup — prevent orphaned intervals from previous screens
+  if(G._xpTimerInterval){clearInterval(G._xpTimerInterval);G._xpTimerInterval=null;}
+  if(typeof _coachRaceTimer!=='undefined'&&_coachRaceTimer&&G.screen!=='coachRace'){clearInterval(_coachRaceTimer);_coachRaceTimer=null;}
   updateFinBar();
   updateTabNav();
   // Clear any pending Express timer if we've left the mid-race event screen
@@ -2988,6 +3070,10 @@ function render(){
     clubPlantilla:renderClubPlantilla,clubCalendar:renderClubCalendar,
     clubSimulate:renderClubSimulate,clubSeasonEnd:renderClubSeasonEnd,
     clubEvent:renderClubEvent,
+    lifeAthleteOffer:renderLifeAthleteOffer,
+    overlapHub:renderOverlapHub,
+    lifeRetirement:renderLifeRetirement,
+    clubOffer:renderClubOffer,
   }[G.screen]||renderIntro)();
   triggerFade(el);
 }
@@ -3423,34 +3509,129 @@ function renderRunnerTab(){
 // ══════════════════════════════════════
 //  SISTEMA DE GUARDADO
 // ══════════════════════════════════════
-const SAVE_KEY='trail_save_slot_';
+const LS_PREFIX='mpt_';
+const LS={
+  get:(k)=>{try{return localStorage.getItem(LS_PREFIX+k);}catch(e){return null;}},
+  set:(k,v)=>{try{localStorage.setItem(LS_PREFIX+k,v);return true;}catch(e){return false;}},
+  del:(k)=>{try{localStorage.removeItem(LS_PREFIX+k);}catch(e){}}
+};
+// Migración one-shot v40→v41: claves sin prefijo → mpt_*
+(function migrateLS_v41(){
+  try{
+    if(localStorage.getItem(LS_PREFIX+'migrated_v41'))return;
+    const legacy=['trail_unlocked'];
+    for(let i=0;i<10;i++)legacy.push('trail_save_slot_'+i);
+    legacy.forEach(k=>{
+      const v=localStorage.getItem(k);
+      if(v!==null){
+        const nk=k.replace(/^trail_/,'');
+        try{localStorage.setItem(LS_PREFIX+nk,v);localStorage.removeItem(k);}catch(e){}
+      }
+    });
+    localStorage.setItem(LS_PREFIX+'migrated_v41','1');
+  }catch(e){}
+})();
+const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
 
+// Devuelve una copia de G sin las claves transitorias (prefijo _)
+// Evita serializar timers, cachés de HTML, borradores de UI, etc.
+function serializableState(){
+  const clean={};
+  for(const k in G){
+    if(!k.startsWith('_')) clean[k]=G[k];
+  }
+  return JSON.parse(JSON.stringify(clean));
+}
+
+// Fusiona un save con freshState() para añadir campos nuevos que no existían
+// cuando se creó el save. Garantiza que cargar una partida vieja no deja
+// propiedades undefined que revienten el render.
+function migrateState(saved){
+  const base=freshState();
+  const merged={...base,...saved};
+  // Merge profundo en las estructuras anidadas críticas
+  if(saved.runner){
+    merged.runner={...base.runner,...saved.runner};
+    merged.runner.stats={...base.runner.stats,...(saved.runner.stats||{})};
+  }
+  merged.sponsors={...base.sponsors,...(saved.sponsors||{})};
+  merged.spending={...base.spending,...(saved.spending||{})};
+  merged.workByQuarter={...base.workByQuarter,...(saved.workByQuarter||{})};
+  merged.vacByQuarter={...base.vacByQuarter,...(saved.vacByQuarter||{})};
+  merged.openQuarters={...base.openQuarters,...(saved.openQuarters||{})};
+  merged.fameActionsThisSeason={...(saved.fameActionsThisSeason||{})};
+  merged.personalBests={...(saved.personalBests||{})};
+  merged.careerRaceHistory={...(saved.careerRaceHistory||{})};
+  merged.circuitPoints={...(saved.circuitPoints||{})};
+  merged.rivalRetirements={...(saved.rivalRetirements||{})};
+  merged.midRaceEventTriggered={...(saved.midRaceEventTriggered||{})};
+  // Asegurar arrays
+  ['selectedRaces','raceResults','careerHistory','rivals','liveClass','lastRaceGains',
+   'injuryHistory','monthlyEvents','sponsorPenalties','joinedCircuits','circuitCompleted',
+   'seasonDiary','aidSelected','paceLog','rivalChildren','lifePendingAthletes',
+   'coachSelectedRaces','coachRaceResults','coachAthleteHistory','coachDecisionLog',
+   'coachEventLog','coachRoster','coachSponsors','unlockedAchievements']
+    .forEach(k=>{if(!Array.isArray(merged[k]))merged[k]=Array.isArray(base[k])?[...base[k]]:[];});
+  return merged;
+}
+
+// Valida y sanea un estado. Clampa numéricos, limita strings, asegura shape mínimo.
+// No muta el input — devuelve una copia saneada o null si es inválido.
+function sanitizeState(raw){
+  if(!raw||typeof raw!=='object')return null;
+  if(!raw.runner||typeof raw.runner!=='object')return null;
+  if(!raw.runner.stats||typeof raw.runner.stats!=='object')return null;
+  if(typeof raw.runner.name!=='string')return null;
+  if(typeof raw.year!=='number'||!Number.isFinite(raw.year))return null;
+  if(typeof raw.money!=='number'||!Number.isFinite(raw.money))return null;
+  const s=JSON.parse(JSON.stringify(raw));
+  const clampI=(v,lo,hi,def)=>{const n=Math.round(Number(v));return Number.isFinite(n)?Math.max(lo,Math.min(hi,n)):def;};
+  s.runner.name=String(s.runner.name||'').slice(0,30);
+  s.runName=String(s.runName||'').slice(0,40);
+  s.year=clampI(s.year,1,50,1);
+  s.money=clampI(s.money,0,9999999,0);
+  s.runner.age=clampI(s.runner.age,14,80,25);
+  s.runner.energy=clampI(s.runner.energy,0,100,100);
+  s.runner.hydration=clampI(s.runner.hydration,0,100,100);
+  s.runner.legs=clampI(s.runner.legs,0,100,100);
+  ['resistencia','velocidad','subida','bajada','nutricion','mental'].forEach(k=>{
+    s.runner.stats[k]=clampI(s.runner.stats[k],0,100,50);
+  });
+  s.ranking=clampI(s.ranking,1,999,999);
+  s.specRanking=clampI(s.specRanking,1,999,999);
+  s.bodyLoad=clampI(s.bodyLoad,0,100,0);
+  s.currentRaceIdx=clampI(s.currentRaceIdx,0,50,0);
+  s.followers=clampI(s.followers,0,99999999,0);
+  s.coachReputation=clampI(s.coachReputation,0,100,0);
+  s.coachTrust=clampI(s.coachTrust,0,100,60);
+  return s;
+}
+
 function saveToSlot(slot){
   try{
-    const data={
-      v:SAVE_VERSION,
-      ts:Date.now(),
-      state:JSON.parse(JSON.stringify(G))
-    };
-    localStorage.setItem(SAVE_KEY+slot, JSON.stringify(data));
+    const data={v:SAVE_VERSION,ts:Date.now(),state:serializableState()};
+    LS.set(SAVE_KEY+slot, JSON.stringify(data));
     return true;
   }catch(e){return false;}
 }
 
 function loadFromSlot(slot){
   try{
-    const raw=localStorage.getItem(SAVE_KEY+slot);
+    const raw=LS.get(SAVE_KEY+slot);
     if(!raw)return null;
     const data=JSON.parse(raw);
-    if(!data.state)return null;
+    if(!data||!data.state)return null;
+    const safe=sanitizeState(data.state);
+    if(!safe)return null;
+    data.state=migrateState(safe);
     return data;
   }catch(e){return null;}
 }
 
 function deleteSlot(slot){
-  localStorage.removeItem(SAVE_KEY+slot);
+  LS.del(SAVE_KEY+slot);
 }
 
 function getAllSlots(){
@@ -3465,7 +3646,10 @@ function getAllSlots(){
 function exportSlotToClipboard(slot){
   const data=loadFromSlot(slot);
   if(!data){alert('Ranura vacía.');return;}
-  const txt=SAVE_VERSION+'::'+btoa(unescape(encodeURIComponent(JSON.stringify(data.state))));
+  // TextEncoder + base64 estándar (evita escape/unescape deprecados)
+  const bytes=new TextEncoder().encode(JSON.stringify(data.state));
+  let bin='';for(let i=0;i<bytes.length;i++)bin+=String.fromCharCode(bytes[i]);
+  const txt=SAVE_VERSION+'::'+btoa(bin);
   if(navigator.clipboard&&navigator.clipboard.writeText){
     navigator.clipboard.writeText(txt).then(()=>{
       alert('✓ Partida copiada al portapapeles. Pégala donde quieras para guardarla.');
@@ -3482,34 +3666,27 @@ function fallbackCopy(txt){
   document.body.removeChild(ta);
 }
 
-function validateState(s){
-  if(!s||typeof s!=='object')return false;
-  if(!s.runner||typeof s.runner!=='object')return false;
-  if(!s.runner.stats||typeof s.runner.stats!=='object')return false;
-  if(typeof s.runner.name!=='string')return false;
-  if(typeof s.year!=='number'||s.year<1)return false;
-  if(typeof s.money!=='number')return false;
-  // Sanitize user-editable strings
-  s.runner.name=String(s.runner.name||'').slice(0,30);
-  s.runName=String(s.runName||'').slice(0,40);
-  return true;
-}
 function importFromText(txt, slot){
   try{
     const clean=txt.trim();
     if(!clean.startsWith(SAVE_VERSION+'::'))throw new Error('Formato no reconocido');
     const b64=clean.slice(SAVE_VERSION.length+2);
-    const state=JSON.parse(decodeURIComponent(escape(atob(b64))));
-    if(!validateState(state))throw new Error('Estado inválido');
+    const bin=atob(b64);
+    const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+    const json=new TextDecoder().decode(bytes);
+    const raw=JSON.parse(json);
+    const safe=sanitizeState(raw);
+    if(!safe)throw new Error('Estado inválido');
+    const state=migrateState(safe);
     const data={v:SAVE_VERSION,ts:Date.now(),state};
-    localStorage.setItem(SAVE_KEY+slot, JSON.stringify(data));
+    LS.set(SAVE_KEY+slot, JSON.stringify(data));
     return true;
   }catch(e){return false;}
 }
 
 function autoSave(){
   if(G._saveSlot==null)return;
-  if(G.gameMode==='coach')saveCoachSlot();
+  if(G.gameMode==='coach'){saveCoachSlot();return;}
   try{saveToSlot(G._saveSlot);}catch(e){}
 }
 
@@ -3526,7 +3703,14 @@ function slotLabel(data){
   const mode={facil:'🟢 Fácil',medio:'🟡 Medio',dificil:'🔴 Difícil',hardcore:'💀 Hardcore',expres:'⚡ Exprés'}[s.gameMode||'medio'];
   const totalKm=s.totalCareerKm||0;
   const date=new Date(data.ts).toLocaleDateString('es-ES',{day:'2-digit',month:'short'});
-  return {name,runName,year,ranking,specRanking,spec,mode,totalKm,date};
+  // Fase del arco narrativo
+  const phase=s.carreraVida?{
+    runner:  '🏃 Corredor',
+    overlap: '🏃 · 📋 Solapamiento',
+    coach:   '📋 Entrenador',
+    club:    '🏕 Club',
+  }[s.lifecyclePhase||'runner']:null;
+  return {name,runName,year,ranking,specRanking,spec,mode,totalKm,date,phase};
 }
 
 // ── SAVE SCREEN ────────────────────────
@@ -3536,7 +3720,7 @@ function renderSaveScreen(){
   const autoData=loadFromSlot('auto');
   el.innerHTML=`
     <h1>Juego Trail</h1>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v37</span></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v43</span></div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
       <p class="sub" style="margin-bottom:0;flex:1">Partidas guardadas</p>
       <button onclick="showTutorial()" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid #ddd;border-radius:20px;background:#fff;font-size:12px;font-weight:600;color:#888;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background='#fff'">📖 Tutorial</button>
@@ -3557,7 +3741,7 @@ function renderSaveScreen(){
           <div class="save-slot-info">
             <div class="save-slot-name">${lbl.runName?`"${esc(lbl.runName)}"`:lbl.name}</div>
             <div class="save-slot-meta">${lbl.runName?esc(lbl.name)+' · ':''}Año ${lbl.year} · Global ${lbl.ranking} · ${lbl.spec} ${lbl.specRanking}</div>
-            <div class="save-slot-meta" style="margin-top:2px">${lbl.mode}${lbl.totalKm?' · '+lbl.totalKm+'km':''} · ${lbl.date}</div>
+            <div class="save-slot-meta" style="margin-top:2px">${lbl.mode}${lbl.phase?` · <span style="color:#534AB7;font-weight:500">${lbl.phase}</span>`:''}${lbl.totalKm?' · '+lbl.totalKm+'km':''} · ${lbl.date}</div>
           </div>
         </div>
         <div class="save-btns">
@@ -3586,13 +3770,10 @@ window.loadSlot=slot=>{
   if(!data||!data.state){alert('Ranura vacía.');return;}
   if(!validateState(data.state)){alert('Partida corrupta.');return;}
   Object.assign(G,freshState(),data.state);
-  render();
-};
-window.loadAutoSave=()=>{
-  const data=loadFromSlot('auto');
-  if(!data||!data.state){alert('Sin autoguardado.');return;}
-  if(!validateState(data.state)){alert('Autoguardado corrupto.');return;}
-  Object.assign(G,freshState(),data.state);
+  // Si está en solapamiento, mostrar el hub de modo antes de workSetup
+  if(G.carreraVida&&G.lifecyclePhase==='overlap'&&G.lifeAthlete){
+    G.screen='overlapHub';
+  }
   render();
 };
 window.saveCurrentToSlot=slot=>{
@@ -3921,12 +4102,16 @@ function renderModeSelect(){
     {id:'hardcore', icon:'💀', label:'Hardcore', desc:'Material importa · fractura = temporada perdida · sin red de seguridad'},
   ];
   const otherModes=[
-    {id:'expres',        icon:'⚡', label:'Carrera Exprés',        desc:'3 temporadas · sin jornada laboral · ganancias ×1.5',         available:true},
-    {id:'infinite_prog', icon:'📈', label:'Modo infinito',          desc:'Dificultad progresiva · sin techo · próximamente',            available:false},
-    {id:'coach',         icon:'📋', label:'Entrenador',              desc:'Lleva un atleta ajeno · honorarios + bonus · temporadas',     available:true},
-    {id:'club',          icon:'🏕️', label:'Club',                   desc:'Gestiona un club · plantilla · presupuesto · ranking',        available:true},
-    {id:'canicross',     icon:'🐕', label:'Canicross',              desc:'Corres con tu perro · carreras específicas · próximamente',    available:false},
+    {id:'expres',        icon:'⚡', label:'Carrera Exprés',  desc:'3 temporadas · sin jornada laboral · ganancias ×1.5', available:true,  lockable:false},
+    {id:'infinite_prog', icon:'📈', label:'Modo infinito',   desc:'Dificultad progresiva · sin techo · próximamente',   available:false, lockable:false},
+    {id:'coach',         icon:'📋', label:'Entrenador',      desc:'Lleva un atleta ajeno · honorarios + bonus',          available:true,  lockable:true},
+    {id:'club',          icon:'🏕️', label:'Club',            desc:'Gestiona un club · plantilla · presupuesto',          available:true,  lockable:true},
+    {id:'canicross',     icon:'🐕', label:'Canicross',       desc:'Corres con tu perro · carreras específicas · próx.',  available:false, lockable:false},
   ];
+  // Leer desbloqueos del localStorage
+  let unlocked={coach:false,club:false};
+  try{Object.assign(unlocked,JSON.parse(LS.get('unlocked')||'{}'));}catch(e){}
+
   const sel=G.gameMode||'medio';
   el.innerHTML=`
     <h1>Monte Perdido Trail</h1>
@@ -3962,17 +4147,8 @@ function renderModeSelect(){
     <div style="font-size:12px;font-weight:500;color:var(--color-text-tertiary);letter-spacing:.6px;text-transform:uppercase;margin-bottom:8px;margin-top:16px">Otros modos</div>
     <div class="carrera-group" style="margin-top:0">
       ${otherModes.map(m=>{
-        if(m.available){
-          const isSel=sel===m.id;
-          return `<div class="carrera-group-header" onclick="selectMode('${m.id}')" style="${isSel?'background:#fef9ec;border-bottom:1px solid #e8e6e0':''}">
-            <div style="width:36px;height:36px;border-radius:8px;background:${isSel?'#fef9ec':'var(--color-background-secondary)'};display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${m.icon}</div>
-            <div style="flex:1">
-              <div style="font-size:14px;font-weight:${isSel?'600':'500'};color:${isSel?'#c07a10':'var(--color-text-primary)'}">${m.label}</div>
-              <div style="font-size:12px;color:var(--color-text-secondary)">${m.desc}</div>
-            </div>
-            <span style="font-size:12px;color:#c07a10;font-weight:600">${isSel?'✓':''}</span>
-          </div>`;
-        } else {
+        // Próximamente
+        if(!m.available){
           return `<div class="carrera-group-header" style="opacity:0.42;cursor:default">
             <div style="width:36px;height:36px;border-radius:8px;background:var(--color-background-secondary);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${m.icon}</div>
             <div style="flex:1">
@@ -3982,6 +4158,42 @@ function renderModeSelect(){
             <span style="font-size:12px;color:var(--color-text-tertiary)">Próx.</span>
           </div>`;
         }
+        // Lockable y bloqueado
+        if(m.lockable&&!unlocked[m.id]){
+          return `<div class="carrera-group-header" style="opacity:0.55;cursor:default">
+            <div style="width:36px;height:36px;border-radius:8px;background:var(--color-background-secondary);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${m.icon}</div>
+            <div style="flex:1">
+              <div style="font-size:14px;font-weight:500;color:var(--color-text-primary)">${m.label} 🔒</div>
+              <div style="font-size:12px;color:var(--color-text-secondary)">Sigue el arco narrativo en modo carrera para desbloquear</div>
+            </div>
+          </div>`;
+        }
+        // Lockable y desbloqueado — dos botones
+        if(m.lockable&&unlocked[m.id]){
+          return `<div style="padding:12px 14px;border-bottom:1px solid var(--color-border-tertiary)">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <div style="width:36px;height:36px;border-radius:8px;background:#EEEDFE;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${m.icon}</div>
+              <div style="flex:1">
+                <div style="font-size:14px;font-weight:600;color:#3C3489">${m.label} <span style="font-size:11px;background:#EEEDFE;color:#534AB7;padding:1px 6px;border-radius:4px;font-weight:500">Desbloqueado</span></div>
+                <div style="font-size:12px;color:var(--color-text-secondary)">${m.desc}</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <button class="main" style="margin-top:0;font-size:13px;padding:9px 8px;border-color:#534AB7;color:#3C3489" onclick="selectAndConfirm('${m.id}','continuar')">Continuar historia</button>
+              <button class="main" style="margin-top:0;font-size:13px;padding:9px 8px" onclick="selectAndConfirm('${m.id}','nuevo')">Nuevo desde cero</button>
+            </div>
+          </div>`;
+        }
+        // Normal (expres)
+        const isSel=sel===m.id;
+        return `<div class="carrera-group-header" onclick="selectMode('${m.id}')" style="${isSel?'background:#fef9ec;border-bottom:1px solid #e8e6e0':''}">
+          <div style="width:36px;height:36px;border-radius:8px;background:${isSel?'#fef9ec':'var(--color-background-secondary)'};display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${m.icon}</div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:${isSel?'600':'500'};color:${isSel?'#c07a10':'var(--color-text-primary)'}">${m.label}</div>
+            <div style="font-size:12px;color:var(--color-text-secondary)">${m.desc}</div>
+          </div>
+          <span style="font-size:12px;color:#c07a10;font-weight:600">${isSel?'✓':''}</span>
+        </div>`;
       }).join('')}
     </div>
 
@@ -3995,13 +4207,59 @@ window.toggleModeGroup=()=>{
   if(c){const open=c.classList.toggle('open');if(a)a.style.transform=open?'rotate(90deg)':'';}
 };
 window.selectMode=id=>{G.gameMode=id;render();};
+window.selectAndConfirm=(id,path)=>{
+  G.gameMode=id;
+  if(path==='continuar'){
+    if(id==='coach'){
+      G.coachReputation=G.coachReputation||0;
+      if((G.coachRoster||[]).some(s=>s&&s.coachAthlete)){G.screen='coachHub';render();return;}
+      G._coachUnlockedHint=true;
+      G.coachActiveIdx=0;if(!G.coachRoster)G.coachRoster=[];
+      const sh=shuffle(COACH_ATHLETE_POOL);
+      const bon=LIFE_ATHLETE_POOL.filter(a=>a.potential==='talento_oculto'||a.potential==='prometedor');
+      let pl=sh.slice(0,3).map(a=>({...a,currentStats:{...a.baseStats}}));
+      if(bon.length){const pk=bon[Math.floor(Math.random()*bon.length)];pl=[...pl,{...pk,currentStats:{...pk.baseStats},monthlyFee:200}];}
+      G.coachPool=pl;G.screen='coachSelect';render();return;
+    }
+    if(id==='club'){
+      if(G.clubModeData){G.screen='clubHub';render();return;}
+      G._clubUnlockedHint=true;G.screen='clubCreate';render();return;
+    }
+  }
+  if(path==='nuevo'){
+    if(id==='coach'){
+      G.coachReputation=5;G._coachUnlockedHint=true;
+      G.coachActiveIdx=0;G.coachRoster=[];G.coachAthlete=null;
+      const sh=shuffle(COACH_ATHLETE_POOL);
+      const bon=LIFE_ATHLETE_POOL.filter(a=>a.potential==='talento_oculto'||a.potential==='prometedor');
+      let pl=sh.slice(0,3).map(a=>({...a,currentStats:{...a.baseStats}}));
+      if(bon.length){const pk=bon[Math.floor(Math.random()*bon.length)];pl=[...pl,{...pk,currentStats:{...pk.baseStats},monthlyFee:200}];}
+      G.coachPool=pl;G.screen='coachSelect';render();return;
+    }
+    if(id==='club'){
+      G.clubModeData=null;G._clubUnlockedHint=true;
+      G.screen='clubCreate';render();return;
+    }
+  }
+};
 window.confirmMode=()=>{
   if(G.gameMode==='club'){
+    // Guiño narrativo si el modo está desbloqueado vía arco narrativo
+    const unlocked=JSON.parse(LS.get('unlocked')||'{}');
+    if(unlocked.club&&!G.carreraVida){
+      G._clubUnlockedHint=true; // flag para mostrar texto en clubCreate
+    }
     if(G.clubModeData){G.screen='clubHub';render();return;}
     G.screen='clubCreate';render();return;
   }
   if(G.gameMode==='coach'){
     G.coachReputation=G.coachReputation||0;
+    // Guiño narrativo si el modo está desbloqueado vía arco narrativo
+    const unlocked=JSON.parse(LS.get('unlocked')||'{}');
+    if(unlocked.coach&&!G.carreraVida){
+      G.coachReputation=Math.max(G.coachReputation,5);
+      G._coachUnlockedHint=true; // flag para mostrar el texto en coachSelect
+    }
     // If roster already has athletes, go to hub
     if((G.coachRoster||[]).some(s=>s&&s.coachAthlete)){
       G.screen='coachHub';render();return;
@@ -4009,20 +4267,41 @@ window.confirmMode=()=>{
     // First time — init pool and go to athlete selection for slot 0
     G.coachActiveIdx=0;
     if(!G.coachRoster)G.coachRoster=[];
-    const shuffled=[...COACH_ATHLETE_POOL].sort(()=>Math.random()-0.5);
-    G.coachPool=shuffled.slice(0,3).map(a=>({...a,currentStats:{...a.baseStats}}));
+    const shuffled=shuffle(COACH_ATHLETE_POOL);
+    // Pool extra si viene del arco: un atleta de LIFE_ATHLETE_POOL con buen potencial
+    let pool=shuffled.slice(0,3).map(a=>({...a,currentStats:{...a.baseStats}}));
+    if(unlocked.coach&&!G.carreraVida){
+      const bonus=LIFE_ATHLETE_POOL.filter(a=>a.potential==='talento_oculto'||a.potential==='prometedor');
+      if(bonus.length){
+        const pick=bonus[Math.floor(Math.random()*bonus.length)];
+        pool=[...pool,{...pick,currentStats:{...pick.baseStats},monthlyFee:pick.monthlyFee||200}];
+      }
+    }
+    G.coachPool=pool;
     G.screen='coachSelect';render();return;
+  }
+  // Modos de carrera normal — el arco narrativo corredor→entrenador→club está siempre activo
+  if(['facil','medio','dificil','hardcore'].includes(G.gameMode)){
+    G.carreraVida=true;
+    G.lifecyclePhase=G.lifecyclePhase||'runner';
   }
   G.screen='intro';render();
 };
 
 function renderIntro(){
+  // Preservar focus de inputs (#runname/#rname) tras re-render por cambio edad/especialidad
+  const _prevFocusId=document.activeElement&&document.activeElement.id;
+  const _prevSelStart=document.activeElement&&document.activeElement.selectionStart;
+  const _prevSelEnd=document.activeElement&&document.activeElement.selectionEnd;
+  // Persistir valores actuales del DOM en G antes de redibujar
+  const _rn=document.getElementById('runname');if(_rn)G.runName=_rn.value;
+  const _nm=document.getElementById('rname');if(_nm&&G.runner)G.runner.name=_nm.value;
   const el=document.getElementById('main');
   const r=G.runner;
   el.innerHTML=`
     <h1>Juego Trail</h1>
     <p class="sub">Crea tu corredor y empieza tu carrera deportiva</p>
-    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v37</div>
+    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v43</div>
     ${G.gameMode==='expres'?`<div class="warn" style="margin-bottom:14px">⚡ <strong>Carrera Exprés</strong> — 3 temporadas · sin gestión de jornada · ganancias de entrenamiento ×1.5</div>`:''}
     <label class="field-label">Nombre de la partida</label>
     <input id="runname" type="text" placeholder="Ej: Temporada del reto, Sin trabajo año 1..." value="${esc(G.runName||'')}" maxlength="30" style="margin-bottom:14px"/>
@@ -4061,6 +4340,16 @@ function renderIntro(){
     if(i)i.oninput=e=>G.runner.name=e.target.value;
     const rn=document.getElementById('runname');
     if(rn)rn.oninput=e=>G.runName=e.target.value;
+    // Restaurar focus tras re-render
+    if(_prevFocusId){
+      const tgt=document.getElementById(_prevFocusId);
+      if(tgt){
+        tgt.focus();
+        if(_prevSelStart!=null&&tgt.setSelectionRange){
+          try{tgt.setSelectionRange(_prevSelStart,_prevSelEnd);}catch(e){}
+        }
+      }
+    }
   },0);
 }
 
@@ -4081,7 +4370,7 @@ function renderWorkSetup(){
 
   el.innerHTML=`
     <h2>Jornada laboral</h2>
-    <p class="sub">${qLabel[q]} · ${esc(G.runner.name||'Corredor')}</p>
+    <p class="sub">${qLabel[q]} · ${esc(G.runner.name||'Corredor')}${G.carreraVida?` · <span style="font-size:11px;padding:1px 7px;border-radius:4px;background:#E6F1FB;color:#185FA5;font-weight:600">🏔 Carrera de Vida · Año ${G.year} · ${{runner:'Corredor',overlap:'Solapamiento',coach:'Entrenador',club:'Club'}[G.lifecyclePhase||'runner']}</span>`:''}</p>
     ${qRaces.length>0?`<div class="note">Este trimestre tienes ${qRaces.length} carrera${qRaces.length>1?'s':''}: ${qRaces.map(r=>r.name).join(', ')}. Valora bajar jornada o usar vacaciones.</div>`:''}
     ${G.workChangePenalties?.[q]?`<div class="warn">⚠ Cambio brusco de jornada${G.workChangePenalties[q]?.amount>0?' — pierdes €'+G.workChangePenalties[q].amount:''} · eficiencia entrenamiento ${Math.round((G.workChangePenalties[q]?.trainingEff||1)*100)}% este trimestre.</div>`:''}
     <div class="card" style="margin-bottom:14px">
@@ -4178,7 +4467,7 @@ function renderSeasonStart(){
       <h2>Temporada ${G.year}</h2>
       <span style="font-size:12px;color:#999;padding-top:5px">${G.ranking<900?'Ranking #'+G.ranking:'Sin ranking'}</span>
     </div>
-    <p class="sub">${esc(G.runner.name||'Corredor')} · ${G.runner.specialty} · ${G.runner.age?G.runner.age+' años · ':''}<span style="font-size:12px;padding:1px 7px;border-radius:4px;background:${{facil:'#EAF3DE',medio:'#FAEEDA',dificil:'#FCEBEB',hardcore:'#F1EFE8',expres:'#fef9ec'}[G.gameMode||'medio']};color:${{facil:'#27500A',medio:'#633806',dificil:'#791F1F',hardcore:'#444441',expres:'#8a4a00'}[G.gameMode||'medio']}">${{facil:'Fácil',medio:'Medio',dificil:'Difícil',hardcore:'Hardcore',expres:'⚡ Exprés'}[G.gameMode||'medio']}</span>${G.gameMode==='expres'?` <span style="font-size:12px;color:#c07a10;font-weight:600">Año ${G.year}/3</span>`:''}</p>
+    <p class="sub">${esc(G.runner.name||'Corredor')} · ${G.runner.specialty} · ${G.runner.age?G.runner.age+' años · ':''}<span style="font-size:12px;padding:1px 7px;border-radius:4px;background:${{facil:'#EAF3DE',medio:'#FAEEDA',dificil:'#FCEBEB',hardcore:'#F1EFE8',expres:'#fef9ec'}[G.gameMode||'medio']};color:${{facil:'#27500A',medio:'#633806',dificil:'#791F1F',hardcore:'#444441',expres:'#8a4a00'}[G.gameMode||'medio']}">${{facil:'Fácil',medio:'Medio',dificil:'Difícil',hardcore:'Hardcore',expres:'⚡ Exprés'}[G.gameMode||'medio']}</span>${G.gameMode==='expres'?` <span style="font-size:12px;color:#c07a10;font-weight:600">Año ${G.year}/3</span>`:''}${G.carreraVida?` <span style="font-size:11px;padding:1px 7px;border-radius:4px;background:#EEEDFE;color:#534AB7;font-weight:600">${{runner:'🏃 Corredor',overlap:'🏃 · 📋 Overlap',coach:'📋 Entrenador',club:'🏕 Club'}[G.lifecyclePhase||'runner']}</span>`:''}</p>
     
     ${showObjectives?`
     <div style="background:#f5f4f0;border:1.5px solid #1a1a1a;border-radius:12px;padding:14px 16px;margin-bottom:16px">
@@ -4522,10 +4811,49 @@ function renderTraining(){
         </div>`;}).join('')}
     </div>
     ${G.trainingEvent?`<div class="hint" style="margin-bottom:12px">${G.trainingEvent.icon} <strong>Evento de entrenamiento:</strong> ${G.trainingEvent.title} — ${G.trainingEvent.desc}</div>`:''}
+    ${G.carreraVida&&G.lifecyclePhase==='overlap'&&G.lifeAthlete?renderAthleteHoursBlock():''}
     <button class="main" onclick="doStartRaces()" ${!G.trainingBlock?'disabled':''}>¡Empezar temporada! →</button>`;
 }
 
-// ── PRE RACE ───────────────────────────
+// ── Bloque de horas al atleta (fase overlap) ──────────────────────────────────
+function renderAthleteHoursBlock(){
+  const a=G.lifeAthlete;
+  if(!a)return '';
+  const first=esc(a.name.split(' ')[0]);
+  const h=G.lifeAthleteHours||0;
+  const effPct=Math.round(lifeAthleteEffMult(h)*100);
+  const opts=[0,2,5,10];
+  return `
+    <div style="border-top:1px solid #e8e6e0;margin:16px 0 14px;padding-top:14px">
+      <div style="font-size:12px;font-weight:600;color:#888;margin-bottom:8px">Horas para ${first} esta semana</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        ${opts.map(v=>{
+          const sel=h===v;
+          return `<div onclick="setAthleteHours(${v})" style="flex:1;text-align:center;padding:8px 4px;border-radius:8px;border:1.5px solid ${sel?'#534AB7':'#e0dfd8'};background:${sel?'#EEEDFE':'#fff'};cursor:pointer;font-size:13px;font-weight:${sel?'600':'400'};color:${sel?'#534AB7':'#555'};transition:all .15s">${v}h</div>`;
+        }).join('')}
+      </div>
+      ${h>0?`<div style="font-size:12px;color:#c07a10">–${h}h para ti · +${h}h para ${first} · tu entrenamiento al <strong>${effPct}%</strong></div>`
+           :`<div style="font-size:12px;color:#aaa">Sin horas asignadas — entrenas al 100%</div>`}
+    </div>`;
+}
+function lifeAthleteEffMult(h){
+  // 0h=100%, 2h=90%, 5h=75%, 10h=60%
+  if(h<=0)return 1.0;
+  if(h<=2)return 0.90;
+  if(h<=5)return 0.75;
+  return 0.60;
+}
+window.setAthleteHours=h=>{
+  const prev=G.lifeAthleteHours||0;
+  G.lifeAthleteHours=h;
+  const first=G.lifeAthlete?esc(G.lifeAthlete.name.split(' ')[0]):'el atleta';
+  if(h>0)showToast(`–${h}h para ti · +${h}h para ${first}`,'#c07a10');
+  else showToast('Entrenas al 100% — sin horas para el atleta','#4a90d9');
+  // Re-render solo el bloque de horas para no perder scroll
+  const block=document.querySelector('[data-athlete-hours]');
+  if(block)block.outerHTML=renderAthleteHoursBlock();
+  else render();
+};
 // ── PRE-RACE PREP (Tanda 7) ────────────
 function renderPreRacePrep(){
   const el=document.getElementById('main');
@@ -4657,7 +4985,7 @@ function initRace(){
   // Generar 14 rivales del pool según tier de carrera
   const maxTier=race.reqRanking===999?1:race.reqRanking<=15?3:race.tier==='nacional'?2:race.tier==='elite'?3:2;
   const pool=[...RIVALS_POOL.filter(r=>r.tier<=maxTier)];
-  const shuffled=pool.sort(()=>Math.random()-0.5).slice(0,14);
+  const shuffled=shuffle(pool).slice(0,14);
 
   // Escalar dificultad por tier de carrera
   const tierDiffMult={local:1.15,regional:1.08,nacional:1.02,elite:0.97};
@@ -4734,14 +5062,20 @@ function initRace(){
   G.legsPenalty=false;
   // Mental momentum: modifica temporalmente el stat mental para la carrera
   if(!injStart&&G.mentalMomentum!==0){
+    const _before=G.runner.stats.mental;
     G.runner.stats.mental=Math.max(10,Math.min(100,G.runner.stats.mental+G.mentalMomentum));
+    G._mentalMomentumApplied=G.runner.stats.mental-_before; // delta real (clamped)
   }
   // Warmup bonus (p9) — temporal para esta carrera
   if(G.warmedUp&&!injStart){
     G.runner.energy=Math.max(10,G.runner.energy-5);
-    G._warmupApplied=true;
+    const _velBefore=G.runner.stats.velocidad;
+    const _subBefore=G.runner.stats.subida;
     G.runner.stats.velocidad=Math.min(100,G.runner.stats.velocidad+4);
     G.runner.stats.subida=Math.min(100,G.runner.stats.subida+3);
+    G._warmupApplied=true;
+    G._warmupVelDelta=G.runner.stats.velocidad-_velBefore;
+    G._warmupSubDelta=G.runner.stats.subida-_subBefore;
   }
   G.nextRaceEnergyStart=null;G.nextRaceLegsStart=null;G.nextRaceHydrationStart=null;
   G.postRaceConsequence=null;
@@ -5517,6 +5851,7 @@ function renderSeasonBalance(){
 
     <button class="main" style="margin-top:14px" onclick="doNextYear(${yearNet})">${G.gameMode==='expres'&&G.year>=3?'Ver resumen final →':`Temporada ${G.year+1} →`}</button>
     ${(G.runner.age||25)>=42&&G.gameMode!=='expres'?`<button class="main" style="margin-top:6px;border-color:#c0392b;color:#c0392b" onclick="doRetire()">Retirarse — ver resumen de carrera</button>`:''}
+    ${G.carreraVida&&G.lifecyclePhase==='overlap'&&(G.runner.age||25)<42?`<button class="main" style="margin-top:6px;border-color:#534AB7;color:#3C3489" onclick="doRetire()">Dejar la competición — pasar a entrenador</button>`:''}
     ${G.gameMode==='expres'&&G.year>=2?`<button class="main" style="margin-top:6px;border-color:#c0392b;color:#c0392b" onclick="doRetire()">Retiro anticipado — ver resumen</button>`:''}
     ${G.monthlyEvents&&G.monthlyEvents.length>0&&!G.monthlyEvents[0].resolved?`
     <div style="margin-top:18px;border-top:1px solid var(--color-border-tertiary);padding-top:16px">
@@ -5698,7 +6033,6 @@ function renderSavingsChart(){
     <text x="${padL}" y="${padT-3}" font-size="11" fill="#555" font-weight="600">Proyección ahorros</text>
   </svg>`;
 }
-window.removeSponsor=cat=>{G.sponsors[cat]=null;render();};
 
 window.selectSponsor=(cat,spId)=>{
   const sp=SPONSORS_DB.find(s=>s.id===spId);
@@ -6020,7 +6354,7 @@ function checkMidRaceEvents(){
         desc:`La niebla y la tormenta borran las marcas. En el km ${Math.round(doneKm)} llevas unos minutos sin ver ninguna señal. El GPS parpadea.`,
         choices:[
           {text:'Usar el GPS (pierdes batería y 2:30 min, pero llegas seguro)',id:'gps'},
-          {text:'Buscar la senda a ojo (Mental ${mental} — resultado incierto)',id:'find_trail'},
+          {text:`Buscar la senda a ojo (Mental ${mental} — resultado incierto)`,id:'find_trail'},
         ]
       };
     }
@@ -6166,7 +6500,7 @@ function checkMidRaceEvents(){
         desc:`El viento (o alguien) ha tumbado la marca de ruta. Hay dos sendas que podrían ser la correcta. Detrás de ti vienen tres corredores que tampoco saben. Km ${Math.round(doneKm)}.`,
         choices:[
           {text:'Sacar el GPS y confirmar (+45 seg, 100% seguro)',id:'gps_fork'},
-          {text:'Confiar en el instinto — recuerdas el perfil (sin pausa, Mental ${mental} define el resultado)',id:'gut_fork'},
+          {text:`Confiar en el instinto — recuerdas el perfil (sin pausa, Mental ${mental} define el resultado)`,id:'gut_fork'},
           {text:'Esperar a que llegue otro corredor que sepa (+30 seg, decisión compartida)',id:'wait_fork'},
         ]
       };
@@ -7004,6 +7338,7 @@ window.toggleNutTooltip=()=>{
 
 window.doAbandon=()=>{
   const race=G.selectedRaces[G.currentRaceIdx];
+  if(!race){G.screen='seasonBalance';render();return;}
   const kmDone=Math.round(race.km*(G.seg/curSegs().length));
   const sponsorPenalty=Object.values(G.sponsors).filter(Boolean).some(sp=>sp.objKey==='finish2'||sp.objKey==='finish3'||sp.objKey==='finish4');
   const el=document.getElementById('main');
@@ -7038,6 +7373,9 @@ window.doAbandon=()=>{
 
 window.doAbandonConfirmed=()=>{
   const race=G.selectedRaces[G.currentRaceIdx];
+  if(!race){G.screen='seasonBalance';render();return;}
+  // Revertir modificaciones temporales de carrera (warmup + mental momentum)
+  endRaceCleanup();
   // Recover some energy from not finishing
   G.runner.energy=Math.min(60,G.runner.energy+20);
   G.runner.legs=Math.min(60,G.runner.legs+15);
@@ -7161,12 +7499,13 @@ function renderRaceResult(){
 // ── Calcula posición, premios y stats ganados ──────────
 function calcRaceResult(race){
   const specBonus=race.spec&&race.spec===G.runner.specialty?0.92:1.0;
-  G.rivals=G.rivals.map(rv=>({...rv,time:Math.round(rv.time*(rv.spec===G.runner.specialty?0.97:1.0))}));
+  // Calcular tiempos ajustados sin mutar G.rivals ni G.time
+  const rivalsAdjusted=G.rivals.map(rv=>({...rv,time:Math.round(rv.time*(rv.spec===G.runner.specialty?0.97:1.0))}));
+  const playerTime=Math.round(G.time*specBonus);
   const playerAge=G.runner.age||25;
   const playerCat=getAgeCategory(playerAge);
-  const all=[{name:G.runner.name||'Tú',time:Math.round(G.time*specBonus),me:true,flag:'',country:'',age:playerAge},
-             ...G.rivals.map(rv=>({name:rv.name,time:rv.time,me:false,flag:rv.flag||'',country:rv.country||'',age:rv.age||30}))].sort((a,b)=>a.time-b.time);
-  if(race.spec&&race.spec===G.runner.specialty) G.time=Math.round(G.time*specBonus);
+  const all=[{name:G.runner.name||'Tú',time:playerTime,me:true,flag:'',country:'',age:playerAge},
+             ...rivalsAdjusted.map(rv=>({name:rv.name,time:rv.time,me:false,flag:rv.flag||'',country:rv.country||'',age:rv.age||30}))].sort((a,b)=>a.time-b.time);
   const pos=all.findIndex(x=>x.me)+1;
   const total=all.length;
   const catAll=all.filter(x=>getAgeCategory(x.age).id===playerCat.id);
@@ -7183,7 +7522,25 @@ function calcRaceResult(race){
   else if(pos===2)statGains.push({k:dom,v:2});
   else if(pos===3)statGains.push({k:dom,v:1});
   if(pos<=10)statGains.push({k:'mental',v:1});
-  return {pos,total,all,prize,statGains,playerCat,catPos,catTotal};
+  return {pos,total,all,prize,statGains,playerCat,catPos,catTotal,rivalsAdjusted,playerTime};
+}
+
+// ── Revierte modificaciones temporales de carrera (warmup + mental momentum) ──
+// Llamado desde applyPostRaceTracking (carrera terminada) y desde doAbandonConfirmed (abandono).
+// Usa deltas guardados en initRace para revertir exactamente lo que se aplicó (evita drift por clamping).
+function endRaceCleanup(){
+  if(G._mentalMomentumApplied){
+    G.runner.stats.mental=Math.max(10,Math.min(100,G.runner.stats.mental-G._mentalMomentumApplied));
+    G._mentalMomentumApplied=0;
+  }
+  G.mentalMomentum=0;
+  if(G._warmupApplied){
+    if(G._warmupVelDelta)G.runner.stats.velocidad=Math.max(10,Math.min(100,G.runner.stats.velocidad-G._warmupVelDelta));
+    if(G._warmupSubDelta)G.runner.stats.subida=Math.max(10,Math.min(100,G.runner.stats.subida-G._warmupSubDelta));
+    G._warmupApplied=false;
+    G._warmupVelDelta=0;
+    G._warmupSubDelta=0;
+  }
 }
 
 // ── Aplica tracking, nemesis, km, PBs, lesiones, circuitos ──
@@ -7199,16 +7556,8 @@ function applyPostRaceTracking(race,res){
   if(consequence){G.postRaceConsequence=consequence;consequence.apply(G);}
   G.redZoneStreak=0;G.redZoneMax=0;
 
-  // Revertir modificaciones temporales de carrera
-  if(G.mentalMomentum&&G.mentalMomentum!==0){
-    G.runner.stats.mental=Math.max(10,Math.min(100,G.runner.stats.mental-G.mentalMomentum));
-    G.mentalMomentum=0;
-  }
-  if(G._warmupApplied){
-    G.runner.stats.velocidad=Math.max(10,G.runner.stats.velocidad-4);
-    G.runner.stats.subida=Math.max(10,G.runner.stats.subida-3);
-    G._warmupApplied=false;
-  }
+  // Revertir modificaciones temporales de carrera (warmup + mental momentum)
+  endRaceCleanup();
 
   // Rankings
   const rankPts=getRankPts(pos);
@@ -7236,13 +7585,26 @@ function applyPostRaceTracking(race,res){
     if(x.me||i>=myIdx)return;
     const gap=G.time-x.time;
     if(!G.nemesisLog)G.nemesisLog={};
-    if(!G.nemesisLog[x.name])G.nemesisLog[x.name]={wins:0,gaps:[]};
+    if(!G.nemesisLog[x.name])G.nemesisLog[x.name]={wins:0,gapSum:0,gapCount:0};
+    // Migración: si viene de save antiguo con `gaps` array, convertirlo
+    if(G.nemesisLog[x.name].gaps){
+      const old=G.nemesisLog[x.name].gaps;
+      G.nemesisLog[x.name].gapSum=(G.nemesisLog[x.name].gapSum||0)+old.reduce((a,b)=>a+b,0);
+      G.nemesisLog[x.name].gapCount=(G.nemesisLog[x.name].gapCount||0)+old.length;
+      delete G.nemesisLog[x.name].gaps;
+    }
     G.nemesisLog[x.name].wins++;
-    G.nemesisLog[x.name].gaps.push(gap);
+    G.nemesisLog[x.name].gapSum+=gap;
+    G.nemesisLog[x.name].gapCount++;
   });
   if(G.nemesisLog&&Object.keys(G.nemesisLog).length>0){
     const sorted=Object.entries(G.nemesisLog)
-      .map(([name,d])=>({name,wins:d.wins,avgGap:d.gaps.reduce((a,b)=>a+b,0)/d.gaps.length}))
+      .map(([name,d])=>{
+        // Compatibilidad con saves viejos
+        const sum=d.gapSum!=null?d.gapSum:(d.gaps?d.gaps.reduce((a,b)=>a+b,0):0);
+        const cnt=d.gapCount!=null?d.gapCount:(d.gaps?d.gaps.length:1);
+        return {name,wins:d.wins,avgGap:cnt>0?sum/cnt:0};
+      })
       .sort((a,b)=>b.wins-a.wins||(a.avgGap-b.avgGap));
     const top=sorted[0];
     const nemRival=all.find(x=>x.name===top.name);
@@ -7258,7 +7620,8 @@ function applyPostRaceTracking(race,res){
   if(!existingPB||G.time<existingPB.time){
     const isNew=!existingPB;
     G.personalBests[race.id]={time:G.time,year:G.year,pos};
-    if(!isNew) setTimeout(()=>showToast('🏆 ¡Nuevo récord personal! '+fmt(G.time),'#c07a10'),600);
+    if(isNew) setTimeout(()=>showToast('🏆 ¡Primer registro en '+race.dist+'K! '+fmt(G.time),'#c07a10'),600);
+    else setTimeout(()=>showToast('🏆 ¡Nuevo récord personal! '+fmt(G.time),'#c07a10'),600);
   }
   if(G.stormActive)G.stormSurvivedCount=(G.stormSurvivedCount||0)+1;
   checkAndUnlockAchievements();
@@ -7304,6 +7667,9 @@ function finishRace(){
   G.screen='raceResult';
   const race=G.selectedRaces[G.currentRaceIdx];
   const res=calcRaceResult(race);
+  // Aplicar mutaciones que antes hacía calcRaceResult (ahora pura)
+  G.rivals=res.rivalsAdjusted;
+  G.time=res.playerTime;
   applyPostRaceTracking(race,res);
   const {pos,total,all,prize,statGains,playerCat,catPos,catTotal}=res;
 
@@ -7612,9 +7978,196 @@ window.doNextYear=yearNet=>{
   G.trainingMomentum=null;G.taperBonus=false;
   G.dayConditionGenerated=false;G.dayCondition=null;G.raceDayCondition=null;
   G.gelsCarried=0;G.gelsUsed=0;G.warmedUp=false;G.startStrategy=null;
+  // Arco narrativo — actualizar atleta y resetear horas
+  if(G.carreraVida&&G.lifeAthlete&&G.lifecyclePhase==='overlap'){
+    const h=G.lifeAthleteHours||0;
+    if(h>0){
+      // Subir stats del atleta proporcional a horas
+      const gain=h>=10?3:h>=5?2:1;
+      const stats=G.lifeAthlete.currentStats||{...G.lifeAthlete.baseStats};
+      const keys=Object.keys(stats);
+      const picks=shuffle(keys).slice(0,gain);
+      picks.forEach(k=>{stats[k]=Math.min(100,(stats[k]||50)+1);});
+      G.lifeAthlete.currentStats=stats;
+      // Línea en diario
+      const first=G.lifeAthlete.name.split(' ')[0];
+      G.seasonDiary=G.seasonDiary||[];
+      G.seasonDiary.push(`Año ${G.year-1} · ${first}: ${h}h dedicadas. ${gain===3?'Progresa bien.':gain===2?'Va mejorando.':'Poco tiempo, pero algo es algo.'}`);
+    }
+    G.lifeAthleteHours=0; // reset para la siguiente temporada
+  }
   G.screen=G.gameMode==='expres'?'expresSeasonStart':'workSetup';
   G._expressSponsorPool=null;
+  // Arco narrativo — comprobar oferta de atleta (solo carrera normal, fase runner)
+  if(G.carreraVida&&G.lifecyclePhase==='runner'&&G.gameMode!=='expres'){
+    const offer=checkFirstAthleteOffer();
+    if(offer){G.pendingLifeAthleteOffer=offer;G.screen='lifeAthleteOffer';}
+  }
+  // Arco narrativo — fase entrenador: retiros de rivales y nuevos atletas
+  if(G.carreraVida&&G.lifecyclePhase==='coach'){
+    checkRivalRetirements();
+    checkLifeExtraAthlete();
+    if(G.screen==='lifeAthleteOffer'){}// checkLifeExtraAthlete puede haber cambiado screen
+    // Oferta del club (solo si no se ha cambiado ya la pantalla)
+    if(G.screen!=='lifeAthleteOffer')checkClubOffer();
+  }
   autoSave();render();
+};
+
+// ══════════════════════════════════════
+//  CARRERA DE VIDA — CV-2: OFERTA DEL ATLETA
+// ══════════════════════════════════════
+function checkFirstAthleteOffer(){
+  if(G.lifeAthlete)return null; // ya tiene atleta
+  const yr=G.year; // ya incrementado
+  // Umbrales por dificultad: [primeraOferta, probPorAño, garantizado]
+  const cfg={
+    facil:   {first:12, prob:0.30, sure:15},
+    medio:   {first:10, prob:0.30, sure:13},
+    dificil: {first:7,  prob:0.40, sure:10},
+    hardcore:{first:5,  prob:0.50, sure:8},
+  }[G.gameMode||'medio']||{first:10,prob:0.30,sure:13};
+  if(yr < cfg.first) return null;
+  const prob = yr >= cfg.sure ? 1.00 : cfg.prob;
+  if(Math.random()>prob)return null;
+
+  // Elegir atleta que no haya sido rechazado antes
+  const rejectedIds=(G.lifePendingAthletes||[]).map(a=>a.id);
+  const available=LIFE_ATHLETE_POOL.filter(a=>!rejectedIds.includes(a.id));
+  if(!available.length)return null;
+  const pick=available[Math.floor(Math.random()*available.length)];
+  return {...pick, currentStats:{...pick.baseStats}};
+}
+
+function renderLifeAthleteOffer(){
+  const el=document.getElementById('main');
+  if(!el)return;
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const a=G.pendingLifeAthleteOffer;
+  if(!a){G.screen='workSetup';render();return;}
+
+  const isUrgent=false; // filosofía: el juego informa, el jugador decide — sin presión
+  const potData=LIFE_POTENTIAL_LABEL[a.potential]||{label:a.potential,color:'#888',desc:''};
+  const persData=PERSONALITY_LABEL[a.personality]||{label:a.personality,color:'#888',emoji:'⚫',desc:''};
+  const specLabel={fondista:'Fondista',montanero:'Montañero',tecnico:'Técnico',todoterreno:'Todoterreno'}[a.spec]||a.spec;
+
+  const introTexts={
+    txus: `Después de la carrera, un chico con zapatillas viejas y calcetines de lana te espera en la zona de meta. Te ha visto correr. No sabe muy bien cómo pedirte lo que quiere pedirte.`,
+    noa:  `La encuentras en la salida recogiendo dorsal para una carrera en la que no tienes nada que hacer. Te reconoce, se pone roja. Lleva semanas queriendo hablar contigo.`,
+    kepa: `Un amigo en común te manda un vídeo: alguien subiendo un puerto en bici a un ritmo que no tiene sentido. Al día siguiente ese alguien te escribe por Instagram.`,
+    celia:`Te la presentan en una charla de prevención de lesiones donde tú eras el ponente. Al terminar espera a que todo el mundo se vaya y te hace tres preguntas muy precisas.`,
+    unai: `Su madre te llama. No él. Su madre. Te dice que su hijo necesita a alguien que entienda lo que pasó hace tres años. Tú no sabes lo que pasó.`,
+    mireia:`Aparece en el entrenamiento de tu club local con una zapatilla de pista en cada pie. Dice que le han dicho que aquí entrenan corredores de monte.`,
+  };
+  const intro=introTexts[a.id]||`Alguien busca un entrenador. Alguien que sepa lo que es correr de verdad.`;
+
+  el.innerHTML=`
+    <div style="font-size:11px;font-weight:600;color:#aaa;letter-spacing:.5px;text-transform:uppercase;margin-bottom:16px">Año ${G.year} · Un momento inesperado</div>
+    ${isUrgent?`<div class="warn" style="margin-bottom:16px">⚠ Llevas tiempo rechazando a gente. Este puede ser distinto.</div>`:''}
+    <div class="card" style="margin-bottom:16px;border-left:3px solid #e0dfd8;padding-left:18px">
+      <p style="font-size:15px;line-height:1.7;color:#1a1a1a;font-style:italic">"${intro}"</p>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;align-items:flex-start;gap:14px">
+        <div style="width:48px;height:48px;border-radius:50%;background:#f0ede8;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${a.flag}</div>
+        <div style="flex:1">
+          <div style="font-size:17px;font-weight:700;margin-bottom:2px">${esc(a.name)}</div>
+          <div style="font-size:13px;color:#888;margin-bottom:8px">${a.age} años · ${specLabel}</div>
+          <p style="font-size:13px;color:#555;line-height:1.6;margin-bottom:10px">${esc(a.bio)}</p>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <span style="font-size:12px;padding:2px 10px;border-radius:20px;background:#f5f4f0;color:${potData.color};font-weight:600">${potData.label}</span>
+            <span style="font-size:12px;padding:2px 10px;border-radius:20px;background:#f5f4f0;color:#555">${persData.emoji} ${persData.label}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;background:#fafaf8">
+      <div style="font-size:12px;font-weight:600;color:#888;margin-bottom:10px">Stats iniciales</div>
+      ${['resistencia','velocidad','subida','bajada','nutricion','mental'].map(s=>`
+        <div class="bar-row">
+          <div class="bar-label">${s.charAt(0).toUpperCase()+s.slice(1)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${a.baseStats[s]}%;background:${a.baseStats[s]>=60?'#4a8a2a':a.baseStats[s]>=45?'#c07a10':'#c0392b'}"></div></div>
+          <div class="bar-pct">${a.baseStats[s]}</div>
+        </div>`).join('')}
+    </div>
+
+    <div style="font-size:13px;color:#888;margin-bottom:16px;line-height:1.6">
+      Aceptar implica dedicar horas a esta persona durante tus propias temporadas. No es gratis. Pero puede que merezca la pena.
+    </div>
+
+    <button class="main" style="border-color:#4a8a2a;color:#2d5a1a" onclick="acceptLifeAthlete()">Acepto — quiero trabajar con ${esc(a.name.split(' ')[0])} →</button>
+    ${(()=>{
+      const limitYear={facil:15,medio:13,dificil:10,hardcore:8}[G.gameMode||'medio']||13;
+      const forced=G.year>=limitYear;
+      return forced
+        ? `<div class="warn" style="margin-top:10px">El cuerpo te lo pide. Ha llegado el momento de pasar el testigo.</div>`
+        : `<button class="main" style="margin-top:8px;opacity:0.65" onclick="rejectLifeAthlete()">Ahora no — puede que aparezca alguien más adelante</button>`;
+    })()}`;
+}
+
+window.acceptLifeAthlete=()=>{
+  const a=G.pendingLifeAthleteOffer;
+  if(!a)return;
+  G.lifeAthlete={...a};
+  G.lifecyclePhase='overlap';
+  G.pendingLifeAthleteOffer=null;
+  G.coachReputation=(G.coachReputation||0)+10;
+  showToast(`${a.name.split(' ')[0]} confía en ti. Empieza el solapamiento.`,'#4a8a2a');
+  G.screen='workSetup';
+  autoSave();render();
+};
+
+window.rejectLifeAthlete=()=>{
+  const a=G.pendingLifeAthleteOffer;
+  if(!a)return;
+  if(!G.lifePendingAthletes)G.lifePendingAthletes=[];
+  G.lifePendingAthletes.push({...a});
+  G.lifeAthleteOfferCount=(G.lifeAthleteOfferCount||0)+1;
+  G.pendingLifeAthleteOffer=null;
+  showToast('Sigues con tus carreras. Quizás llegue alguien más adelante.','#888');
+  G.screen='workSetup';
+  autoSave();render();
+};
+
+// ══════════════════════════════════════
+//  CARRERA DE VIDA — CV-3: HUB SOLAPAMIENTO
+// ══════════════════════════════════════
+function renderOverlapHub(){
+  const el=document.getElementById('main');
+  if(!el)return;
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const a=G.lifeAthlete;
+  const runnerName=esc(G.runner?.name||'Corredor');
+  const athleteName=a?esc(a.name):'tu atleta';
+  const athleteFirst=a?esc(a.name.split(' ')[0]):'el atleta';
+  el.innerHTML=`
+    <div style="font-size:11px;font-weight:600;color:#aaa;letter-spacing:.5px;text-transform:uppercase;margin-bottom:20px">Año ${G.year} · Solapamiento</div>
+    <h2 style="margin-bottom:6px">¿Qué haces hoy?</h2>
+    <p class="sub" style="margin-bottom:24px">Puedes seguir con tu carrera o gestionar a ${athleteFirst}. Tú decides.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
+      <div onclick="G.screen='workSetup';render()" style="background:#fff;border:1.5px solid #e0dfd8;border-radius:12px;padding:20px 16px;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f8f7f3'" onmouseleave="this.style.background='#fff'">
+        <div style="font-size:28px;margin-bottom:10px">🏃</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:4px">Seguir corriendo</div>
+        <div style="font-size:12px;color:#888;line-height:1.5">Temporada ${G.year} · ${esc(G.runner?.specialty||'')}<br>${G.selectedRaces?.length?G.selectedRaces.length+' carrera'+(G.selectedRaces.length!==1?'s':'')+' en calendario':'Sin carreras aún'}</div>
+      </div>
+      <div onclick="goToCoachFromOverlap()" style="background:#fff;border:1.5px solid #e0dfd8;border-radius:12px;padding:20px 16px;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f8f7f3'" onmouseleave="this.style.background='#fff'">
+        <div style="font-size:28px;margin-bottom:10px">📋</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:4px">Entrenador</div>
+        <div style="font-size:12px;color:#888;line-height:1.5">${athleteName}<br>${a?`${a.age} años · ${a.spec}`:'Pendiente de asignar'}</div>
+      </div>
+    </div>
+
+    ${G.lifeAthleteHours>0?`<div class="note" style="font-size:13px">Esta temporada llevas <strong>${G.lifeAthleteHours}h</strong> dedicadas a ${athleteFirst}.</div>`:`<div class="hint" style="font-size:13px">Aún no has dedicado horas a ${athleteFirst} esta temporada. Puedes hacerlo desde el bloque de entrenamiento.</div>`}`;
+}
+
+window.goToCoachFromOverlap=()=>{
+  if(!G.lifeAthlete){showToast('Sin atleta asignado todavía','#c0392b');return;}
+  // Preparar el modo entrenador con lifeAthlete como atleta activo
+  if(!G.coachAthlete)G.coachAthlete={...G.lifeAthlete};
+  G.screen='coachHome';render();
 };
 
 // ══════════════════════════════════════
@@ -7668,9 +8221,24 @@ function applyAgingPenalties(){
   const degradStats=['resistencia','velocidad','subida','bajada'];
   const pick=()=>degradStats[Math.floor(Math.random()*degradStats.length)];
   const count=age>=46?2:1;
-  for(let i=0;i<count;i++){
+  // Multiplicador post-límite: el cuerpo se degrada más rápido tras el año límite
+  let mult=1;
+  if(G.carreraVida&&G.lifecyclePhase==='overlap'){
+    const limitYear={facil:15,medio:13,dificil:10,hardcore:8}[G.gameMode||'medio']||13;
+    const seasonsOver=G.year-limitYear;
+    if(seasonsOver>=5)mult=4.0;
+    else if(seasonsOver>=3)mult=2.5;
+    else if(seasonsOver>=1)mult=1.5;
+  }
+  const totalHits=Math.round(count*mult);
+  for(let i=0;i<totalHits;i++){
     const k=pick();
     G.runner.stats[k]=Math.max(10,(G.runner.stats[k]||50)-1);
+  }
+  // Aviso pasivo si la degradación ya es notable
+  if(mult>=2.5){
+    const msgs=['Las bajadas ya no salen solas.','El cuerpo tarda más en recuperar.','Necesitas el doble de tiempo para recuperarte.','Las piernas ya no responden igual.'];
+    showToast(msgs[Math.floor(Math.random()*msgs.length)],'#c07a10');
   }
 }
 
@@ -7689,7 +8257,268 @@ function getAgeCategory(age){
   return      {id:'master_c',      label:'Máster C (M60+)'};
 }
 
-window.doRetire=()=>{G.screen='retirement';render();};
+window.doRetire=()=>{
+  if(G.carreraVida&&(G.lifecyclePhase==='runner'||G.lifecyclePhase==='overlap')){
+    G.screen='lifeRetirement';render();return;
+  }
+  G.screen='retirement';render();
+};
+
+// ══════════════════════════════════════
+//  CARRERA DE VIDA — CV-6: LA OFERTA DEL CLUB
+// ══════════════════════════════════════
+function checkClubOffer(){
+  if(!G.carreraVida||G.lifecyclePhase!=='coach')return;
+  if(G._clubOfferSeen)return;
+  if((G.coachReputation||0)<60)return;
+  if((G.coachSeason||1)<3)return;
+  if(G._clubOfferDelay&&(G.coachSeason||1)<G._clubOfferDelay)return;
+  G.screen='clubOffer';
+}
+
+function renderClubOffer(){
+  const el=document.getElementById('main');
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
+  const isReturn=(G._clubOfferDelay>0); // segunda vez que aparece
+  const cost=Math.round((G.money||0)*0.6);
+  const athlete=G.coachAthlete;
+  const athleteName=athlete?esc(athlete.name.split(' ')[0]):'tu atleta';
+
+  const introText=isReturn
+    ? `La oferta vuelve. Siguen creyendo en ti. La inversión inicial no ha cambiado — si acaso, la oportunidad es más clara que antes.`
+    : `Suena el teléfono un martes por la mañana. Al otro lado, alguien que gestiona un club de trail en el Pirineo. Llevan tiempo siguiendo tu trabajo con ${athleteName}. Quieren que lo lleves al siguiente nivel. Quieren que lo lleves tú.`;
+
+  const coachSeasons=G.coachSeason||1;
+  const rosterCount=(G.coachRoster||[]).filter(s=>s&&s.coachAthlete).length;
+
+  el.innerHTML=`
+    <div style="font-size:11px;font-weight:600;color:#aaa;letter-spacing:.5px;text-transform:uppercase;margin-bottom:20px">Temporada ${coachSeasons} como entrenador · Una llamada inesperada</div>
+
+    <div class="card" style="margin-bottom:16px;border-left:3px solid #1D9E75;padding-left:18px">
+      <p style="font-size:15px;line-height:1.7;color:#1a1a1a;font-style:italic">"${introText}"</p>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">La propuesta</div>
+      <div class="fin-row"><span>Inversión inicial (60% de tus ahorros)</span><span class="minus">-€${cost.toLocaleString('es-ES')}</span></div>
+      <div class="fin-row"><span>Tus ahorros actuales</span><span>€${(G.money||0).toLocaleString('es-ES')}</span></div>
+      <div class="fin-row"><span>Después de la inversión</span><span style="font-weight:600">€${Math.max(0,(G.money||0)-cost).toLocaleString('es-ES')}</span></div>
+      <div class="fin-row" style="border-top:1px solid #e0dfd8;margin-top:6px;padding-top:10px"><span>Reputación como entrenador</span><span style="color:#2d7a2d;font-weight:600">${G.coachReputation||0}/100</span></div>
+      ${rosterCount>1?`<div class="fin-row"><span>Atletas en cartera</span><span>${rosterCount}</span></div>`:''}
+    </div>
+
+    <div class="card" style="margin-bottom:16px;background:#E1F5EE;border-color:#9FE1CB">
+      <div style="font-size:13px;color:#085041;line-height:1.6">
+        <strong>Lo que ganas:</strong> acceso a instalaciones, plantilla de corredores ya formada, sponsors de club y competición por equipos.<br>
+        <strong>Lo que dejas:</strong> la gestión uno a uno. El club es otra escala.
+      </div>
+    </div>
+
+    <button class="main" style="border-color:#1D9E75;color:#085041" onclick="confirmClubOffer()">Acepto — monto el club →</button>
+    <button class="main" style="margin-top:8px;opacity:0.65" onclick="rejectClubOffer()">Ahora no — sigo solo con mis atletas</button>`;
+}
+
+window.confirmClubOffer=()=>{
+  const cost=Math.round((G.money||0)*0.6);
+  G.money=Math.max(0,(G.money||0)-cost);
+  G.lifecyclePhase='club';
+  G._clubOfferSeen=true;
+  // Inicializar clubModeData con el atleta actual ya dentro
+  const athlete=G.coachAthlete;
+  const spec=athlete?.spec||'mixto';
+  const clubName=`Club Trail ${G.runner?.name?.split(' ').slice(-1)[0]||'Monte Perdido'}`;
+  G.clubModeData=initClubModeData(clubName,spec,'montanero');
+  // El atleta actual pasa a la plantilla del club
+  if(athlete){
+    const clubRunner={
+      id:athlete.id||'life_athlete',
+      name:athlete.name, flag:athlete.flag||'🇪🇸', spec:athlete.spec||'fondista',
+      stats:{...((athlete.currentStats||athlete.baseStats)||{})},
+      salary:athlete.monthlyFee||200, currentSalary:athlete.monthlyFee||200, role:'capitan',
+    };
+    G.clubModeData.plantilla.unshift(clubRunner);
+  }
+  generateClubEvent();
+  generateClubObjective();
+  // Desbloquear modo club en localStorage
+  try{
+    const ul=JSON.parse(LS.get('unlocked')||'{}');
+    ul.club=true;
+    LS.set('unlocked',JSON.stringify(ul));
+  }catch(e){}
+  showToast('El club nace. Una nueva etapa empieza.','#1D9E75');
+  G.screen='clubHub';
+  autoSave();render();
+};
+
+window.rejectClubOffer=()=>{
+  G._clubOfferDelay=(G.coachSeason||1)+2;
+  showToast('Les dices que no de momento. Volverán a llamar.','#888');
+  G.screen='coachHome';
+  autoSave();render();
+};
+
+// ══════════════════════════════════════
+//  CARRERA DE VIDA — CV-5: ENTRENADOR PURO
+// ══════════════════════════════════════
+function checkRivalRetirements(){
+  if(!G.carreraVida||G.lifecyclePhase!=='coach')return;
+  if(!G.rivalRetirements)G.rivalRetirements={};
+  if(!G.rivalChildren)G.rivalChildren=[];
+  const retiredIds=Object.keys(G.rivalRetirements);
+  RIVALS_POOL.forEach(r=>{
+    if(retiredIds.includes(r.name))return;
+    // Rivales de nivel tier 1-2 con más años de carrera
+    if(r.tier>2)return;
+    if(Math.random()>0.25)return;
+    // Se retira — crear un "hijo"
+    const lastName=r.name.split(' ').slice(-1)[0];
+    const childNames=['Alex','Iker','Jon','Mikel','Ander','Unai','Gorka','Aitor'];
+    const childFirst=childNames[Math.floor(Math.random()*childNames.length)];
+    const child={
+      name:`${childFirst} ${lastName}`,
+      flag:r.flag, spec:r.spec,
+      parentName:r.name, parentWins:Math.floor(Math.random()*5)+1,
+      baseStats:{
+        resistencia:Math.round(50+Math.random()*20),
+        velocidad:Math.round(45+Math.random()*20),
+        subida:Math.round(48+Math.random()*22),
+        bajada:Math.round(45+Math.random()*20),
+        nutricion:Math.round(35+Math.random()*25),
+        mental:Math.round(40+Math.random()*25),
+      }
+    };
+    G.rivalRetirements[r.name]={season:G.coachSeason||1,child};
+    G.rivalChildren.push(child);
+    // Entrada en diario
+    G.seasonDiary=G.seasonDiary||[];
+    G.seasonDiary.push(`${r.name} se retira. Su ${childFirst} ya corre por los montes.`);
+  });
+}
+
+function checkLifeExtraAthlete(){
+  if(!G.carreraVida||G.lifecyclePhase!=='coach')return;
+  if((G.coachSeason||1)%2!==0)return; // cada 2 temporadas
+  if(Math.random()>0.40)return;
+  const usedIds=[
+    ...(G.coachAthleteHistory||[]).map(a=>a.id),
+    G.coachAthlete?.id,
+  ].filter(Boolean);
+  const available=LIFE_EXTRA_ATHLETES.filter(a=>!usedIds.includes(a.id));
+  if(!available.length)return;
+  const pick=available[Math.floor(Math.random()*available.length)];
+  G.pendingLifeAthleteOffer={...pick,currentStats:{...pick.baseStats}};
+  G.screen='lifeAthleteOffer';
+}
+
+// ══════════════════════════════════════
+//  CARRERA DE VIDA — CV-4: TRANSICIÓN AL RETIRO
+// ══════════════════════════════════════
+function renderLifeRetirement(){
+  const el=document.getElementById('main');
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
+
+  const totalRaces=G.careerHistory.length;
+  const totalWins=G.careerHistory.filter(r=>r.pos===1).length;
+  const totalPodiums=G.careerHistory.filter(r=>r.pos<=3).length;
+  const totalPrize=G.careerHistory.reduce((a,r)=>a+(r.prize||0),0);
+  const yearsActive=G.year-1;
+  const age=G.runner.age||25;
+  const name=esc(G.runner.name||'El corredor');
+  const modeLabel={facil:'Fácil',medio:'Medio',dificil:'Difícil',hardcore:'Hardcore'}[G.gameMode||'medio'];
+
+  let legacy='';
+  if(totalWins>=10)legacy='Una carrera de élite. Tu nombre queda grabado en la historia del trail.';
+  else if(totalWins>=5)legacy='Varios triunfos y una trayectoria que el circuito recordará.';
+  else if(totalWins>=1)legacy='Al menos una victoria. Eso no te lo quita nadie.';
+  else if(G.ranking<100)legacy='Llegaste a las puertas de la élite. Una carrera respetable.';
+  else if(totalRaces>=15)legacy='Años de kilómetros y esfuerzo. El monte siempre te esperó.';
+  else legacy='Cada carrera fue un paso adelante. El trail es así de personal.';
+
+  const a=G.lifeAthlete;
+  const athleteFirst=a?esc(a.name.split(' ')[0]):null;
+
+  // Texto narrativo de transición según si tiene atleta o no
+  const transitionText=a
+    ? `El cuerpo ha dado todo lo que tenía. ${athleteFirst} sale en pocas semanas al Monte Perdido. Todavía tienes trabajo pendiente, pero de otro tipo.`
+    : `El cuerpo ha dado todo lo que tenía. Hay gente joven ahí fuera que necesita a alguien que entienda lo que es correr de verdad. Alguien como tú.`;
+
+  const btnText=a
+    ? `Continuar como entrenador de ${athleteFirst} →`
+    : `Buscar un atleta y continuar como entrenador →`;
+
+  el.innerHTML=`
+    <div style="text-align:center;padding:20px 0 10px">
+      <div style="font-size:36px;margin-bottom:8px">🏔</div>
+      <h1 style="font-size:22px;margin-bottom:4px">Fin de la carrera deportiva</h1>
+      <p style="font-size:14px;color:#888">${name} · ${age} años · ${modeLabel}</p>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title">Trayectoria completa</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${[['Temporadas',yearsActive],['Ranking final','#'+G.ranking],['Carreras',totalRaces],['Victorias',totalWins],['Podios',totalPodiums],['Premios','€'+totalPrize]].map(([l,v])=>`
+          <div style="background:#f5f4f0;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:12px;color:#aaa;margin-bottom:3px">${l}</div>
+            <div style="font-size:17px;font-weight:700">${v}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="note" style="font-size:14px;line-height:1.75;margin-bottom:16px"><strong>Legado:</strong> ${legacy}</div>
+
+    <div style="border-top:1px solid #e8e6e0;margin-bottom:20px;padding-top:20px">
+      <div class="card" style="border-left:3px solid #534AB7;padding-left:18px;margin-bottom:16px">
+        <p style="font-size:15px;line-height:1.7;color:#1a1a1a;font-style:italic">"${transitionText}"</p>
+      </div>
+      ${a?`
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#EEEDFE;border-radius:10px;margin-bottom:16px">
+          <div style="font-size:24px">${a.flag}</div>
+          <div>
+            <div style="font-size:14px;font-weight:600;color:#3C3489">${esc(a.name)}</div>
+            <div style="font-size:12px;color:#534AB7">${a.age} años · ${a.spec} · ${LIFE_POTENTIAL_LABEL[a.potential]?.label||''}</div>
+          </div>
+        </div>`:''}
+      <button class="main" style="border-color:#534AB7;color:#3C3489" onclick="confirmLifeCoachTransition()">
+        ${btnText}
+      </button>
+      <button class="main" style="margin-top:8px;opacity:0.55" onclick="G=freshState();render()">Nueva partida desde cero</button>
+    </div>`;
+}
+
+window.confirmLifeCoachTransition=()=>{
+  // Si no tiene atleta, necesita elegir uno — mostrar la oferta
+  if(!G.lifeAthlete){
+    const available=LIFE_ATHLETE_POOL.filter(a=>
+      !(G.lifePendingAthletes||[]).map(x=>x.id).includes(a.id)
+    );
+    const pick=available.length?available[Math.floor(Math.random()*available.length)]:LIFE_ATHLETE_POOL[0];
+    G.pendingLifeAthleteOffer={...pick,currentStats:{...pick.baseStats}};
+    G.screen='lifeAthleteOffer';render();return;
+  }
+  // Tiene atleta — transición directa a entrenador
+  G.lifecyclePhase='coach';
+  G.coachAthlete={...G.lifeAthlete};
+  G.coachReputation=G.coachReputation||0;
+  G.coachSeason=G.coachSeason||1;
+  G.coachTrust=60;
+  G.coachEmotionalState='fresco';
+  G.coachBodyLoad=0;
+  G.coachRaceResults=[];
+  G.coachSelectedRaces=[];
+  G.coachRaceIdx=0;
+  // Desbloquear modo entrenador en localStorage
+  try{
+    const ul=JSON.parse(LS.get('unlocked')||'{}');
+    ul.coach=true;
+    LS.set('unlocked',JSON.stringify(ul));
+  }catch(e){}
+  showToast(`${G.lifeAthlete.name.split(' ')[0]} te espera. Empieza una nueva etapa.`,'#534AB7');
+  G.screen='coachHome';
+  autoSave();render();
+};
 
 function renderRetirement(){
   const el=document.getElementById('main');
@@ -7856,8 +8685,9 @@ function renderCoachSelect(){
     <div style="text-align:center;padding:16px 0 18px">
       <div style="font-size:32px;margin-bottom:8px">📋</div>
       <h2 style="margin-bottom:4px">Elige tu atleta</h2>
-      <p class="sub">Te presentan a tres corredores. Solo puedes entrenar a uno.</p>
+      <p class="sub">${G._coachUnlockedHint?'Tu nombre como corredor te abre puertas. Elige a quién quieres entrenar.':'Te presentan a tres corredores. Solo puedes entrenar a uno.'}</p>
     </div>
+    ${G._coachUnlockedHint?`<div class="note" style="margin-bottom:14px;background:#EEEDFE;border-color:#AFA9EC;color:#3C3489">Con tu historial como atleta, uno de los candidatos es de un nivel que normalmente no llegaría a ti tan pronto.</div>`:''}
     ${pool.map(a=>{
       const pl=PERSONALITY_LABEL[a.personality];
       return`<div class="coach-card" onclick="doCoachSelect('${a.id}')">
@@ -8387,6 +9217,16 @@ function renderCoachPreRace(){
         <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#378ADD;margin-right:2px;vertical-align:middle"></span>Avituallamiento</span>
       </div>
     </div>
+    ${(()=>{
+      // Rival hijo en esta carrera
+      const children=G.rivalChildren||[];
+      if(!children.length)return '';
+      const child=children[Math.floor(Math.random()*children.length)];
+      return `<div class="note" style="margin-bottom:12px;background:#FAEEDA;border-color:#FAC775">
+        <div style="font-size:12px;font-weight:600;color:#854F0B;margin-bottom:2px">🎯 ${esc(child.name)} corre hoy</div>
+        <div style="font-size:12px;color:#633806">Hijo de ${esc(child.parentName)} — te ganó ${child.parentWins} vece${child.parentWins!==1?'s':''} en tu época. Ahora corre él.</div>
+      </div>`;
+    })()}
 
     <div class="card" style="margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Condición del día</div>
@@ -9317,7 +10157,7 @@ window.doCoachNewAthlete=()=>{
   G._coachSlotNotifs=[];
   const coached=(G.coachAthleteHistory||[]).map(h=>h.name);
   const avail=COACH_ATHLETE_POOL.filter(a=>!coached.includes(a.name));
-  const src=(avail.length>=3?avail:COACH_ATHLETE_POOL).sort(()=>Math.random()-0.5);
+  const src=shuffle((avail.length>=3?avail:COACH_ATHLETE_POOL));
   G.coachPool=src.slice(0,3).map(a=>({...a,currentStats:{...a.baseStats}}));
   saveCoachSlot(); // save empty slot back
   G.screen='coachSelect';render();
@@ -9500,7 +10340,7 @@ window.addCoachSlot=idx=>{
   // Also exclude athletes already in other slots
   const activeNames=(G.coachRoster||[]).filter((s,i)=>i!==targetIdx&&s&&s.coachAthlete).map(s=>s.coachAthlete.name);
   const avail=COACH_ATHLETE_POOL.filter(a=>!coached.includes(a.name)&&!activeNames.includes(a.name));
-  const src=(avail.length>=3?avail:COACH_ATHLETE_POOL).sort(()=>Math.random()-0.5);
+  const src=shuffle((avail.length>=3?avail:COACH_ATHLETE_POOL));
   G.coachPool=src.slice(0,3).map(a=>({...a,currentStats:{...a.baseStats}}));
   G.screen='coachSelect';render();
 };
@@ -9576,8 +10416,9 @@ function renderClubCreate(){
     <div style="text-align:center;padding:14px 0 16px">
       <div style="font-size:32px;margin-bottom:6px">🏕️</div>
       <h2>Crear tu club</h2>
-      <p class="sub">Define el nombre, especialidad y filosofía del club.</p>
+      <p class="sub">${G._clubUnlockedHint?'Con tu experiencia como corredor y entrenador, el club ya nace con algo de credibilidad.':'Define el nombre, especialidad y filosofía del club.'}</p>
     </div>
+    ${G._clubUnlockedHint?`<div class="note" style="margin-bottom:14px;background:#E1F5EE;border-color:#9FE1CB;color:#085041">Tu historial habla por ti. Empiezas con presupuesto un 15% mayor y reputación inicial de 13 en lugar de 10.</div>`:''}
     <label class="field-label">Nombre del club</label>
     <input id="club-name-inp" type="text" placeholder="Ej: Gorbea Trail Club, Txindoki Runners..." maxlength="32" value="${esc(name)}" oninput="G._clubNameDraft=this.value;"/>
     <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Especialidad de la plantilla</div>
@@ -9608,6 +10449,12 @@ window.doClubCreate=()=>{
   const spec=G._clubSpecDraft||'mixto';
   const fil=G._clubFilDraft||'montanero';
   G.clubModeData=initClubModeData(name,spec,fil);
+  // Guiño narrativo si el modo está desbloqueado: presupuesto +15% y reputación inicial +3
+  if(G._clubUnlockedHint){
+    G.clubModeData.presupuesto=Math.round(G.clubModeData.presupuesto*1.15);
+    G.clubModeData.reputacion=Math.min(100,(G.clubModeData.reputacion||10)+3);
+    G._clubUnlockedHint=false;
+  }
   G._clubNameDraft=null;G._clubSpecDraft=null;G._clubFilDraft=null;
   generateClubEvent();
   generateClubObjective();
@@ -10956,7 +11803,7 @@ function generateCoachSeasonObjective(){
 function generateCoachSponsorPool(){
   const season=G.coachSeason||1;
   const tier=season<=1?1:2;
-  const pool=[...COACH_SPONSORS_POOL].filter(s=>s.tier<=tier).sort(()=>Math.random()-0.5);
+  const pool=[...COACH_SPONSORS_POOL].filtershuffle((s=>s.tier<=tier));
   G.coachSponsorPool=pool.slice(0,3);
 }
 
