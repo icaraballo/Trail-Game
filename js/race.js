@@ -2153,7 +2153,10 @@ function applyPostRaceTracking(race,res){
       G.circuitPoints[cid]=(G.circuitPoints[cid]||0)+circuitPoints(pos,all.length);
     }
   });
-  G.followers=(G.followers||0)+Math.round(50+(pos===1?300:pos<=3?150:50));
+  const raceFollowers=followersFromRaceResult(pos,race.tier,false);
+  G.followers=(G.followers||0)+raceFollowers;
+  if(raceFollowers>0)setTimeout(()=>showToast('+'+raceFollowers+' seguidores 📱','#4a90d9'),400);
+  checkFollowerThresholds();
 
   // Lesión post-carrera
   const specificInjury=getSpecificInjury(G.paceLog||[],getBodyLoad());

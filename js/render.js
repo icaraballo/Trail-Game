@@ -70,7 +70,7 @@ function updateTabNav(){
       if(t==='game'&&labelEl)labelEl.textContent='Temporada';
     } else {
       if(t==='runner'&&labelEl)labelEl.textContent='Corredor';
-      if(t==='fame'&&labelEl)labelEl.textContent='Fama';
+      if(t==='fame'&&labelEl)labelEl.textContent='Reputación';
       if(t==='game'&&labelEl)labelEl.textContent='Temporada';
     }
   });
@@ -182,7 +182,7 @@ function renderCalendarTab(){
   // uses global QUARTERS
   const tierColor=TIER_COLOR_RACE;
   const tierLabel=TIER_LABEL_RACE;
-  const canAccess=r=>r.zegamaSpecial?(G.ranking<=20||G.zegamaQual):(G.year===1?r.reqRanking===999:r.reqRanking>=G.ranking||r.reqRanking===999);
+  const canAccess=r=>r.zegamaSpecial?(G.ranking<=20||G.zegamaQual):((G.repInvitations||[]).find(i=>i.id===r.id)||(G.year===1?r.reqRanking===999:r.reqRanking>=G.ranking||r.reqRanking===999));
 
   // Calcula qué carreras dan puntos de circuito y cuántos
   function circuitBadge(raceId){
@@ -199,6 +199,7 @@ function renderCalendarTab(){
   function calRaceRow(r){
     const isSel=selIds.includes(r.id);
     const isLocked=!canAccess(r);
+    const isInvited=!!(G.repInvitations||[]).find(i=>i.id===r.id);
     const cls=isSel?'sel':isLocked?'lock':'avail';
     const badge=circuitBadge(r.id);
     return `<div class="cal-race ${cls}">
@@ -208,8 +209,9 @@ function renderCalendarTab(){
           <span style="font-size:12px;font-weight:600;padding:1px 5px;border-radius:3px;background:${tierColor[r.tier]||'#888'}22;color:${tierColor[r.tier]||'#888'}">${tierLabel[r.tier]||''}</span>
           ${badge}
           ${r.spec?`<span style="font-size:12px;font-weight:600;padding:1px 5px;border-radius:3px;background:#4a8a2a22;color:#4a8a2a">★ ${r.spec}</span>`:''}
+          ${isInvited?`<span style="font-size:12px;font-weight:600;padding:1px 5px;border-radius:3px;background:#2d7a2a22;color:#2d7a2a">📩 Invitación</span>`:''}
         </div>
-        <div class="cal-race-meta">${r.monthName} · ${r.type} · ${r.desnivel}</div>
+        <div class="cal-race-meta">${r.monthName} · ${r.type} · ${r.desnivel}${isInvited?' · <span style="color:#2d7a2a">ranking no requerido</span>':''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${isSel?`<span style="font-size:12px;color:#4a8a2a;font-weight:600">✓</span>`:isLocked?`<span style="font-size:12px;color:#ccc">🔒</span>`:''}
@@ -607,7 +609,7 @@ function renderSaveScreen(){
   const autoData=loadFromSlot('auto');
   el.innerHTML=`
     <h1>Juego Trail</h1>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v45</span></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v46</span></div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
       <p class="sub" style="margin-bottom:0;flex:1">Partidas guardadas</p>
       <button onclick="showTutorial()" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid #ddd;border-radius:20px;background:#fff;font-size:12px;font-weight:600;color:#888;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background='#fff'">📖 Tutorial</button>
@@ -1208,7 +1210,7 @@ function renderIntro(){
   el.innerHTML=`
     <h1>Juego Trail</h1>
     <p class="sub">Crea tu corredor y empieza tu carrera deportiva</p>
-    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v45</div>
+    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v46</div>
     ${G.gameMode==='expres'?`<div class="warn" style="margin-bottom:14px">⚡ <strong>Carrera Exprés</strong> — 3 temporadas · sin gestión de jornada · ganancias de entrenamiento ×1.5</div>`:''}
     <label class="field-label">Nombre de la partida</label>
     <input id="runname" type="text" placeholder="Ej: Temporada del reto, Sin trabajo año 1..." value="${esc(G.runName||'')}" maxlength="30" style="margin-bottom:14px"/>
@@ -1275,9 +1277,11 @@ function renderWorkSetup(){
   const wo=WORK_OPTIONS.find(o=>o.pct===curPct)||WORK_OPTIONS[0];
   const totalTrainingH=wo.trainingH+vacBonus;
 
+  if(G.year===1&&q===1&&!G._workTipSeen){G._workTipSeen=true;}
   el.innerHTML=`
     <h2>Jornada laboral</h2>
     <p class="sub">${qLabel[q]} · ${esc(G.runner.name||'Corredor')}${G.carreraVida?` · <span style="font-size:11px;padding:1px 7px;border-radius:4px;background:#E6F1FB;color:#185FA5;font-weight:600">🏔 Carrera de Vida · Año ${G.year} · ${{runner:'Corredor',overlap:'Solapamiento',coach:'Entrenador',club:'Club'}[G.lifecyclePhase||'runner']}</span>`:''}</p>
+    ${G.year===1&&q===1?`<div class="note" style="border-left-color:#c07a10">💡 <strong>Las horas que no dediques a trabajar van a entrenar — y las que no uses entrenando, a reputación.</strong> Atleta puro, mediático o equilibrado: tú eliges cada trimestre.</div>`:''}
     ${qRaces.length>0?`<div class="note">Este trimestre tienes ${qRaces.length} carrera${qRaces.length>1?'s':''}: ${qRaces.map(r=>r.name).join(', ')}. Valora bajar jornada o usar vacaciones.</div>`:''}
     ${G.workChangePenalties?.[q]?`<div class="warn">⚠ Cambio brusco de jornada${G.workChangePenalties[q]?.amount>0?' — pierdes €'+G.workChangePenalties[q].amount:''} · eficiencia entrenamiento ${Math.round((G.workChangePenalties[q]?.trainingEff||1)*100)}% este trimestre.</div>`:''}
     <div class="card" style="margin-bottom:14px">
@@ -1591,6 +1595,7 @@ function renderSponsors(){
               </div>
               <div style="color:#888">Obj: ${cur.objective} · <strong>${cur.duration}</strong> temp. restante${cur.duration!==1?'s':''}</div>
               ${!objMet?`<div style="color:#c0392b;margin-top:2px">Penalización si no cumples: €${Math.round(cur.salary*cur.penaltyPct)}</div>`:''}
+              ${followersSponsorMult()>1?`<div style="font-size:12px;color:#4a90d9;margin-top:2px">📱 +${Math.round((followersSponsorMult()-1)*100)}% por reputación</div>`:''}
             </div>
             <button class="secondary" onclick="breakSponsorContract('${cat}')" style="font-size:11px;padding:5px 9px;flex-shrink:0;color:#c0392b;border-color:#c0392b;background:#fff8f0;text-align:center;line-height:1.3">Romper<br><span style="font-size:10px">-€${Math.round(cur.salary*cur.duration*0.4)}</span></button>
           </div>
@@ -1710,10 +1715,11 @@ function renderTraining(){
             const r=Math.round(v*eff);const col=r>0?'#4a8a2a':'#c0392b';
             return `<span style="font-size:12px;color:${col}">${k.charAt(0).toUpperCase()+k.slice(1)} ${r>0?'+':''}${r}</span>`;
           }).join(' <span style="color:#ddd">·</span> ');
+        const bkH=b.hours||8;const bkRepH=Math.max(0,(wo?.trainingH||5)+vacTrainingHBonus(G.currentQuarter||1)-bkH);
         return `<div class="train-card ${sel?'sel':''}" onclick="selectTraining('${b.id}')">
           <div class="flex-between">
             <div style="flex:1">
-              <div class="card-title">${b.name}</div>
+              <div class="card-title">${b.name} <span style="font-size:11px;color:#888;font-weight:400">· ${bkH}h/sem · quedan ${bkRepH}h reputación</span></div>
               <div style="font-size:12px;color:#888;margin:2px 0 6px">${b.desc} ${b.detail}</div>
               <div class="flex-between-center">
                 <div>${effs}</div>
@@ -2024,7 +2030,7 @@ function renderFameTab(){
   const hasRecentRace=G.raceResults.length>0;
   const hasSponsor=Object.values(G.sponsors).some(Boolean);
   el.innerHTML=`
-    <h2>Fama e influencia</h2>
+    <h2>Reputación</h2>
     <p class="sub">${esc(G.runner.name||'Corredor')} · ${f.toLocaleString()} seguidores</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
       <div class="fame-stat">
@@ -2039,11 +2045,22 @@ function renderFameTab(){
       </div>
     </div>
     ${nextLevel?`<div style="font-size:12px;color:#888;margin-bottom:14px">Próximo nivel: <strong>${nextLevel.label}</strong> a ${(nextLevel.followers-f).toLocaleString()} seguidores</div>`:''}
-    <div style="display:flex;justify-content:space-between;font-size:13px;color:#888;margin-bottom:8px">
-      <span>Horas disponibles esta temporada</span>
+    ${(()=>{const wo=curWorkOpt();const blockH=G.trainingBlockHours||8;const totalH=(wo?.trainingH||5)+vacTrainingHBonus(G.currentQuarter||1);const repH=Math.max(0,totalH-blockH);return `<div style="display:flex;justify-content:space-between;font-size:13px;color:#888;margin-bottom:4px">
+      <span>Horas disponibles</span>
       <span style="font-weight:600;color:${availH<=2?'#c0392b':availH<=5?'#c07a10':'#1a1a1a'}">${availH}h</span>
     </div>
+    <div style="font-size:12px;color:#aaa;margin-bottom:8px">${totalH}h trabajo − ${blockH}h bloque = ${repH}h reputación · usadas: ${G.fameHoursUsed||0}h</div>`;})()}
     ${availH<=2?`<div class="warn">Pocas horas disponibles — más actividad en redes reducirá tu tiempo de entrenamiento.</div>`:''}
+    ${(G.repInvitations||[]).length>0?`<div class="card" style="margin-bottom:14px;border-color:#2d7a2d">
+      <div style="font-size:13px;font-weight:700;color:#2d7a2d;margin-bottom:8px">📩 Invitaciones disponibles esta temporada</div>
+      ${G.repInvitations.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid #e8e6e0">
+        <div>
+          <div style="font-size:13px;font-weight:600">${esc(r.name)}</div>
+          <div style="font-size:12px;color:#888">${r.tier} · ${r.monthName||''}</div>
+        </div>
+        <button class="secondary" onclick="addRepInvitation('${r.id}')" style="font-size:12px;padding:4px 10px">Añadir →</button>
+      </div>`).join('')}
+    </div>`:''}
     <div class="section-label">Acciones disponibles</div>
     ${FAME_ACTIONS.map(a=>{
       const done=G.fameActionsThisSeason[a.id]||0;
@@ -2082,6 +2099,16 @@ window.doFameAction=id=>{
   G.fameActionsThisSeason[id]=(G.fameActionsThisSeason[id]||0)+1;
   if(a.income)G.money+=a.income;
   if(a.statBonus)Object.entries(a.statBonus).forEach(([k,v])=>{G.runner.stats[k]=Math.min(100,(G.runner.stats[k]||0)+v);});
+  showToast('+'+a.followers+' seguidores 📱','#4a90d9');
+  checkFollowerThresholds();
+  render();
+};
+window.addRepInvitation=id=>{
+  const inv=(G.repInvitations||[]).find(r=>r.id===id);
+  if(!inv)return;
+  if(!G.selectedRaces.find(r=>r.id===id))G.selectedRaces.push(inv);
+  G.repInvitations=(G.repInvitations||[]).filter(r=>r.id!==id);
+  showToast('📩 '+inv.name+' añadida al calendario','#2d7a2d');
   render();
 };
 // ── BETWEEN RACE MANAGEMENT ────────────
@@ -2473,6 +2500,7 @@ window.confirmBreakSponsor=(cat)=>{
 };
 window.selectTraining=id=>{
   G.trainingBlock=TRAINING_BLOCKS.find(b=>b.id===id);
+  G.trainingBlockHours=G.trainingBlock?.hours||8;
   if(G.trainingBlock){
     const nextRace=G.selectedRaces[0];
     const curMonth=nextRace?nextRace.month:(new Date().getMonth()+1);
@@ -2675,6 +2703,13 @@ window.doNextYear=yearNet=>{
   // El coste del empleado ya está descontado en monthlyBrandIncome() = 600 neto
 
   // Envejecer
+  // ── Decaimiento de reputación al fin de temporada ──
+  const _finishedRaces=(G.raceResults||[]).filter(r=>!r.injured).length;
+  const _fameActCount=Object.values(G.fameActionsThisSeason||{}).reduce((a,v)=>a+v,0);
+  if(_finishedRaces===0)applyRepDecay('no_races');
+  else if(_fameActCount===0)applyRepDecay('season_inactive');
+  if((G.injuryRacesLeft||0)>=4)applyRepDecay('injury_long');
+
   G.runner.age=(G.runner.age||25)+1;
   applyAgingPenalties();
 
@@ -2690,6 +2725,8 @@ window.doNextYear=yearNet=>{
   G.activeTab='game';G.liveClass=[];G.lastRaceGains=[];
   G.workByQuarter={1:G.workPct,2:G.workPct,3:G.workPct,4:G.workPct};
   G.currentQuarter=1;G.fameActionsThisSeason={};G.fameHoursUsed=0;
+  // Calcular invitaciones por reputación para la nueva temporada (tras resetear selectedRaces)
+  calcRepInvitations();
   G.circuitPoints={};G.circuitCompleted=[];G.vacByQuarter={1:0,2:0,3:0,4:0};
   G.seasonKm=0;
   G.fatBurning=false;
@@ -3336,13 +3373,26 @@ const TUTORIAL_CARDS=[
   },
   {
     icon:'⭐',
-    title:'La pestaña Fama',
+    title:'La pestaña Reputación',
     text:`<div style="text-align:left;line-height:1.9">
       <div style="font-size:13px;color:#888;margin-bottom:10px">Tu presencia en redes te abre puertas:</div>
       <div>📱 Publica posts, da charlas o aparece en medios para ganar <strong>seguidores</strong></div>
-      <div>🏆 Más seguidores = mejor reputación con <strong>sponsors</strong> y acceso a contratos de élite</div>
+      <div>🏆 Más seguidores = mejor salario de <strong>sponsors</strong> e invitaciones a carreras</div>
       <div>⏱ Cada acción cuesta <strong>horas</strong> que no dedicarás a entrenar — elige bien</div>
       <div>💸 Algunas acciones requieren <strong>sponsor activo</strong> para ejecutarse</div>
+    </div>`
+  },
+  {
+    icon:'⚖️',
+    title:'Entrenamiento vs Reputación',
+    text:`<div style="text-align:left;line-height:1.9">
+      <div style="font-size:13px;color:#888;margin-bottom:10px">
+        Cada trimestre tienes horas limitadas. Las que dedicas a entrenar no puedes dedicarlas a las redes — y viceversa.
+      </div>
+      <div>🏃 <strong>Atleta puro</strong> — entrena a tope, vive de resultados y sponsors deportivos</div>
+      <div>📱 <strong>Atleta mediático</strong> — menos entreno, más presencia, mejores contratos comerciales</div>
+      <div>⚖️ <strong>Equilibrado</strong> — tú decides cada trimestre según cómo va la temporada</div>
+      <div style="margin-top:10px;font-size:12px;color:#aaa">No hay una estrategia correcta. Depende de tus objetivos del año.</div>
     </div>`
   }
 ];

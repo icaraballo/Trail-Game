@@ -145,6 +145,11 @@ function freshState(){
     workPromotionsUsed:[],       // jornadas donde ya se ofreció el ascenso (array de pct)
     // ── Sponsors provisionales ───────────
     _pendingSponsors:{},         // selecciones provisionales antes de confirmar
+    // ── Reputación / Horas ───────────────
+    trainingBlockHours:8,        // h/sem que consume el bloque elegido
+    repInvitations:[],           // invitaciones a carreras por seguidores esta temporada
+    _thresholdsSeen:[],          // thresholds cruzados (para no repetir toasts)
+    _workTipSeen:false,          // ya se mostró el tip de trabajo año 1 Q1
   };
 }
 let G=freshState();
@@ -157,7 +162,84 @@ function curWorkOpt(){
   const pct=G.workByQuarter?G.workByQuarter[G.currentQuarter||1]:G.workPct;
   return WORK_OPTIONS.find(o=>o.pct===pct)||WORK_OPTIONS[0];
 }
-function monthlySponsorIncome(){return Math.round(Object.values(G.sponsors).filter(Boolean).reduce((a,s)=>a+(s.salary||0),0)/12*(modeCfg().sponsorMult||1));}
+function followersSponsorMult(){
+  const f=G.followers||0;
+  if(f>=100000)return 1.65;
+  if(f>=50000) return 1.52;
+  if(f>=25000) return 1.42;
+  if(f>=15000) return 1.35;
+  if(f>=10000) return 1.28;
+  if(f>=5000)  return 1.20;
+  if(f>=2500)  return 1.15;
+  if(f>=1000)  return 1.10;
+  return 1.0;
+}
+function monthlySponsorIncome(){return Math.round(Object.values(G.sponsors).filter(Boolean).reduce((a,s)=>a+(s.salary||0),0)/12*(modeCfg().sponsorMult||1)*(followersSponsorMult()));}
+function followersFromRaceResult(pos,tier,dnf){
+  if(dnf)return 0;
+  const tierMult={local:1,regional:1.6,nacional:2.6,elite:4}[tier]||1;
+  let base=0;
+  if(pos===1)      base=900;
+  else if(pos===2) base=650;
+  else if(pos===3) base=500;
+  else if(pos<=5)  base=350;
+  else if(pos<=10) base=220;
+  else if(pos<=20) base=120;
+  else             base=60;
+  return Math.round(base*tierMult);
+}
+function applyRepDecay(cause){
+  const decays={
+    dnf_important:0.15,
+    season_inactive:0.10,
+    sabotaje:0.25,
+    injury_long:0.08,
+    no_races:0.20,
+    bad_result:0.05,
+  };
+  const pct=decays[cause]||0;
+  const before=G.followers||0;
+  G.followers=Math.max(0,Math.round(before*(1-pct)));
+  const lost=before-G.followers;
+  if(lost>200)setTimeout(()=>showToast('-'+lost+' seguidores 📉','#c07a10'),400);
+}
+function calcRepInvitations(){
+  const f=G.followers||0;
+  const invites=[];
+  if(f>=5000){
+    const regionales=RACES_DB.filter(r=>r.tier==='regional'&&!G.selectedRaces.find(s=>s.id===r.id));
+    if(regionales.length)invites.push({...shuffle(regionales)[0],inviteType:'regional'});
+  }
+  if(f>=10000){
+    const nacionales=RACES_DB.filter(r=>r.tier==='nacional'&&!G.selectedRaces.find(s=>s.id===r.id));
+    if(nacionales.length)invites.push({...shuffle(nacionales)[0],inviteType:'nacional'});
+  }
+  if(f>=15000){
+    const nacionales2=RACES_DB.filter(r=>r.tier==='nacional'&&!G.selectedRaces.find(s=>s.id===r.id)&&!invites.find(i=>i.id===r.id));
+    if(nacionales2.length)invites.push({...shuffle(nacionales2)[0],inviteType:'nacional'});
+  }
+  if(f>=25000){
+    const elites=RACES_DB.filter(r=>r.tier==='elite'&&!G.selectedRaces.find(s=>s.id===r.id));
+    if(elites.length)invites.push({...shuffle(elites)[0],inviteType:'elite'});
+  }
+  if(f>=50000){
+    const elites2=RACES_DB.filter(r=>r.tier==='elite'&&!G.selectedRaces.find(s=>s.id===r.id)&&!invites.find(i=>i.id===r.id));
+    if(elites2.length)invites.push({...shuffle(elites2)[0],inviteType:'elite'});
+  }
+  G.repInvitations=invites;
+}
+function checkFollowerThresholds(){
+  const f=G.followers||0;
+  if(!G._thresholdsSeen)G._thresholdsSeen=[];
+  const invThresholds=[5000,10000,15000,25000,50000];
+  invThresholds.forEach(th=>{
+    if(f>=th&&!G._thresholdsSeen.includes(th)){
+      G._thresholdsSeen.push(th);
+      const race=(G.repInvitations||[]).find(i=>['regional','nacional','elite'].includes(i.inviteType));
+      if(race)setTimeout(()=>showToast('Tu presencia en redes te abre una puerta: '+race.name+' te invita 📩','#4a8a2a'),1200);
+    }
+  });
+}
 function monthlyClubCost(){return G.club?.cost||0;}
 function monthlyBrandIncome(){
   if(!G.ownBrand) return 0;
@@ -246,7 +328,10 @@ function modeCfg(){
 }
 function availableFameHours(){
   const wo=curWorkOpt();
-  return Math.max(0,(wo?.trainingH||5)-G.fameHoursUsed);
+  const blockH=G.trainingBlockHours||8;
+  const totalH=(wo?.trainingH||5)+vacTrainingHBonus(G.currentQuarter||1);
+  const repH=Math.max(0,totalH-blockH);
+  return Math.max(0,repH-(G.fameHoursUsed||0));
 }
 function getExpressSponsors(){
   // Returns 2 sponsor candidates appropriate to current year
