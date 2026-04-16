@@ -1008,11 +1008,12 @@ function renderModeSelect(){
     {id:'hardcore', icon:'💀', label:'Hardcore', desc:'Material importa · fractura = temporada perdida · sin red de seguridad'},
   ];
   const otherModes=[
-    {id:'expres',        icon:'⚡', label:'Carrera Exprés',  desc:'3 temporadas · sin jornada laboral · ganancias ×1.5', available:true,  lockable:false},
-    {id:'infinite_prog', icon:'📈', label:'Modo infinito',   desc:'Dificultad progresiva · sin techo · próximamente',   available:false, lockable:false},
-    {id:'coach',         icon:'📋', label:'Entrenador',      desc:'Lleva un atleta ajeno · honorarios + bonus',          available:true,  lockable:true},
+    {id:'expres',        icon:'⚡',  label:'Carrera Exprés',  desc:'3 temporadas · sin jornada laboral · ganancias ×1.5', available:true,  lockable:false},
+    {id:'infinite_prog', icon:'📈',  label:'Modo infinito',   desc:'Dificultad progresiva · sin techo · próximamente',   available:false, lockable:false},
+    {id:'ultratrail',    icon:'🏔️',  label:'Modo Ultratrail', desc:'80K mínimo · autosuficiencia · peso mochila · próximamente', available:false, lockable:false},
+    {id:'coach',         icon:'📋',  label:'Entrenador',      desc:'Lleva un atleta ajeno · honorarios + bonus',          available:true,  lockable:true},
     {id:'club',          icon:'🏕️', label:'Club',            desc:'Gestiona un club · plantilla · presupuesto',          available:true,  lockable:true},
-    {id:'canicross',     icon:'🐕', label:'Canicross',       desc:'Corres con tu perro · carreras específicas · próx.',  available:false, lockable:false},
+    {id:'canicross',     icon:'🐕',  label:'Canicross',       desc:'Corres con tu perro · carreras específicas · próx.',  available:false, lockable:false},
   ];
   // Leer desbloqueos del localStorage
   let unlocked={coach:false,club:false};
@@ -1297,7 +1298,7 @@ function renderWorkSetup(){
             <div class="card-title">${wo2.label}</div>
             <div class="card-sub">${wo2.desc}</div>
           </div>
-          ${isLocked?`<span style="font-size:12px;color:#ccc;flex-shrink:0;margin-left:8px">Sin ingresos suficientes</span>`:''}
+          ${isLocked?`<span style="font-size:12px;color:#c0392b;flex-shrink:0;margin-left:8px">Necesitas €${FIXED_COSTS.total+(G.club?.cost||0)}/mes en sponsors (tienes €${sponsorM})</span>`:''}
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:12px">
           <div><div style="color:#aaa;margin-bottom:2px">Trabajo</div>
@@ -1606,12 +1607,15 @@ function renderSponsors(){
           </div>
         </div>`).join('')}`:''}`:''
         }
-        ${!cur?offers.map(sp=>`<div class="sponsor-card" onclick="selectSponsor('${cat}','${sp.id}')">
+        ${!cur?offers.map(sp=>{
+          const isPending=G._pendingSponsors?.[cat]?.id===sp.id;
+          return `<div class="sponsor-card ${isPending?'sel-aid':''}" onclick="selectSponsor('${cat}','${sp.id}')" style="${isPending?'border:2px solid #4a90d9;background:#f0f6ff;':''}">
             <div class="flex-between">
               <div style="flex:1">
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
                   <span class="card-title">${sp.name}</span>
                   <span style="font-size:12px;font-weight:600;padding:1px 6px;border-radius:4px;background:${tierColor[sp.tier]}22;color:${tierColor[sp.tier]}">${tierLabel[sp.tier]}</span>
+                  ${isPending?`<span style="font-size:11px;font-weight:700;color:#4a90d9">● Seleccionado</span>`:''}
                 </div>
                 <div style="font-size:12px;color:#888">${sp.bonus}</div>
                 <div style="font-size:12px;color:#aaa;margin-top:2px">Obj: ${sp.objective}</div>
@@ -1623,7 +1627,7 @@ function renderSponsors(){
                 <div class="text-warn">Penaliz. ${Math.round(sp.penaltyPct*100)}%</div>
               </div>
             </div>
-          </div>`).join(''):''}
+          </div>`;}).join(''):''}
 
         ${lockedOffers.length>0?`
           <div style="margin-top:6px">
@@ -1635,7 +1639,12 @@ function renderSponsors(){
 
         ${offers.length===0&&lockedOffers.length===0?`<div style="font-size:13px;color:#ccc;padding:6px 0">Sin ofertas esta temporada.</div>`:''}
       </div>`;}).join('')}
-    <button class="main" onclick="G.screen='training';render()">Bloque de entrenamiento →</button>`;
+    ${Object.keys(G._pendingSponsors||{}).length>0?`
+    <div class="warn" style="margin-bottom:10px">
+      <strong>Tienes selecciones sin confirmar.</strong> Haz clic en un sponsor seleccionado para quitarlo, o confirma para firmar los contratos.
+    </div>
+    <button class="main" onclick="confirmSponsors()" style="background:#2d7a2d;border-color:#2d7a2d;color:#fff;margin-bottom:8px">✓ Confirmar patrocinios seleccionados</button>`:''}
+    <button class="main" onclick="G._pendingSponsors={};G.screen='training';render()">Bloque de entrenamiento →</button>`;
 }
 
 window.payPenalty=id=>{
@@ -2134,7 +2143,10 @@ function renderBetweenManage(){
       <div class="card-title">🏃 ${G.club&&G.club.id!=='none'?'Club: '+G.club.name:'Unirse a un club'}</div>
       <div class="card-sub">${G.club&&G.club.id!=='none'?'Ver reputación o cambiar de club':'Sin club actualmente — explorar opciones'}</div>
     </div>
-    <button class="main" onclick="afterRace()">Siguiente carrera →</button>`;
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      ${G._raceResultHTML?`<button class="main" onclick="G.screen='raceResult';render()" style="margin-top:0;background:#f5f4f0;color:#1a1a1a;border-color:#ccc">← Ver resumen</button>`:'<div></div>'}
+      <button class="main" onclick="afterRace()" style="margin-top:0">Siguiente carrera →</button>
+    </div>`;
 }
 window.doRecovery=id=>{
   if(G._recoveryUsed){showToast('Ya has usado una acción de recuperación','#c07a10');return;}
@@ -2395,11 +2407,29 @@ window.selectSponsor=(cat,spId)=>{
   if(!sp)return;
   const cur=G.sponsors[cat];
   if(cur){
-    if(cur.id===spId){showToast('Ya es tu sponsor activo 👍','#4a90d9');return;}
+    if(cur.id===spId){showToast('Ya es tu sponsor activo — rompe el contrato para cambiarlo','#4a90d9');return;}
     showToast(`Primero rompe el contrato con ${cur.name}`,'#c07a10');return;
   }
-  G.sponsors[cat]=Object.assign({},sp);
-  showToast(`✓ ${sp.name} — +€${sp.salary}/año`,'#2d7a2d');
+  if(!G._pendingSponsors)G._pendingSponsors={};
+  // Toggle: si ya está pendiente lo deselecciona, si no lo selecciona
+  if(G._pendingSponsors[cat]?.id===spId){
+    delete G._pendingSponsors[cat];
+  } else {
+    G._pendingSponsors[cat]={...sp};
+  }
+  render();
+};
+window.confirmSponsors=()=>{
+  if(!G._pendingSponsors)return;
+  let count=0;
+  Object.entries(G._pendingSponsors).forEach(([cat,sp])=>{
+    if(!G.sponsors[cat]){
+      G.sponsors[cat]=Object.assign({},sp);
+      count++;
+    }
+  });
+  G._pendingSponsors={};
+  if(count>0)showToast(`✓ ${count} patrocinio${count>1?'s':''} confirmado${count>1?'s':''}`,'#2d7a2d');
   autoSave();render();
 };
 window.breakSponsorContract=(cat)=>{
@@ -2493,6 +2523,12 @@ window.doStartRaces=()=>{
 };
 
 // ── Calcula costes y multiplicador de tiempo para un ritmo ──
+// 5b: Mejora marginal decreciente por encima del techo suave según modo
+function statCapMult(currentVal){
+  const softCap={facil:85,medio:75,dificil:82,hardcore:82,expres:75}[G.gameMode||'medio']||75;
+  if(currentVal<softCap)return 1.0;
+  return Math.max(0.05,1.0-(currentVal-softCap)*0.09);
+}
 function applyTraining(){
   if(!G.trainingBlock)return;
   const nextRace=G.selectedRaces[0];
@@ -2523,13 +2559,15 @@ function applyTraining(){
     // Entrenamiento cruzado: efectos normales pero carga mínima; acelera recuperación de lesión
     const crossMult=G.injuryType?1.3:1.0;
     Object.entries(G.trainingBlock.effects).forEach(([k,v])=>{
-      G.runner.stats[k]=Math.max(10,Math.min(100,Math.round(G.runner.stats[k]+v*eff*crossMult)));
+      const capM=statCapMult(G.runner.stats[k]);
+      G.runner.stats[k]=Math.max(10,Math.min(100,Math.round(G.runner.stats[k]+v*eff*crossMult*capM)));
     });
     G.bodyLoad=bodyLoadAfterTraining(G.trainingBlock.id);
     if(G.injuryType&&G.injuryRacesLeft>0){G.injuryRacesLeft=Math.max(0,G.injuryRacesLeft-1);}
   } else {
     Object.entries(G.trainingBlock.effects).forEach(([k,v])=>{
-      G.runner.stats[k]=Math.max(10,Math.min(100,Math.round(G.runner.stats[k]+v*eff)));
+      const capM=statCapMult(G.runner.stats[k]);
+      G.runner.stats[k]=Math.max(10,Math.min(100,Math.round(G.runner.stats[k]+v*eff*capM)));
     });
     G.bodyLoad=bodyLoadAfterTraining(G.trainingBlock.id);
   }
@@ -2554,6 +2592,16 @@ window.resolveMonthlyEvent=(evIdx,optIdx)=>{
   if(opt.statBonus)Object.entries(opt.statBonus).forEach(([k,v])=>{G.runner.stats[k]=Math.min(100,(G.runner.stats[k]||0)+v);});
   if(opt.loadRedux)G.bodyLoad=Math.max(0,G.bodyLoad-opt.loadRedux);
   if(opt.loadAdd)G.bodyLoad=Math.min(100,G.bodyLoad+(opt.loadAdd||0));
+  // 2a: Gestión del ascenso laboral
+  if(ev._isPromotion){
+    if(!G.workPromotionsUsed)G.workPromotionsUsed=[];
+    G.workPromotionsUsed.push(ev._promotionPct);
+    if(opt.effect==='work_promotion_accept'){
+      G.workBonus=(G.workBonus||0)+20;
+      G.trainingHPenalty=(G.trainingHPenalty||0)+2;
+      showToast('Ascenso aceptado — +€20/mes · −2h/sem de entrenamiento','#c07a10');
+    }
+  }
   if(opt.clubRepDelta)changeClubRep(opt.clubRepDelta);
   if(opt.addChampionship&&G.selectedRaces.length<12){
     const cr={...EXCLUSIVE_CLUB_RACE,id:'copa_clubes_'+G.year};
@@ -2599,6 +2647,11 @@ window.doHireEmployee=()=>{
 window.doNextYear=yearNet=>{
   checkAndUnlockAchievements();
   generateDiaryEntry(yearNet);
+  // 2a: Actualizar contador de temporadas en la misma jornada laboral
+  const _curPct=G.workPct;
+  if(!G.workSeasonCount)G.workSeasonCount={pct:_curPct,seasons:0};
+  if(G.workSeasonCount.pct!==_curPct){G.workSeasonCount={pct:_curPct,seasons:1};}
+  else G.workSeasonCount.seasons++;
 
   if(!G.sponsorPenalties)G.sponsorPenalties=[];
   Object.keys(G.sponsors).forEach(cat=>{
@@ -3322,6 +3375,15 @@ function _renderTutCard(){
     </div>`;
 }
 
+// ══════════════════════════════════════
+//  FLUJO POST-CARRERA
+// ══════════════════════════════════════
+// Continuar desde pantalla de resultado: en modo normal va a gestión, en exprés avanza directamente
+window.postRaceContinue=()=>{
+  if(G.gameMode==='expres'){afterRace();return;}
+  G._recoveryUsed=false; // reset para la gestión entre carreras
+  G.screen='betweenManage';render();
+};
 // ══════════════════════════════════════
 //  MODO ENTRENADOR — RENDER & LOGIC
 // ══════════════════════════════════════

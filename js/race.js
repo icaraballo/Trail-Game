@@ -164,7 +164,8 @@ function effForWork(){
   const wo=curWorkOpt();
   const vacBonus=vacTrainingHBonus(G.currentQuarter||1);
   const brandH=brandHoursPerWeek(); // 6h/sem si marca activa sin empleado
-  const h=Math.max(0,(wo?.trainingH||5)+vacBonus-brandH);
+  const promotionPenalty=G.trainingHPenalty||0; // 2h/sem por ascenso laboral aceptado
+  const h=Math.max(0,(wo?.trainingH||5)+vacBonus-brandH-promotionPenalty);
   const overlapMult=(G.carreraVida&&G.lifecyclePhase==='overlap')?lifeAthleteEffMult(G.lifeAthleteHours||0):1.0;
   return trainingEffFromH(h)*(G.spending.entrenador?1.2:1.0)*G.trainingEff*overlapMult;
 }
@@ -259,9 +260,11 @@ function initRace(){
     G.dayConditionGenerated=true;
   }
 
-  // Generar 14 rivales del pool según tier de carrera
-  const maxTier=race.reqRanking===999?1:race.reqRanking<=15?3:race.tier==='nacional'?2:race.tier==='elite'?3:2;
-  const pool=[...RIVALS_POOL.filter(r=>r.tier<=maxTier)];
+  // Generar 14 rivales del pool según tier de carrera y ranking actual del jugador (5c)
+  const rankingForcesHighTier=G.ranking<=10; // top 10 mundial: siempre hay élite
+  const maxTier=rankingForcesHighTier?3:(race.reqRanking===999?1:race.reqRanking<=15?3:race.tier==='nacional'?2:race.tier==='elite'?3:2);
+  const minTier=rankingForcesHighTier?2:1; // al menos tier 2 si el jugador está en top 10
+  const pool=[...RIVALS_POOL.filter(r=>r.tier<=maxTier&&r.tier>=minTier)];
   const shuffled=shuffle(pool).slice(0,14);
 
   // Escalar dificultad por tier de carrera
@@ -278,7 +281,9 @@ function initRace(){
     expres:   {scale:-0.015, cap: -0.03},
   }[G.gameMode||'medio']||{scale:0.015,cap:0.08};
   const _ybRaw=(G.year-1)*_ybCfg.scale;
-  const yearBonus=_ybCfg.scale<0?Math.max(_ybCfg.cap,_ybRaw):Math.min(_ybCfg.cap,_ybRaw);
+  // 5c: Bonus de dificultad adicional según ranking (independiente del año)
+  const rankingDiffBonus=G.ranking<=10?-0.07:G.ranking<=50?-0.04:G.ranking<=100?-0.02:0;
+  const yearBonus=(_ybCfg.scale<0?Math.max(_ybCfg.cap,_ybRaw):Math.min(_ybCfg.cap,_ybRaw))+rankingDiffBonus;
 
   G.rivals=shuffled.map(r=>{
     let rankingRange;
@@ -293,7 +298,7 @@ function initRace(){
     const rivalAge=Math.floor(ar[0]+Math.random()*(ar[1]-ar[0]));
     return {
       name:r.name,spec:r.spec,flag:r.flag||'',country:r.country||'',time:0,
-      mult:(r.base*diffMult*modeCfg().rivalMult*(0.96+Math.random()*0.08)*(1-agingDeg()*0.25))+yearBonus,
+      mult:(r.base*diffMult*modeCfg().rivalMult*(0.87+Math.random()*0.26)*(1-agingDeg()*0.25))+yearBonus,
       ranking,recentWins,age:rivalAge
     };
   });
@@ -2025,7 +2030,7 @@ function calcRaceResult(race){
   const catAll=all.filter(x=>getAgeCategory(x.age).id===playerCat.id);
   const catPos=catAll.findIndex(x=>x.me)+1;
   const catTotal=catAll.length;
-  const prize=Math.round(race.prize*(PRIZE_TABLE[pos-1]||0));
+  const prize=Math.round(race.prize*(PRIZE_TABLE[pos-1]||0)*(modeCfg().sponsorMult||1));
   // Stat bonuses
   const climbSegs=race.segs.filter(s=>s.type==='climb').length;
   const descentSegs=race.segs.filter(s=>s.type==='descent').length;
@@ -2247,11 +2252,9 @@ function finishRace(){
       <div style="font-size:13px;color:#aaa">Sin premio · Ranking #${G.ranking}</div>
     </div>`}
     ${raceStats()}
-    <div style="display:grid;grid-template-columns:${G.gameMode==='expres'?'1fr':'1fr 1fr'};gap:8px;margin-top:6px">
-      ${G.gameMode!=='expres'?`<button class="main" onclick="G.screen='betweenManage';render()" style="margin-top:0">Gestionar →</button>`:''}
-      <button class="main" onclick="afterRace()" style="margin-top:0">Continuar →</button>
-    </div>
-    ${G.gameMode!=='expres'?`<div style="text-align:center;font-size:12px;color:#aaa;margin-top:8px">Gestionar = fisio, calendario, descanso — sin avanzar la temporada</div>`:''}`;
+    <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:6px">
+      <button class="main" onclick="postRaceContinue()" style="margin-top:0">Continuar →</button>
+    </div>`;
   G._raceResultHTML=el.innerHTML;
   updateFinBar();
   autoSave();

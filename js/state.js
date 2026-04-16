@@ -138,12 +138,20 @@ function freshState(){
     rivalChildren:[],            // [{name, flag, spec, parentName, parentWins, baseStats}]
     _clubOfferSeen:false,        // ya se mostró la oferta del club (no repetir)
     _clubOfferDelay:0,           // temporada a partir de la cual vuelve a intentarlo tras rechazo
+    // ── Sistema de trabajo ───────────────
+    workBonus:0,                 // €/mes extra por ascenso laboral aceptado
+    trainingHPenalty:0,          // h/sem de entreno perdidas por ascenso laboral
+    workSeasonCount:{pct:100,seasons:0}, // tracking de temporadas consecutivas en la misma jornada
+    workPromotionsUsed:[],       // jornadas donde ya se ofreció el ascenso (array de pct)
+    // ── Sponsors provisionales ───────────
+    _pendingSponsors:{},         // selecciones provisionales antes de confirmar
   };
 }
 let G=freshState();
 function monthlyWorkIncome(){
   const pct=G.workByQuarter?G.workByQuarter[G.currentQuarter||1]:G.workPct;
-  return WORK_OPTIONS.find(o=>o.pct===pct)?.income||0;
+  const base=WORK_OPTIONS.find(o=>o.pct===pct)?.income||0;
+  return Math.round((base+(G.workBonus||0))*(modeCfg().sponsorMult||1));
 }
 function curWorkOpt(){
   const pct=G.workByQuarter?G.workByQuarter[G.currentQuarter||1]:G.workPct;
@@ -354,8 +362,29 @@ function seasonWeatherMultiplier(month){
 function generateMonthlyEvents(){
   G.monthlyEvents=[];
   const hasClub=G.club&&G.club.id!=='none';
-  const pool=MONTHLY_EVENTS_POOL.filter(e=>!e.requiresClub||hasClub);
+  const hasWork=!!(WORK_OPTIONS.find(o=>o.pct===(G.workByQuarter?G.workByQuarter[G.currentQuarter||1]:G.workPct))?.income);
+  const pool=MONTHLY_EVENTS_POOL.filter(e=>(!e.requiresClub||hasClub)&&(!e.requiresWork||hasWork));
   if(Math.random()<0.6)G.monthlyEvents.push({...pool[Math.floor(Math.random()*pool.length)],resolved:false});
+  // 2a: Evento de ascenso laboral si lleva 3+ temporadas en la misma jornada
+  if(hasWork&&G.gameMode!=='expres'){
+    const curPct=G.workByQuarter?G.workByQuarter[1]:G.workPct;
+    if(!G.workSeasonCount)G.workSeasonCount={pct:curPct,seasons:0};
+    if(G.workSeasonCount.pct===curPct&&G.workSeasonCount.seasons>=3){
+      if(!(G.workPromotionsUsed||[]).includes(curPct)){
+        G.monthlyEvents.push({
+          id:'work_promotion',
+          title:'Tu empresa te ofrece un ascenso',
+          options:[
+            {text:'Aceptar (+€20/mes, -2h/sem de entreno)',effect:'work_promotion_accept',value:0},
+            {text:'Rechazar — el entreno es tu prioridad',effect:'nothing',value:0},
+          ],
+          resolved:false,
+          _isPromotion:true,
+          _promotionPct:curPct,
+        });
+      }
+    }
+  }
 }
 function getNutritionCost(id){
   const n=PRE_RACE_NUTRITION.find(x=>x.id===id);

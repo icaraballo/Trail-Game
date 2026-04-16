@@ -1,3 +1,4 @@
+// TODO: Modo Ultratrail — distancia mínima 80K, mecánicas de autosuficiencia, peso mochila, gestión comida por tramos. Modo separado, no carrera dentro del modo Carrera.
 const WORK_OPTIONS=[
   {pct:100,label:'Jornada completa',hours:40,income:150,trainingH:5,
    desc:'Máximo dinero. Casi sin tiempo para entrenar.'},
@@ -1597,6 +1598,19 @@ const MONTHLY_EVENTS_POOL=[
     {text:'Apuntarse — una semana con el grupo (+subida, +mental, +rep, +carga)', value:-30, statBonus:{subida:3,mental:4}, clubRepDelta:10, loadAdd:12},
     {text:'Unirse solo el fin de semana (+rep leve, menos carga)',                value:-10, statBonus:{mental:2}, clubRepDelta:5, loadAdd:5},
     {text:'Esta vez no puedo',                                                    value:0, clubRepDelta:-2},
+  ]},
+  // ── Eventos de trabajo (2b) ──────────
+  {id:'work_audit', title:'Semana de auditoría en el trabajo — ritmo frenético', requiresWork:true, options:[
+    {text:'Afrontarlo — agotado, entrenamientos menos efectivos (carga +15)',  value:0, loadAdd:15},
+    {text:'Pedir días de asuntos propios — pierdes €20 pero mantienes el ritmo', value:-20},
+  ]},
+  {id:'work_overtime', title:'Tu jefe te ofrece horas extra este mes', requiresWork:true, options:[
+    {text:'Aceptar (+€40, pero el cuerpo llega cargado al entreno, carga +18)', value:40, loadAdd:18},
+    {text:'Rechazar — respeta tu plan de entrenamiento', value:0},
+  ]},
+  {id:'work_congrats', title:'Tu empresa celebra un trimestre récord — bonus sorpresa', requiresWork:true, options:[
+    {text:'Disfrutar el reconocimiento (+€30)', value:30},
+    {text:'Invertirlo en material técnico (+€10 · +bajada)', value:10, statBonus:{bajada:1}},
   ]},
 ];
 
