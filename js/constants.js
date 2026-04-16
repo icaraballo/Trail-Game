@@ -1,4 +1,3 @@
-// TODO: Modo Ultratrail — distancia mínima 80K, mecánicas de autosuficiencia, peso mochila, gestión comida por tramos. Modo separado, no carrera dentro del modo Carrera.
 const WORK_OPTIONS=[
   {pct:100,label:'Jornada completa',hours:40,income:150,trainingH:5,
    desc:'Máximo dinero. Casi sin tiempo para entrenar.'},
@@ -1156,6 +1155,350 @@ const CIRCUITS_DB=[
    raceIds:['pinar','febrero','octubre'],
    pointsForPrize:80,
    reward:{money:200,followerBonus:500}},
+];
+
+// ══════════════════════════════════════
+//  MODO ULTRATRAIL
+// ══════════════════════════════════════
+const ULTRATRAIL_RACES={
+  1:[
+    {id:'ut_zegama',name:'Maratón Montaña Zegama',km:42,desnivel:'2.728m+',
+     month:5,monthName:'Mayo',type:'prep',tier:'regional',
+     cost:80,prize:200,cutoffs:[{cp:'Aizkorri km22',maxH:3.5}],
+     nocturna:false,crew:false,
+     segs:[
+       {name:'Salida Zegama',km:6,type:'flat',gain:0,base:1600},
+       {name:'Aizkorri subida',km:8,type:'climb',gain:900,base:3200,aid:true},
+       {name:'Cresta Aizkorri',km:5,type:'flat',gain:0,base:1800},
+       {name:'Descenso Aratz',km:7,type:'descent',gain:-800,base:2200,aid:true},
+       {name:'Subida Murumendi',km:8,type:'climb',gain:700,base:2800},
+       {name:'Llegada Zegama',km:8,type:'descent',gain:-800,base:2000,aid:true}
+     ]},
+    {id:'ut_pirineos80',name:'Ultra Pirineos 80K',km:80,desnivel:'4.800m+',
+     month:8,monthName:'Agosto',type:'objetivo',tier:'nacional',
+     cost:150,prize:600,
+     cutoffs:[
+       {cp:'Refugio Respomuso km28',maxH:7},
+       {cp:'Sallent de Gállego km55',maxH:13},
+       {cp:'Meta Sallent',maxH:18}
+     ],
+     nocturna:true,nocturnaStart:55,nocturnaEnd:72,crew:false,
+     segs:[
+       {name:'Salida Formigal',km:7,type:'flat',gain:0,base:1800},
+       {name:'Subida Anayet',km:9,type:'climb',gain:900,base:3200},
+       {name:'Valle Tena',km:6,type:'flat',gain:0,base:1700,aid:true},
+       {name:'Puerto del Palo',km:8,type:'climb',gain:800,base:3000},
+       {name:'Cresta Alta',km:5,type:'flat',gain:0,base:1900},
+       {name:'Bajada Técnica',km:7,type:'descent',gain:-900,base:2400,aid:true},
+       {name:'Refugio Respomuso',km:8,type:'climb',gain:700,base:2800,aid:true},
+       {name:'Sección Llana',km:6,type:'flat',gain:0,base:1700},
+       {name:'Subida Nocturna',km:8,type:'climb',gain:600,base:3100},
+       {name:'Cresta Nocturna',km:7,type:'flat',gain:0,base:2000,aid:true},
+       {name:'Gran Descenso Final',km:9,type:'descent',gain:-900,base:2600,aid:true}
+     ]},
+    {id:'ut_menorca50',name:'Trail Menorca 50K',km:50,desnivel:'1.500m+',
+     month:10,monthName:'Octubre',type:'cierre',tier:'regional',
+     cost:90,prize:300,cutoffs:[{cp:'CP Central km28',maxH:8}],
+     nocturna:false,crew:false,
+     segs:[
+       {name:'Salida Ciutadella',km:7,type:'flat',gain:0,base:1600},
+       {name:'Camí de Cavalls N',km:9,type:'flat',gain:0,base:1500,aid:true},
+       {name:'Subida Monte Toro',km:7,type:'climb',gain:400,base:2200},
+       {name:'Bajada Este',km:6,type:'descent',gain:-400,base:1900,aid:true},
+       {name:'Costa Sur',km:8,type:'flat',gain:0,base:1600},
+       {name:'Subida Final',km:6,type:'climb',gain:300,base:2100},
+       {name:'Llegada Maó',km:7,type:'flat',gain:0,base:1700,aid:true}
+     ]}
+  ],
+  2:[
+    {id:'ut_med42',name:'Maratón Mediterráneo Trail',km:42,desnivel:'2.200m+',
+     month:4,monthName:'Abril',type:'prep',tier:'regional',
+     cost:80,prize:250,cutoffs:[{cp:'CP km22',maxH:4}],
+     nocturna:false,crew:false,
+     segs:[
+       {name:'Salida',km:6,type:'flat',gain:0,base:1600},
+       {name:'Subida Serra',km:8,type:'climb',gain:700,base:2800},
+       {name:'Cresta',km:5,type:'flat',gain:0,base:1700,aid:true},
+       {name:'Bajada',km:7,type:'descent',gain:-700,base:2100},
+       {name:'Llano costero',km:8,type:'flat',gain:0,base:1600,aid:true},
+       {name:'Subida final',km:4,type:'climb',gain:300,base:2000},
+       {name:'Meta',km:4,type:'flat',gain:0,base:1600}
+     ]},
+    {id:'ut_buff105',name:'Buff Epic Trail 105K',km:105,desnivel:'6.000m+',
+     month:9,monthName:'Septiembre',type:'objetivo',tier:'elite',
+     cost:200,prize:1200,
+     cutoffs:[
+       {cp:'Espot km35',maxH:8},
+       {cp:'Tavascan km65',maxH:15},
+       {cp:'Llessui km85',maxH:21},
+       {cp:'Meta Sort',maxH:27}
+     ],
+     nocturna:true,nocturnaStart:65,nocturnaEnd:88,crew:false,
+     segs:[
+       {name:'Salida Sort',km:8,type:'flat',gain:0,base:1900},
+       {name:'Subida Pallars',km:10,type:'climb',gain:1000,base:3400},
+       {name:'Cresta Pirineo',km:7,type:'flat',gain:0,base:2100,aid:true},
+       {name:'Bajada Espot',km:9,type:'descent',gain:-1100,base:2600,aid:true},
+       {name:'Valle Àneu',km:8,type:'flat',gain:0,base:1900},
+       {name:'Subida Alta',km:10,type:'climb',gain:1100,base:3500,aid:true},
+       {name:'Travesía Alta',km:8,type:'flat',gain:0,base:2200},
+       {name:'Bajada Nocturna',km:9,type:'descent',gain:-1000,base:2800,aid:true},
+       {name:'Subida Nocturna',km:10,type:'climb',gain:900,base:3300},
+       {name:'Cresta Final',km:7,type:'flat',gain:0,base:2100,aid:true},
+       {name:'Gran Descenso',km:10,type:'descent',gain:-1000,base:2700},
+       {name:'Llegada Llessui',km:9,type:'flat',gain:0,base:2000,aid:true}
+     ]}
+  ],
+  3:[
+    {id:'ut_ccc100',name:'CCC - Courmayeur Champex Chamonix',km:100,desnivel:'6.100m+',
+     month:8,monthName:'Agosto',type:'prep',tier:'elite',
+     cost:250,prize:1000,
+     cutoffs:[
+       {cp:'Champex-Lac km63',maxH:15},
+       {cp:'Vallorcine km87',maxH:22},
+       {cp:'Meta Chamonix',maxH:26.5}
+     ],
+     nocturna:true,nocturnaStart:55,nocturnaEnd:78,
+     crew:true,crewCPs:['Champex-Lac km63','Vallorcine km87'],
+     segs:[
+       {name:'Salida Courmayeur',km:8,type:'flat',gain:0,base:2000},
+       {name:'Subida Grand Col Ferret',km:12,type:'climb',gain:1200,base:3800,aid:true},
+       {name:'Bajada La Fouly',km:9,type:'descent',gain:-1100,base:2700,aid:true},
+       {name:'Val Ferret',km:8,type:'flat',gain:0,base:2000},
+       {name:'Subida Champex',km:10,type:'climb',gain:900,base:3200,aid:true},
+       {name:'Bosques Valais',km:9,type:'flat',gain:0,base:2100},
+       {name:'Subida Nocturna Catogne',km:10,type:'climb',gain:800,base:3100,aid:true},
+       {name:'Bajada Nocturna',km:9,type:'descent',gain:-900,base:2800},
+       {name:'Subida Tête aux Vents',km:8,type:'climb',gain:700,base:3000,aid:true},
+       {name:'Cresta Final',km:8,type:'flat',gain:0,base:2200},
+       {name:'Llegada Chamonix',km:9,type:'descent',gain:-700,base:2400,aid:true}
+     ]},
+    {id:'ut_tds145',name:'TDS - Sur les Traces des Ducs',km:145,desnivel:'9.100m+',
+     month:8,monthName:'Agosto',type:'objetivo',tier:'elite',
+     cost:300,prize:1800,
+     cutoffs:[
+       {cp:'Bourg Saint Maurice km45',maxH:10},
+       {cp:'Les Chapieux km75',maxH:17},
+       {cp:'Courmayeur km110',maxH:27},
+       {cp:'Meta Chamonix',maxH:38}
+     ],
+     nocturna:true,nocturnaStart:80,nocturnaEnd:115,
+     crew:true,crewCPs:['Courmayeur km110'],
+     segs:[
+       {name:'Salida Courmayeur',km:10,type:'flat',gain:0,base:2100},
+       {name:'Subida Mont Favre',km:12,type:'climb',gain:1300,base:4000,aid:true},
+       {name:'Travesía Alta',km:10,type:'flat',gain:0,base:2300},
+       {name:'Bajada Les Chapieux',km:11,type:'descent',gain:-1200,base:3000,aid:true},
+       {name:'Val Veny',km:9,type:'flat',gain:0,base:2100},
+       {name:'Subida Col Checrouit',km:11,type:'climb',gain:1100,base:3500,aid:true},
+       {name:'Cresta Alta',km:9,type:'flat',gain:0,base:2400},
+       {name:'Bajada Nocturna',km:12,type:'descent',gain:-1100,base:3100,aid:true},
+       {name:'Subida Nocturna',km:11,type:'climb',gain:1000,base:3700},
+       {name:'Cresta Nocturna',km:9,type:'flat',gain:0,base:2500,aid:true},
+       {name:'Subida Fenêtre dArpette',km:12,type:'climb',gain:1200,base:3900,aid:true},
+       {name:'Bajada Chamonix',km:11,type:'descent',gain:-1100,base:2900},
+       {name:'Valle Final',km:8,type:'flat',gain:0,base:2200,aid:true}
+     ]}
+  ],
+  4:[
+    {id:'ut_mds',name:'Marathon des Sables',km:250,desnivel:'2.500m+',
+     month:4,monthName:'Abril',type:'objetivo_especial',tier:'elite',
+     cost:3500,prize:5000,isMDS:true,
+     etapas:[
+       {id:'mds_e1',name:'Etapa 1 — Bienvenida al desierto',km:32,
+        jugable:true,cutoffs:[{cp:'Meta etapa',maxH:6}],
+        segs:[
+          {name:'Salida campamento',km:6,type:'flat',gain:0,base:1700},
+          {name:'Primer erg',km:8,type:'climb',gain:200,base:2000,aid:true},
+          {name:'Valle rocoso',km:7,type:'flat',gain:0,base:1800},
+          {name:'Dunas pequeñas',km:7,type:'climb',gain:150,base:2200},
+          {name:'Meta etapa 1',km:4,type:'flat',gain:0,base:1600,aid:true}
+        ]},
+       {id:'mds_e2',name:'Etapa 2 — El calor aumenta',km:39,jugable:false,
+        decisiones:[
+          {texto:'Ritmo conservador',efecto:{combustible:10,pies:-5,tiempo:25}},
+          {texto:'Ritmo agresivo',efecto:{combustible:-15,pies:-15,tiempo:-20}},
+          {texto:'Gestión perfecta',efecto:{combustible:0,hidratacion:10,tiempo:5}}
+        ]},
+       {id:'mds_e3',name:'Etapa 3 — Las dunas',km:36,jugable:false,
+        decisiones:[
+          {texto:'Bastones en las dunas',efecto:{pies:-8,piernas:-5,tiempo:20}},
+          {texto:'Sin bastones',efecto:{pies:-18,piernas:-15,tiempo:-15}},
+          {texto:'Curar ampollas en CP',efecto:{pies:20,tiempo:10}}
+        ]},
+       {id:'mds_e4',name:'Etapa 4 — La Larga (86K)',km:86,jugable:true,
+        cutoffs:[{cp:'CP intermedio km45',maxH:12},{cp:'Meta etapa',maxH:22}],
+        segs:[
+          {name:'Salida temprana',km:8,type:'flat',gain:0,base:1900},
+          {name:'Dunas grandes',km:10,type:'climb',gain:300,base:2800,aid:true},
+          {name:'Valle del viento',km:9,type:'flat',gain:0,base:1800},
+          {name:'Jebel subida',km:11,type:'climb',gain:400,base:3000,aid:true},
+          {name:'Travesía alta',km:9,type:'flat',gain:0,base:2100},
+          {name:'Descenso largo',km:10,type:'descent',gain:-400,base:2200,aid:true},
+          {name:'Sección nocturna',km:11,type:'flat',gain:0,base:2000},
+          {name:'Dunas finales',km:10,type:'climb',gain:200,base:2600,aid:true},
+          {name:'Meta etapa 4',km:8,type:'flat',gain:0,base:1900,aid:true}
+        ]},
+       {id:'mds_e5',name:'Etapa 5 — Supervivencia',km:42,jugable:true,
+        cutoffs:[{cp:'Meta etapa',maxH:9}],
+        segs:[
+          {name:'Salida dolorosa',km:7,type:'flat',gain:0,base:2100},
+          {name:'Erg final',km:9,type:'climb',gain:200,base:2400,aid:true},
+          {name:'Valle de piedras',km:8,type:'flat',gain:0,base:2000},
+          {name:'Jebel último',km:9,type:'climb',gain:250,base:2600,aid:true},
+          {name:'Llegada campamento',km:9,type:'descent',gain:-250,base:2200,aid:true}
+        ]},
+       {id:'mds_e6',name:'Etapa 6 — Llegada',km:15,jugable:false,
+        cinematica:true,
+        texto:'Los últimos kilómetros del desierto. El cuerpo ya no siente el dolor. Solo la meta.'}
+     ]},
+    {id:'ut_utmb170',name:'UTMB - Ultra Trail du Mont Blanc',km:170,
+     desnivel:'10.000m+',month:8,monthName:'Agosto',
+     type:'objetivo',tier:'elite',cost:400,prize:3000,
+     cutoffs:[
+       {cp:'Les Contamines km31',maxH:8},
+       {cp:'Courmayeur km79',maxH:19.5},
+       {cp:'Champex-Lac km125',maxH:29},
+       {cp:'Meta Chamonix',maxH:46.5}
+     ],
+     nocturna:true,nocturnaStart:100,nocturnaEnd:140,
+     crew:true,crewCPs:['Courmayeur km79','Champex-Lac km125','Vallorcine km155'],
+     segs:[
+       {name:'Salida Chamonix',km:10,type:'flat',gain:0,base:2200},
+       {name:'Les Houches subida',km:11,type:'climb',gain:1000,base:3500,aid:true},
+       {name:'Saint Gervais bajada',km:10,type:'descent',gain:-900,base:2800,aid:true},
+       {name:'Les Contamines',km:10,type:'flat',gain:0,base:2100,aid:true},
+       {name:'Col du Bonhomme',km:12,type:'climb',gain:1200,base:3900},
+       {name:'Val Veny',km:11,type:'descent',gain:-1100,base:2900,aid:true},
+       {name:'Courmayeur subida',km:11,type:'climb',gain:1100,base:3700,aid:true},
+       {name:'Grand Col Ferret',km:12,type:'climb',gain:1000,base:3600},
+       {name:'La Fouly bajada',km:10,type:'descent',gain:-1000,base:2800,aid:true},
+       {name:'Champex-Lac',km:11,type:'climb',gain:800,base:3200,aid:true},
+       {name:'Tramo nocturno largo',km:12,type:'flat',gain:0,base:2400},
+       {name:'Subida nocturna',km:11,type:'climb',gain:900,base:3500,aid:true},
+       {name:'Bajada Vallorcine',km:10,type:'descent',gain:-900,base:2700,aid:true},
+       {name:'Llegada Chamonix',km:9,type:'flat',gain:0,base:2300,aid:true}
+     ]}
+  ],
+  5:[
+    {id:'ut_transgran128',name:'Transgrancanaria',km:128,desnivel:'7.300m+',
+     month:3,monthName:'Marzo',type:'prep',tier:'elite',
+     cost:200,prize:1500,
+     cutoffs:[
+       {cp:'Tejeda km50',maxH:12},
+       {cp:'Cruz de Tejeda km80',maxH:19},
+       {cp:'Meta Las Palmas',maxH:28}
+     ],
+     nocturna:true,nocturnaStart:70,nocturnaEnd:100,crew:false,
+     segs:[
+       {name:'Salida Agaete',km:9,type:'flat',gain:0,base:2000},
+       {name:'Subida interior',km:12,type:'climb',gain:1100,base:3600,aid:true},
+       {name:'Cresta volcánica',km:10,type:'flat',gain:0,base:2200},
+       {name:'Bajada Tejeda',km:11,type:'descent',gain:-1000,base:2800,aid:true},
+       {name:'Valle central',km:10,type:'flat',gain:0,base:2100},
+       {name:'Subida Cruz',km:12,type:'climb',gain:1000,base:3500,aid:true},
+       {name:'Tramo nocturno',km:12,type:'flat',gain:0,base:2300},
+       {name:'Subida nocturna',km:11,type:'climb',gain:900,base:3400,aid:true},
+       {name:'Bajada Las Palmas',km:12,type:'descent',gain:-1000,base:2900},
+       {name:'Costa llegada',km:9,type:'flat',gain:0,base:2000,aid:true}
+     ]},
+    {id:'ut_tor330',name:'Tor des Géants',km:330,desnivel:'24.000m+',
+     month:9,monthName:'Septiembre',type:'objetivo',tier:'elite',
+     cost:600,prize:5000,isTOR:true,maxHoras:150,
+     cutoffs:[
+       {cp:'Cogne km78',maxH:22},
+       {cp:'Ollomont km145',maxH:45},
+       {cp:'Valpelline km220',maxH:72},
+       {cp:'Donnas km278',maxH:96},
+       {cp:'Meta Courmayeur',maxH:150}
+     ],
+     nocturna:true,nocturnaStart:0,nocturnaEnd:330,
+     crew:true,crewCPs:['Cogne km78','Ollomont km145','Donnas km278'],
+     microSiestas:true,segs:[]}
+  ],
+  6:[
+    {id:'ut_spine431',name:'Spine Race',km:431,desnivel:'12.000m+',
+     month:1,monthName:'Enero',type:'objetivo',tier:'elite',
+     cost:800,prize:6000,isSpine:true,
+     descripcion:'Pennine Way completo. Enero. Lluvia, barro, nieve. 7 días.',
+     cutoffs:[
+       {cp:'Hawes km165',maxH:60},
+       {cp:'Middleton km280',maxH:100},
+       {cp:'Meta Kirk Yetholm',maxH:168}
+     ],
+     nocturna:true,nocturnaStart:0,nocturnaEnd:431,crew:false,segs:[]}
+  ],
+  7:[
+    {id:'ut_moab386',name:'Moab 240',km:386,desnivel:'12.400m+',
+     month:10,monthName:'Octubre',type:'objetivo',tier:'elite',
+     cost:700,prize:5000,
+     cutoffs:[
+       {cp:'Green River km130',maxH:44},
+       {cp:'Moab km260',maxH:84},
+       {cp:'Meta',maxH:117}
+     ],
+     nocturna:true,nocturnaStart:0,nocturnaEnd:386,
+     crew:true,crewCPs:['Green River km130','Moab km260'],segs:[]}
+  ],
+  8:[
+    {id:'ut_gran_travesia',name:'La Gran Travesía',km:500,desnivel:'28.000m+',
+     month:7,monthName:'Julio',type:'endgame',tier:'elite',
+     cost:1200,prize:10000,isEndgame:true,
+     descripcion:'500K de los Pirineos al Mediterráneo. 7 etapas. El final de todo.',
+     cutoffs:[
+       {cp:'Pamplona km80',maxH:24},
+       {cp:'Jaca km165',maxH:50},
+       {cp:'Benasque km250',maxH:78},
+       {cp:'Andorra km330',maxH:104},
+       {cp:'La Seu km380',maxH:122},
+       {cp:'Berga km430',maxH:140},
+       {cp:'Meta Sitges',maxH:168}
+     ],
+     nocturna:true,nocturnaStart:0,nocturnaEnd:500,
+     crew:true,crewCPs:['Jaca km165','Benasque km250','Andorra km330','Berga km430'],
+     segs:[]}
+  ]
+};
+
+const BACKYARD_CONFIG={
+  loopKm:6.706,
+  minutesPerLoop:60,
+  rivalNames:[
+    {name:'Harvey Lewis',flag:'🇺🇸'},{name:'Ihor Verys',flag:'🇺🇦'},
+    {name:'Damian Hall',flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿'},{name:'Beth Pascall',flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿'},
+    {name:'Tom Hollins',flag:'🇬🇧'},{name:'Carla Molinaro',flag:'🇬🇧'},
+    {name:'Olivier Leblond',flag:'🇫🇷'},{name:'Antoine Guillon',flag:'🇫🇷'},
+    {name:'Michał Nowak',flag:'🇵🇱'},{name:'Sara Alonso',flag:'🇪🇸'},
+    {name:'Ibon Urdangarin',flag:'🇪🇸'},{name:'Kilian Puerta',flag:'🇪🇸'},
+    {name:'Lars Hansen',flag:'🇩🇰'},{name:'Marta Ryś',flag:'🇵🇱'},
+    {name:'Yuki Kawamoto',flag:'🇯🇵'},{name:'Pedro Crespo',flag:'🇧🇷'},
+    {name:'Ana Fernández',flag:'🇪🇸'},{name:'Marco Oliveri',flag:'🇮🇹'},
+    {name:'Lena Braun',flag:'🇩🇪'},{name:'Johan Ek',flag:'🇸🇪'}
+  ]
+};
+
+const BACKYARD_ITEMS=[
+  {id:'racion_solida',label:'Ración sólida',icon:'🍞',
+   desc:'Comida real. Esencial para aguantar.',
+   pesoG:300,unidadesBase:12,maxUnidades:20,efecto:{combustible:25}},
+  {id:'gel',label:'Gel energético',icon:'🧃',
+   desc:'Energía rápida. No sustituye a la comida.',
+   pesoG:45,unidadesBase:20,maxUnidades:30,efecto:{energia:15}},
+  {id:'sales',label:'Sales minerales',icon:'💊',
+   desc:'Previene calambres. Vital en calor.',
+   pesoG:80,unidadesBase:30,maxUnidades:30,
+   efecto:{piernas:8,hidratacion:5},unlockedYear:4},
+  {id:'vendas',label:'Vendas para pies',icon:'🩹',
+   desc:'Trata ampollas. Resetea el stat Pies parcialmente.',
+   pesoG:60,unidadesBase:3,maxUnidades:6,efecto:{pies:30}},
+  {id:'ibuprofeno',label:'Ibuprofeno',icon:'💊',
+   desc:'Reduce dolor. Úsalo con cuidado.',
+   pesoG:20,unidadesBase:6,maxUnidades:6,
+   efecto:{piernas:12,energia:5},
+   advertencia:'Uso excesivo oculta lesiones reales',unlockedYear:4},
+  {id:'ropa_abrigo',label:'Ropa de abrigo',icon:'🧥',
+   desc:'Loops nocturnos: evita penalización por frío.',
+   pesoG:400,unidadesBase:1,maxUnidades:1,esEquipamiento:true}
 ];
 
 // Puntos por posición en carrera de circuito

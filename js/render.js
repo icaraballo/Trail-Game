@@ -164,6 +164,23 @@ function render(){
     overlapHub:renderOverlapHub,
     lifeRetirement:renderLifeRetirement,
     clubOffer:renderClubOffer,
+    ultratrailWelcome:renderUltratrailWelcome,
+    ultratrailSeasonStart:renderUltratrailSeasonStart,
+    ultratrailMochila:renderUltratrailMochila,
+    ultratrailPreRace:renderUltratrailPreRace,
+    ultratrailSegment:renderUltratrailSegment,
+    ultratrailAid:renderUltratrailAid,
+    ultratrailCutoffDNF:renderUltratrailCutoffDNF,
+    ultratrailPostRace:renderUltratrailPostRace,
+    ultratrailSeasonBalance:renderUltratrailSeasonBalance,
+    ultratrailLegado:renderUltratrailLegado,
+    backyardConfig:renderBackyardConfig,
+    backyardLoop:renderBackyardLoop,
+    backyardResult:renderBackyardResult,
+    mdsPreparation:renderMDSPreparation,
+    mdsDecision:renderMDSDecision,
+    mdsBivouac:renderMDSBivouac,
+    mdsFinal:renderMDSFinal,
   }[G.screen]||renderIntro)();
   triggerFade(el);
 }
@@ -1012,7 +1029,7 @@ function renderModeSelect(){
   const otherModes=[
     {id:'expres',        icon:'⚡',  label:'Carrera Exprés',  desc:'3 temporadas · sin jornada laboral · ganancias ×1.5', available:true,  lockable:false},
     {id:'infinite_prog', icon:'📈',  label:'Modo infinito',   desc:'Dificultad progresiva · sin techo · próximamente',   available:false, lockable:false},
-    {id:'ultratrail',    icon:'🏔️',  label:'Modo Ultratrail', desc:'80K mínimo · autosuficiencia · peso mochila · próximamente', available:false, lockable:false},
+    {id:'ultratrail',    icon:'🏔️',  label:'Modo Ultratrail', desc:'80K mínimo · mochila · cutoffs reales · Backyard · MdS · UTMB', available:true,  lockable:false},
     {id:'coach',         icon:'📋',  label:'Entrenador',      desc:'Lleva un atleta ajeno · honorarios + bonus',          available:true,  lockable:true},
     {id:'club',          icon:'🏕️', label:'Club',            desc:'Gestiona un club · plantilla · presupuesto',          available:true,  lockable:true},
     {id:'canicross',     icon:'🐕',  label:'Canicross',       desc:'Corres con tu perro · carreras específicas · próx.',  available:false, lockable:false},
@@ -1093,9 +1110,12 @@ function renderModeSelect(){
             </div>
           </div>`;
         }
-        // Normal (expres)
+        // Normal (expres / ultratrail)
         const isSel=sel===m.id;
-        return `<div class="carrera-group-header" onclick="selectMode('${m.id}')" style="${isSel?'background:#fef9ec;border-bottom:1px solid #e8e6e0':''}">
+        const clickAct=m.id==='ultratrail'
+          ?`G.gameMode='ultratrail';G.screen='ultratrailWelcome';render()`
+          :`selectMode('${m.id}')`;
+        return `<div class="carrera-group-header" onclick="${clickAct}" style="${isSel?'background:#fef9ec;border-bottom:1px solid #e8e6e0':''}">
           <div style="width:36px;height:36px;border-radius:8px;background:${isSel?'#fef9ec':'var(--color-background-secondary)'};display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${m.icon}</div>
           <div style="flex:1">
             <div style="font-size:14px;font-weight:${isSel?'600':'500'};color:${isSel?'#c07a10':'var(--color-text-primary)'}">${m.label}</div>
@@ -1152,6 +1172,7 @@ window.selectAndConfirm=(id,path)=>{
   }
 };
 window.confirmMode=()=>{
+  if(G.gameMode==='ultratrail'){G.screen='ultratrailWelcome';render();return;}
   if(G.gameMode==='club'){
     // Guiño narrativo si el modo está desbloqueado vía arco narrativo
     const unlocked=JSON.parse(LS.get('unlocked')||'{}');
@@ -3506,4 +3527,29 @@ window.handleEv=(evId,choiceIdx)=>{
   }
   G.pendingEvent=null;goNextRace();
 };
+
+// ══════════════════════════════════════
+//  MODO ULTRATRAIL — STUBS (Parte 2)
+// ══════════════════════════════════════
+function renderUltratrailWelcome(){
+  document.getElementById('main').innerHTML=
+    '<h2>🏔️ Modo Ultratrail</h2><p class="sub">Implementación en curso (Parte 2)</p>'+
+    '<button class="main" onclick="G.screen=\'modeSelect\';render()">← Volver</button>';
+}
+function renderUltratrailSeasonStart(){document.getElementById('main').innerHTML='<h2>Temporada Ultratrail</h2><p class="sub">Próximamente</p>';}
+function renderUltratrailMochila(){document.getElementById('main').innerHTML='<h2>Mochila</h2><p class="sub">Próximamente</p>';}
+function renderUltratrailPreRace(){document.getElementById('main').innerHTML='<h2>Pre-carrera</h2><p class="sub">Próximamente</p>';}
+function renderUltratrailSegment(){document.getElementById('main').innerHTML='<h2>En carrera</h2><p class="sub">Próximamente</p>';}
+function renderUltratrailAid(){document.getElementById('main').innerHTML='<h2>Avituallamiento</h2><p class="sub">Próximamente</p>';}
+function renderUltratrailCutoffDNF(){document.getElementById('main').innerHTML='<h2>Cutoff superado</h2><p class="sub">Próximamente</p>';}
+function renderUltratrailPostRace(){document.getElementById('main').innerHTML='<h2>Post-carrera</h2><p class="sub">Próximamente</p>';}
+function renderUltratrailSeasonBalance(){document.getElementById('main').innerHTML='<h2>Balance temporada</h2><p class="sub">Próximamente</p>';}
+function renderUltratrailLegado(){document.getElementById('main').innerHTML='<h2>Legado</h2><p class="sub">Próximamente</p>';}
+function renderBackyardConfig(){document.getElementById('main').innerHTML='<h2>Backyard Ultra</h2><p class="sub">Próximamente</p>';}
+function renderBackyardLoop(){document.getElementById('main').innerHTML='<h2>Loop en curso</h2><p class="sub">Próximamente</p>';}
+function renderBackyardResult(){document.getElementById('main').innerHTML='<h2>Resultado Backyard</h2><p class="sub">Próximamente</p>';}
+function renderMDSPreparation(){document.getElementById('main').innerHTML='<h2>Marathon des Sables</h2><p class="sub">Próximamente</p>';}
+function renderMDSDecision(){document.getElementById('main').innerHTML='<h2>Etapa MdS</h2><p class="sub">Próximamente</p>';}
+function renderMDSBivouac(){document.getElementById('main').innerHTML='<h2>Noche en la jaima</h2><p class="sub">Próximamente</p>';}
+function renderMDSFinal(){document.getElementById('main').innerHTML='<h2>Llegada MdS</h2><p class="sub">Próximamente</p>';}
 

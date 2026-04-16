@@ -150,6 +150,43 @@ function freshState(){
     repInvitations:[],           // invitaciones a carreras por seguidores esta temporada
     _thresholdsSeen:[],          // thresholds cruzados (para no repetir toasts)
     _workTipSeen:false,          // ya se mostró el tip de trabajo año 1 Q1
+    // ── Modo Ultratrail ──────────────────────────
+    ultratrailMode:false,
+    utYear:1,
+    utCalendar:[],
+    utCurrentRaceIdx:0,
+    utResults:[],
+    utBodyLoad:0,
+    utMoney:800,
+    utRanking:999,
+    utYear1Bonus:true,
+    // Stats nuevos ultratrail
+    combustible:100,
+    pies:100,
+    horasDescanso:0,
+    // Mochila
+    utMochila:{},
+    utMochilaPeso:0,
+    // Crew
+    utCrew:[],
+    utCrewCost:0,
+    utCutoffWarnings:0,
+    // Backyard Ultra
+    backyardHistory:[],
+    backyardCurrentLoop:0,
+    backyardRivalState:[],
+    backyardMochila:{},
+    backyardNocturna:false,
+    // Intensidad narrativa
+    utNarrativeIntensity:'normal',
+    // Sección nocturna activa
+    utNocturnaActive:false,
+    // Marathon des Sables
+    mdsEtapaActual:0,
+    mdsRacionesRestantes:0,
+    mdsHistorialEtapas:[],
+    // Legado
+    legadoData:null,
   };
 }
 let G=freshState();

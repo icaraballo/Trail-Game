@@ -20,7 +20,7 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
-const GAME_BUILD=44; // incrementar con cada versión del juego
+const GAME_BUILD=45; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
@@ -62,8 +62,11 @@ function migrateState(saved){
    'injuryHistory','monthlyEvents','sponsorPenalties','joinedCircuits','circuitCompleted',
    'seasonDiary','aidSelected','paceLog','rivalChildren','lifePendingAthletes',
    'coachSelectedRaces','coachRaceResults','coachAthleteHistory','coachDecisionLog',
-   'coachEventLog','coachRoster','coachSponsors','unlockedAchievements']
+   'coachEventLog','coachRoster','coachSponsors','unlockedAchievements',
+   'utCalendar','utResults','utCrew','backyardHistory','backyardRivalState','mdsHistorialEtapas']
     .forEach(k=>{if(!Array.isArray(merged[k]))merged[k]=Array.isArray(base[k])?[...base[k]]:[];});
+  merged.utMochila={...(saved.utMochila||{})};
+  merged.backyardMochila={...(saved.backyardMochila||{})};
   return merged;
 }
 
