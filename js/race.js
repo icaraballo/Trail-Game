@@ -2277,3 +2277,178 @@ function goNextRace(){
   render();
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  MODO ULTRATRAIL — LÓGICA
+// ══════════════════════════════════════════════════════════════════
+function resolverUltratrailRace(){
+  const year=G.utYear||1;
+  const race=(ULTRATRAIL_RACES[year]||[])[G.utCurrentRaceIdx]||{};
+  const segs=G._utCurrentSegs||race.segs||[];
+  const segIdx=G.seg||0;
+  const seg=segs[segIdx];
+  if(!seg){_utFinishRace(race,false);return;}
+
+  // Stat-based pace (sec/km)
+  const sub=typeof getEffStat==='function'?getEffStat('subida'):(G.runner.stats.subida||50);
+  const baj=typeof getEffStat==='function'?getEffStat('bajada'):(G.runner.stats.bajada||50);
+  const vel=typeof getEffStat==='function'?getEffStat('velocidad'):(G.runner.stats.velocidad||50);
+  let base=seg.base||2000;
+  let statMod=1.0;
+  if(seg.type==='climb')statMod=1-(sub-50)/180;
+  else if(seg.type==='descent')statMod=1-(baj-50)/180;
+  else statMod=1-(vel-50)/180;
+  base=base*Math.max(0.7,Math.min(1.4,statMod));
+
+  // Fatigue modifiers
+  const ePen=Math.max(0,(70-(G.runner.energy||0))/100)*0.5;
+  const cPen=Math.max(0,(60-(G.combustible||0))/100)*0.4;
+  const pPen=Math.max(0,(50-(G.pies||0))/100)*0.3;
+  base=base*(1+ePen+cPen+pPen);
+
+  // Weight & nocturna
+  const wMul=(G.utMochilaPeso||0)>3000?1.12:(G.utMochilaPeso||0)>2000?1.06:1;
+  if(G.utNocturnaActive)base*=1.15;
+  base*=wMul;
+
+  const segTime=Math.round(base*(seg.km||5)*60);
+  G.time=(G.time||0)+segTime;
+
+  // Apply costs
+  const km=seg.km||5;
+  const fMul=(G.utBodyLoad||0)>60?1.3:1.0;
+  G.runner.energy=Math.max(0,G.runner.energy-(km*0.7*fMul));
+  G.runner.hydration=Math.max(0,G.runner.hydration-(km*1.1));
+  G.runner.legs=Math.max(0,G.runner.legs-(km*0.4*fMul));
+  G.combustible=Math.max(0,(G.combustible||0)-(km*0.9*fMul));
+  G.pies=Math.max(0,(G.pies||0)-(seg.type==='descent'?km*1.3:km*0.7));
+  G.utBodyLoad=Math.min(100,(G.utBodyLoad||0)+km*0.25);
+
+  // Update nocturna flag
+  if(race.nocturna){
+    const kmNow=segs.slice(0,segIdx+1).reduce((a,s)=>a+(s.km||0),0);
+    G.utNocturnaActive=(kmNow>=(race.nocturnaStart||9999)&&kmNow<=(race.nocturnaEnd||0));
+  }
+
+  // Cutoff check
+  const horasT=(G.time||0)/3600;
+  const kmDoneT=segs.slice(0,segIdx+1).reduce((a,s)=>a+(s.km||0),0);
+  if(race.cutoffs&&!G._mdsMode){
+    for(const co of race.cutoffs){
+      const m=co.cp.match(/km(\d+)/i);
+      const coKm=m?parseInt(m[1]):race.km;
+      if(kmDoneT>=coKm&&horasT>co.maxH){
+        G.utDNFReason='cutoff';G._utDNFSaved=false;
+        G.screen='ultratrailCutoffDNF';render();return;
+      }
+    }
+  }
+
+  // Exhaustion check
+  if((G.runner.energy||0)<=2||(G.combustible||0)<=2){
+    G.utDNFReason='agotamiento';G._utDNFSaved=false;
+    G.screen='ultratrailCutoffDNF';render();return;
+  }
+
+  G.seg=(G.seg||0)+1;
+  if((G.seg||0)>=segs.length){_utFinishRace(race,false);return;}
+
+  // Aid station after the segment we just ran
+  const prevSeg=segs[(G.seg||0)-1];
+  G.screen=(prevSeg&&prevSeg.aid)?'ultratrailAid':'ultratrailSegment';
+  render();
+}
+
+function _utFinishRace(race,dnf){
+  const year=G.utYear||1;
+  if(!G._mdsMode){
+    const horasT=(G.time||0)/3600;
+    const res=typeof getEffStat==='function'?getEffStat('resistencia'):(G.runner.stats.resistencia||50);
+    const pos=dnf?null:Math.max(1,Math.round(40-res/5+Math.random()*25));
+    const prize=!dnf&&pos&&pos<=3?Math.round((race.prize||0)*(4-pos)/3):!dnf?Math.round((race.prize||0)*0.08):0;
+    G.utResults=G.utResults||[];
+    G.utResults.push({raceId:race.id||'?',raceName:race.name||'',year,dnf,pos,km:race.km||0,timeH:Math.round(horasT*10)/10,prize});
+    if(!dnf){
+      G.utMoney=(G.utMoney||0)+prize;
+      if(race.tier==='elite')G.utRanking=Math.max(1,(G.utRanking||999)-Math.round(40/(pos||10)));
+      else G.utRanking=Math.max(1,(G.utRanking||999)-Math.round(15/(pos||5)));
+    }
+    G.utMoney=Math.max(0,(G.utMoney||0)-(race.cost||0));
+  }
+  G.runner.energy=Math.min(100,(G.runner.energy||0)+25);
+  G.runner.legs=Math.min(100,(G.runner.legs||0)+15);
+  G.combustible=Math.min(100,(G.combustible||0)+35);
+  G.pies=Math.min(100,(G.pies||0)+12);
+
+  if(G._afterRaceScreen==='mdsBivouac'){
+    G.mdsEtapaActual=(G.mdsEtapaActual||0)+1;
+    G.mdsRacionesRestantes=Math.max(0,(G.mdsRacionesRestantes||0)-1);
+  }
+  const next=G._afterRaceScreen||'ultratrailPostRace';
+  G._afterRaceScreen=null;
+  G.screen=next;render();
+}
+
+function generateLegadoData(){
+  const results=G.utResults||[];
+  const finishes=results.filter(r=>!r.dnf).length;
+  const totalKm=results.reduce((a,r)=>a+(r.km||0),0);
+  const eliteFinishes=results.filter(r=>!r.dnf&&(r.raceId||'').match(/utmb|tds|ccc|buff|tor|spine|moab|gran_travesia/)).length;
+  let title='Corredor de Ultratrail';
+  if(totalKm>=500)title='Veterano de las Distancias';
+  if(eliteFinishes>=3)title='Élite de la Montaña';
+  if(results.find(r=>!r.dnf&&r.raceId==='ut_utmb170'))title='Conquistador del UTMB';
+  if(results.find(r=>!r.dnf&&r.raceId==='ut_gran_travesia'))title='Leyenda de la Gran Travesía';
+  if(results.find(r=>!r.dnf&&r.raceId==='ut_mds'))title+=' · Sahara Finisher';
+  const bestPos=finishes>0?Math.min(...results.filter(r=>!r.dnf&&r.pos).map(r=>r.pos)):null;
+  return{totalRaces:results.length,finishes,totalKm:Math.round(totalKm),eliteFinishes,bestPos,title};
+}
+
+function initBackyard(){
+  const cfg=BACKYARD_CONFIG;
+  const n=Math.min(10+(G.utYear||1)*2,20);
+  G.backyardRivalState=cfg.rivalNames.slice(0,n).map((r,i)=>({
+    name:r.name,flag:r.flag,active:true,
+    dropLoop:Math.round(12+i*2+(Math.random()*8))
+  }));
+  G.backyardCurrentLoop=0;G.backyardNocturna=false;G._backyardInit=true;
+  G.screen='backyardLoop';render();
+}
+
+function resolveBackyardLoop(){
+  G.backyardCurrentLoop=(G.backyardCurrentLoop||0)+1;
+  const loop=G.backyardCurrentLoop;
+  const isNoc=loop>=12&&loop%24<12;
+  G.backyardNocturna=isNoc;
+  const effort=loop>20?2.5:loop>10?1.8:1.2;
+  G.runner.energy=Math.max(0,G.runner.energy-effort*4);
+  G.runner.legs=Math.max(0,G.runner.legs-effort*3);
+  G.combustible=Math.max(0,(G.combustible||0)-effort*5);
+  G.pies=Math.max(0,(G.pies||0)-effort*2);
+  if(isNoc)G.runner.energy=Math.max(0,G.runner.energy-3);
+
+  if((G.combustible||0)<25){
+    const stock=(G.backyardMochila&&G.backyardMochila.racion_solida)||0;
+    if(stock>0){G.backyardMochila.racion_solida--;G.combustible=Math.min(100,(G.combustible||0)+25);showToast('🍞 Ración consumida','#c07a10');}
+  }
+
+  G.backyardRivalState=(G.backyardRivalState||[]).map(r=>{
+    if(r.active&&loop>=r.dropLoop)return{...r,active:false};return r;
+  });
+  const active=(G.backyardRivalState||[]).filter(r=>r.active);
+
+  if((G.runner.energy||0)<=3||(G.combustible||0)<=3){resolverBackyard(false);return;}
+  if(active.length===0){resolverBackyard(true);return;}
+  G.screen='backyardLoop';render();
+}
+
+function resolverBackyard(winner){
+  const loops=G.backyardCurrentLoop||0;
+  const km=Math.round(loops*BACKYARD_CONFIG.loopKm*10)/10;
+  G.backyardHistory=G.backyardHistory||[];
+  G.backyardHistory.push({year:G.utYear||1,loops,km,winner,activeAtEnd:(G.backyardRivalState||[]).filter(r=>r.active).length});
+  G.utResults=G.utResults||[];
+  G.utResults.push({raceId:'backyard',raceName:'Backyard Ultra',year:G.utYear||1,dnf:!winner,loops,km,isBackyard:true});
+  if(winner)G.utRanking=Math.max(1,(G.utRanking||999)-50);
+  G.screen='backyardResult';render();
+}
+
