@@ -607,7 +607,7 @@ function renderSaveScreen(){
   const autoData=loadFromSlot('auto');
   el.innerHTML=`
     <h1>Juego Trail</h1>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v44</span></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v45</span></div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
       <p class="sub" style="margin-bottom:0;flex:1">Partidas guardadas</p>
       <button onclick="showTutorial()" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid #ddd;border-radius:20px;background:#fff;font-size:12px;font-weight:600;color:#888;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background='#fff'">📖 Tutorial</button>
@@ -1208,7 +1208,7 @@ function renderIntro(){
   el.innerHTML=`
     <h1>Juego Trail</h1>
     <p class="sub">Crea tu corredor y empieza tu carrera deportiva</p>
-    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v43</div>
+    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v45</div>
     ${G.gameMode==='expres'?`<div class="warn" style="margin-bottom:14px">⚡ <strong>Carrera Exprés</strong> — 3 temporadas · sin gestión de jornada · ganancias de entrenamiento ×1.5</div>`:''}
     <label class="field-label">Nombre de la partida</label>
     <input id="runname" type="text" placeholder="Ej: Temporada del reto, Sin trabajo año 1..." value="${esc(G.runName||'')}" maxlength="30" style="margin-bottom:14px"/>
