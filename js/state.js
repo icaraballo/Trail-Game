@@ -187,10 +187,30 @@ function freshState(){
     backyardRivalState:[],
     backyardMochila:{},
     backyardNocturna:false,
-    // Intensidad narrativa
+    // Intensidad narrativa / selector carrera
     utNarrativeIntensity:'normal',
+    utRaceIntensity:'normal',      // 'expres'|'normal'|'inmersivo'
     // Sección nocturna activa
     utNocturnaActive:false,
+    utNightEntered:false,          // ya se mostró la pantalla de transición nocturna
+    utNightStrategy:null,          // 'conservar'|'mantener'|'gel'
+    // Hub de temporada
+    utActiveTab:'races',           // 'races'|'training'|'finances'
+    utCurrentMonth:1,
+    // Entrenamiento
+    utTrainingBlock:null,
+    utTrainingHours:12,
+    utTrainingApplied:false,
+    // Economía
+    utMonthlyExpenses:150,
+    utSponsor:null,
+    // Carrera — tracking
+    utPaceLog:[],
+    utGels:3,
+    utGelsUsed:0,
+    utKmAtDNF:0,
+    _utCrisesThisRace:0,
+    _utYearStatsSnapshot:null,
     // Marathon des Sables
     mdsEtapaActual:0,
     mdsRacionesRestantes:0,

@@ -2280,53 +2280,62 @@ function goNextRace(){
 // ══════════════════════════════════════════════════════════════════
 //  MODO ULTRATRAIL — LÓGICA
 // ══════════════════════════════════════════════════════════════════
-function resolverUltratrailRace(){
-  const year=G.utYear||1;
-  const race=(ULTRATRAIL_RACES[year]||[])[G.utCurrentRaceIdx]||{};
+// ── ULTRATRAIL: DECISIÓN DE RITMO ────────────────────────────────
+function utDoPace(paceId, autoResolve){
+  const race=(ULTRATRAIL_RACES[G.utYear||1]||[])[G.utCurrentRaceIdx]||{};
   const segs=G._utCurrentSegs||race.segs||[];
   const segIdx=G.seg||0;
   const seg=segs[segIdx];
-  if(!seg){_utFinishRace(race,false);return;}
+  if(!seg)return;
 
-  // Stat-based pace (sec/km)
+  const paceLog=G.utPaceLog||[];
+  const aggressiveStreak=paceLog.slice(-3).filter(p=>p==='allout').length;
+  const hardCount=paceLog.slice(-4).filter(p=>p==='allout'||p==='push').length;
+  const fatMul=paceId==='allout'&&aggressiveStreak>=3?2.2:paceId==='allout'&&aggressiveStreak>=2?1.6:hardCount>=3&&(paceId==='allout'||paceId==='push')?1.3:1.0;
+
+  const baseCosts={
+    conservar:{energy:4, legs:2, combustible:3, pies:1, timeMult:1.18},
+    steady:   {energy:9, legs:5, combustible:7, pies:3, timeMult:1.00},
+    push:     {energy:17,legs:10,combustible:13,pies:6, timeMult:0.90},
+    allout:   {energy:27,legs:17,combustible:20,pies:10,timeMult:0.80},
+  };
+  const c=baseCosts[paceId]||baseCosts.steady;
+
+  // Stat-based time modifier
   const sub=typeof getEffStat==='function'?getEffStat('subida'):(G.runner.stats.subida||50);
   const baj=typeof getEffStat==='function'?getEffStat('bajada'):(G.runner.stats.bajada||50);
   const vel=typeof getEffStat==='function'?getEffStat('velocidad'):(G.runner.stats.velocidad||50);
-  let base=seg.base||2000;
   let statMod=1.0;
   if(seg.type==='climb')statMod=1-(sub-50)/180;
   else if(seg.type==='descent')statMod=1-(baj-50)/180;
   else statMod=1-(vel-50)/180;
-  base=base*Math.max(0.7,Math.min(1.4,statMod));
+  statMod=Math.max(0.7,Math.min(1.4,statMod));
 
-  // Fatigue modifiers
-  const ePen=Math.max(0,(70-(G.runner.energy||0))/100)*0.5;
-  const cPen=Math.max(0,(60-(G.combustible||0))/100)*0.4;
-  const pPen=Math.max(0,(50-(G.pies||0))/100)*0.3;
-  base=base*(1+ePen+cPen+pPen);
-
-  // Weight & nocturna
-  const wMul=(G.utMochilaPeso||0)>3000?1.12:(G.utMochilaPeso||0)>2000?1.06:1;
-  if(G.utNocturnaActive)base*=1.15;
-  base*=wMul;
-
-  const segTime=Math.round(base*(seg.km||5)*60);
+  const pesoMul=(G.utMochilaPeso||0)>3000?1.12:(G.utMochilaPeso||0)>2000?1.06:1;
+  const nocMul=G.utNocturnaActive?(G.utNightStrategy==='conservar'?1.20:G.utNightStrategy==='mantener'?1.05:1.10):1.0;
+  const baseTime=(seg.base||2000)*statMod*pesoMul*nocMul*(seg.km||5)/60;
+  const segTime=Math.round(baseTime*c.timeMult*60);
   G.time=(G.time||0)+segTime;
 
-  // Apply costs
+  // Apply stat costs with fatigue multiplier
   const km=seg.km||5;
-  const fMul=(G.utBodyLoad||0)>60?1.3:1.0;
-  G.runner.energy=Math.max(0,G.runner.energy-(km*0.7*fMul));
-  G.runner.hydration=Math.max(0,G.runner.hydration-(km*1.1));
-  G.runner.legs=Math.max(0,G.runner.legs-(km*0.4*fMul));
-  G.combustible=Math.max(0,(G.combustible||0)-(km*0.9*fMul));
-  G.pies=Math.max(0,(G.pies||0)-(seg.type==='descent'?km*1.3:km*0.7));
+  G.runner.energy=Math.max(0,(G.runner.energy||0)-(c.energy/5*km*fatMul));
+  G.runner.legs=Math.max(0,(G.runner.legs||0)-(c.legs/5*km*fatMul));
+  G.runner.hydration=Math.max(0,(G.runner.hydration||0)-(km*1.1));
+  G.combustible=Math.max(0,(G.combustible||0)-(c.combustible/5*km*fatMul));
+  G.pies=Math.max(0,(G.pies||0)-(seg.type==='descent'?c.pies/5*km*1.5:c.pies/5*km));
   G.utBodyLoad=Math.min(100,(G.utBodyLoad||0)+km*0.25);
+
+  // Log pace
+  if(!G.utPaceLog)G.utPaceLog=[];
+  G.utPaceLog.push(paceId);
 
   // Update nocturna flag
   if(race.nocturna){
     const kmNow=segs.slice(0,segIdx+1).reduce((a,s)=>a+(s.km||0),0);
-    G.utNocturnaActive=(kmNow>=(race.nocturnaStart||9999)&&kmNow<=(race.nocturnaEnd||0));
+    const wasNoc=G.utNocturnaActive;
+    G.utNocturnaActive=(kmNow>=(race.nocturnaStart||9999)&&kmNow<=(race.nocturnaEnd||9999));
+    if(!wasNoc&&G.utNocturnaActive)G.utNightEntered=true;
   }
 
   // Cutoff check
@@ -2338,6 +2347,7 @@ function resolverUltratrailRace(){
       const coKm=m?parseInt(m[1]):race.km;
       if(kmDoneT>=coKm&&horasT>co.maxH){
         G.utDNFReason='cutoff';G._utDNFSaved=false;
+        G._utCrisesThisRace=(G._utCrisesThisRace||0)+1;
         G.screen='ultratrailCutoffDNF';render();return;
       }
     }
@@ -2345,17 +2355,28 @@ function resolverUltratrailRace(){
 
   // Exhaustion check
   if((G.runner.energy||0)<=2||(G.combustible||0)<=2){
-    G.utDNFReason='agotamiento';G._utDNFSaved=false;
+    G.utDNFReason='agotamiento';G._utDNFSaved=false;G.utKmAtDNF=kmDoneT;
+    G._utCrisesThisRace=(G._utCrisesThisRace||0)+1;
     G.screen='ultratrailCutoffDNF';render();return;
+  }
+
+  // Crisis tracking
+  if((G.runner.energy||0)<20||(G.combustible||0)<15||(G.pies||0)<15){
+    G._utCrisesThisRace=(G._utCrisesThisRace||0)+1;
   }
 
   G.seg=(G.seg||0)+1;
   if((G.seg||0)>=segs.length){_utFinishRace(race,false);return;}
 
-  // Aid station after the segment we just ran
-  const prevSeg=segs[(G.seg||0)-1];
-  G.screen=(prevSeg&&prevSeg.aid)?'ultratrailAid':'ultratrailSegment';
+  const nextSeg=segs[G.seg||0];
+  if(nextSeg&&nextSeg.aid){G.screen='ultratrailAid';}
+  else G.screen='ultratrailSegment';
   render();
+}
+
+function resolverUltratrailRace(){
+  // Legacy call — use steady pace by default (called from old buttons if still exist)
+  utDoPace('steady');
 }
 
 function _utFinishRace(race,dnf){
