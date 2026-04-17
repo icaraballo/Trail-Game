@@ -2015,5 +2015,40 @@ const INJURY_TYPES={
 };
 
 // ══════════════════════════════════════
-const SCREENS_WITH_TABS=['seasonStart','calendar','sponsors','training','betweenRace','seasonBalance','betweenManage','preRace','preRacePrep','segment','aid','raceResult','expresSeasonStart','expresCalendar','expresSponsors','expresPrep','expresPreRacePrep','expresSeasonBalance','coachHome','coachTraining','coachCalendar','coachTrainingReaction','coachEvent','coachPreRace','coachSponsors','clubSetup'];
+const SCREENS_WITH_TABS=['seasonStart','calendar','sponsors','training','betweenRace','seasonBalance','betweenManage','preRace','preRacePrep','segment','aid','raceResult','expresSeasonStart','expresCalendar','expresSponsors','expresPrep','expresPreRacePrep','expresSeasonBalance','coachHome','coachTraining','coachCalendar','coachTrainingReaction','coachEvent','coachPreRace','coachSponsors','clubSetup','canicrossHub','canicrossSeasonBalance'];
 const RACE_SCREENS=['preRace','segment','aid','raceResult','midRaceEvent'];
+
+// ── CANICROSS ──────────────────────────────────────────
+const CANICROSS_RACES=[
+  {id:'cn_guadarrama', name:'Canicross Guadarrama',           location:'Madrid',    km:8,  month:1,  monthName:'Enero',     tier:1, prize:150, cost:25},
+  {id:'cn_volcanic',   name:'Canicross Volcànic',             location:'Cataluña',  km:7,  month:1,  monthName:'Enero',     tier:1, prize:120, cost:20},
+  {id:'cn_moncayo',    name:'Canicross Moncayo',              location:'Zaragoza',  km:9,  month:2,  monthName:'Febrero',   tier:2, prize:200, cost:30},
+  {id:'cn_tramuntana', name:'Canicross Serra de Tramuntana',  location:'Mallorca',  km:10, month:12, monthName:'Diciembre', tier:2, prize:220, cost:35},
+  {id:'cn_benasque',   name:'Canicross Valle de Benasque',    location:'Huesca',    km:12, month:3,  monthName:'Marzo',     tier:3, prize:300, cost:40},
+  {id:'cn_copa',       name:'Copa de España Canicross',       location:'Itinerante',km:10, month:2,  monthName:'Nov–Mar',   tier:3, prize:400, cost:50},
+  {id:'cn_campeonato', name:'Campeonato de España Canicross', location:'Itinerante',km:12, month:2,  monthName:'Febrero',   tier:4, prize:600, cost:60},
+];
+
+const CANICROSS_EQUIPMENT={
+  dogHarness:[
+    {id:'basic_harness', name:'Arnés Corto Básico',    price:35,  desc:'Equilibrado. Viene de inicio.',                     speedMod:0,  staminaMod:0,  default:true},
+    {id:'freemotion_pro',name:'Freemotion Pro',         price:95,  desc:'+agilidad técnico, -potencia tracción',             speedMod:2,  staminaMod:-1},
+    {id:'xback',         name:'X-Back Competición',    price:120, desc:'+velocidad llano, ideal larga distancia',           speedMod:5,  staminaMod:2},
+  ],
+  humanBelt:[
+    {id:'basic_belt',    name:'Cinturón Simple',        price:25,  desc:'Viene de inicio.',                                  injuryRiskMod:0,   default:true},
+    {id:'hip_harness',   name:'Arnés Cadera Completo',  price:140, desc:'-riesgo lesión lumbar, mejor control',              injuryRiskMod:-10},
+  ],
+  line:[
+    {id:'soft_line',     name:'Línea Amortiguador Blando',price:30,desc:'Viene de inicio.',                                  jerkMod:0,  default:true},
+    {id:'hard_line',     name:'Línea Amortiguador Duro',  price:55,desc:'Perros con mucha tracción, -tirones bruscos',       jerkMod:-5},
+  ],
+};
+
+const CANICROSS_TRAINING_BLOCKS=[
+  {id:'conjunto',     label:'Entrenamiento conjunto',  hours:5, runnerMod:{resistencia:2,velocidad:1},       dogMod:{speed:2,stamina:2},    bondMod:5,  desc:'Entrenas juntos. Sube vínculo.'},
+  {id:'adiestramiento',label:'Adiestramiento',         hours:3, runnerMod:{},                                dogMod:{},                     bondMod:3,  desc:'Enseña comandos al perro (2 sesiones/comando). +3 vínculo.', teachCommand:true},
+  {id:'tecnica',      label:'Técnica conjunta',        hours:4, runnerMod:{bajada:2,velocidad:1},            dogMod:{speed:1,stamina:1},    bondMod:4,  desc:'Sincronía en tramos técnicos.'},
+  {id:'solo',         label:'Entreno corredor solo',   hours:4, runnerMod:{resistencia:3,velocidad:2,subida:2}, dogMod:{},                  bondMod:-2, desc:'Entrenas sin el perro. -2 vínculo (Malinois: -5 extra).'},
+  {id:'descanso',     label:'Descanso activo juntos',  hours:2, runnerMod:{mental:2},                        dogMod:{health:3},             bondMod:3,  desc:'Paseo tranquilo. Descarga física y vínculo.'},
+];

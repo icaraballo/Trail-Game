@@ -150,6 +150,16 @@ function freshState(){
     repInvitations:[],           // invitaciones a carreras por seguidores esta temporada
     _thresholdsSeen:[],          // thresholds cruzados (para no repetir toasts)
     _workTipSeen:false,          // ya se mostró el tip de trabajo año 1 Q1
+    // ── Modo Canicross ───────────────────────────
+    canicrossMode:false,
+    cnSeason:1, cnSelectedRaces:[], cnCurrentRaceIdx:0, cnRaceResults:[],
+    cnMoney:500, cnTrainingBlock:null, cnWeek:0,
+    cnTrainAdrainSessions:{left:0,hold:0,forward:0},
+    cnOwnedEquipment:{dogHarness:['basic_harness'],humanBelt:['basic_belt'],line:['basic_line']},
+    equipment:{dogHarness:'basic_harness',humanBelt:'basic_belt',line:'basic_line'},
+    cnDogFoodPremium:false, cnDogSupplements:false,
+    cnVetHistory:[], cnBirthdayToastShown:{}, cnRaceState:null,
+    dog:null,
     // ── Modo Ultratrail ──────────────────────────
     ultratrailMode:false,
     utYear:1,

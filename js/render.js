@@ -20,7 +20,7 @@ function updateFinBar(){
   const screens=['intro','workSetup'];
   bar.style.display=screens.includes(G.screen)?'none':'block';
   const net=monthlyNet();
-  document.getElementById('fb-money').textContent='€'+G.money;
+  document.getElementById('fb-money').textContent='€'+(G.canicrossMode?G.cnMoney:G.money);
   const nb=document.getElementById('fb-net');
   nb.textContent=(net>=0?'+':'')+'€'+net+'/mes';
   nb.className='fin-val '+(net>0?'green':net<0?'red':'neutral');
@@ -55,23 +55,30 @@ function updateTabNav(){
   nav.style.display=show?'block':'none';
   const isExpres=G.gameMode==='expres';
   const isCoach=G.gameMode==='coach';
+  const isCanicross=G.gameMode==='canicross';
   if(isExpres&&G.activeTab==='fame')G.activeTab='game';
   ['game','calendar','finances','runner','fame'].forEach(t=>{
     const btn=document.getElementById('tab-'+t);
     if(!btn)return;
     btn.className='tab-btn'+(G.activeTab===t?' active':'');
     if(t==='fame')btn.style.display=isExpres?'none':'';
-    // Coach mode: rename labels
     const iconEl=btn.querySelector('.tab-icon');
     const labelEl=btn.querySelector('.tab-label');
-    if(isCoach){
+    if(isCanicross){
+      btn.style.display='';
+      if(t==='game'){if(iconEl)iconEl.textContent='🏃';if(labelEl)labelEl.textContent='Corredor';}
+      if(t==='runner'){if(iconEl)iconEl.textContent='🐕';if(labelEl)labelEl.textContent='Perro';}
+      if(t==='fame'){if(iconEl)iconEl.textContent='🎒';if(labelEl)labelEl.textContent='Equipo';}
+      if(t==='calendar'&&labelEl)labelEl.textContent='Calendario';
+      if(t==='finances'&&labelEl)labelEl.textContent='Finanzas';
+    } else if(isCoach){
       if(t==='runner'&&labelEl)labelEl.textContent='Atleta';
       if(t==='fame'&&labelEl)labelEl.textContent='Reputación';
       if(t==='game'&&labelEl)labelEl.textContent='Temporada';
     } else {
-      if(t==='runner'&&labelEl)labelEl.textContent='Corredor';
-      if(t==='fame'&&labelEl)labelEl.textContent='Reputación';
-      if(t==='game'&&labelEl)labelEl.textContent='Temporada';
+      if(t==='runner'){if(iconEl)iconEl.textContent='👤';if(labelEl)labelEl.textContent='Corredor';}
+      if(t==='fame'){if(iconEl)iconEl.textContent='⭐';if(labelEl)labelEl.textContent='Reputación';}
+      if(t==='game'){if(iconEl)iconEl.textContent='🏃';if(labelEl)labelEl.textContent='Temporada';}
     }
   });
 }
@@ -119,6 +126,14 @@ function render(){
   if(G.screen!=='midRaceEvent')clearExpressTimer();
   const el=document.getElementById('main');
   if(!el)return;
+  // Canicross — tab routing propio
+  if(G.gameMode==='canicross'&&SCREENS_WITH_TABS.includes(G.screen)){
+    if(G.activeTab==='game'){renderCnCorredorTab();triggerFade(el);return;}
+    if(G.activeTab==='runner'){renderCnPerroTab();triggerFade(el);return;}
+    if(G.activeTab==='fame'){renderCnEquipoTab();triggerFade(el);return;}
+    if(G.activeTab==='calendar'){renderCnCalendarioTab();triggerFade(el);return;}
+    if(G.activeTab==='finances'){renderCnFinanzasTab();triggerFade(el);return;}
+  }
   // Si estamos en una pestaña auxiliar
   if(G.activeTab==='calendar'&&SCREENS_WITH_TABS.includes(G.screen)){
     if(G.gameMode==='coach'){renderCoachCalendar();triggerFade(el);return;}
@@ -181,6 +196,15 @@ function render(){
     mdsDecision:renderMDSDecision,
     mdsBivouac:renderMDSBivouac,
     mdsFinal:renderMDSFinal,
+    canicrossCreateDog:renderCnCreateDog,
+    canicrossHub:renderCnCorredorTab,
+    canicrossPreRace:renderCanicrossPreRace,
+    canicrossSegment:renderCanicrossSegment,
+    canicrossPostRace:renderCanicrossPostRace,
+    canicrossSeasonBalance:renderCnSeasonBalance,
+    canicrossDogRetirement:renderCnDogRetirement,
+    canicrossDogDeath:renderCnDogDeath,
+    canicrossDisplasia:renderCnDisplasia,
   }[G.screen]||renderIntro)();
   triggerFade(el);
 }
@@ -1032,7 +1056,7 @@ function renderModeSelect(){
     {id:'ultratrail',    icon:'🏔️',  label:'Modo Ultratrail', desc:'80K mínimo · mochila · cutoffs reales · Backyard · MdS · UTMB', available:true,  lockable:false},
     {id:'coach',         icon:'📋',  label:'Entrenador',      desc:'Lleva un atleta ajeno · honorarios + bonus',          available:true,  lockable:true},
     {id:'club',          icon:'🏕️', label:'Club',            desc:'Gestiona un club · plantilla · presupuesto',          available:true,  lockable:true},
-    {id:'canicross',     icon:'🐕',  label:'Canicross',       desc:'Corres con tu perro · carreras específicas · próx.',  available:false, lockable:false},
+    {id:'canicross',     icon:'🐕',  label:'Canicross',       desc:'Corres con tu perro · vínculo · carreras reales españolas', available:true, lockable:false},
   ];
   // Leer desbloqueos del localStorage
   let unlocked={coach:false,club:false};
@@ -1173,6 +1197,7 @@ window.selectAndConfirm=(id,path)=>{
 };
 window.confirmMode=()=>{
   if(G.gameMode==='ultratrail'){G.screen='ultratrailWelcome';render();return;}
+  if(G.gameMode==='canicross'){G.screen='intro';render();return;}
   if(G.gameMode==='club'){
     // Guiño narrativo si el modo está desbloqueado vía arco narrativo
     const unlocked=JSON.parse(LS.get('unlocked')||'{}');
@@ -1231,7 +1256,7 @@ function renderIntro(){
   el.innerHTML=`
     <h1>Juego Trail</h1>
     <p class="sub">Crea tu corredor y empieza tu carrera deportiva</p>
-    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v46</div>
+    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v47</div>
     ${G.gameMode==='expres'?`<div class="warn" style="margin-bottom:14px">⚡ <strong>Carrera Exprés</strong> — 3 temporadas · sin gestión de jornada · ganancias de entrenamiento ×1.5</div>`:''}
     <label class="field-label">Nombre de la partida</label>
     <input id="runname" type="text" placeholder="Ej: Temporada del reto, Sin trabajo año 1..." value="${esc(G.runName||'')}" maxlength="30" style="margin-bottom:14px"/>
@@ -1264,7 +1289,8 @@ function renderIntro(){
         }).join('');
       })()}
     </div>
-    <button class="main" onclick="doStart()">Empezar →</button>`;
+    ${G.gameMode==='canicross'?`<div class="note" style="margin-bottom:12px">🐕 <strong>Modo Canicross</strong> — A continuación crearás tu perro y eliges raza.</div>`:''}
+    <button class="main" onclick="${G.gameMode==='canicross'?'doStartCanicross':'doStart'}()">Empezar →</button>`;
   setTimeout(()=>{
     const i=document.getElementById('rname');
     if(i)i.oninput=e=>G.runner.name=e.target.value;
