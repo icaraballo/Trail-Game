@@ -3562,8 +3562,15 @@ window.handleEv=(evId,choiceIdx)=>{
 //  MODO ULTRATRAIL — AUXILIARES
 // ══════════════════════════════════════════════════════════════════
 function utRaceStats(){
-  const s=[['🔥 Combust.',G.combustible||0,'#e87820'],['🦶 Pies',G.pies||0,'#c07a10'],['⚡ Energía',G.runner.energy,'#4a90d9']];
-  return `<div class="card">${s.map(([l,v,c])=>`<div class="bar-row"><span class="bar-label" style="color:${v<25?'#c0392b':'#666'}">${l}${v<25?' ⚠':''}</span>${rbar(v,c)}<span class="bar-pct" style="color:${v<25?'#c0392b':'#1a1a1a'}">${Math.round(v)}%</span></div>`).join('')}</div>`;
+  const r=G.runner;
+  const stats=[
+    ['⚡ Energía',    r.energy,              '#4a8a2a'],
+    ['💧 Hidratación', r.hydration,           '#4a90d9'],
+    ['🦵 Piernas',    r.legs,                '#c07a10'],
+    ['🔥 Combustible',(G.combustible||0),    '#e87820'],
+    ['🦶 Pies',       (G.pies||0),           '#c07a10'],
+  ];
+  return `<div class="card">${stats.map(([l,v,c])=>`<div class="bar-row"><span class="bar-label" style="color:${v<25?'#c0392b':'#666'}">${l}${v<25?' ⚠':''}</span>${rbar(v,c)}<span class="bar-pct" style="color:${v<25?'#c0392b':'#1a1a1a'}">${Math.round(v)}%</span></div>`).join('')}</div>`;
 }
 function utTopBar(){
   const race=(ULTRATRAIL_RACES[G.utYear||1]||[])[G.utCurrentRaceIdx]||{};
@@ -3888,83 +3895,77 @@ function renderUltratrailSegment(){
   const segs=G._utCurrentSegs||race.segs||[];
   const segIdx=G.seg||0;
   const seg=segs[segIdx];
-  if(!seg){if(typeof resolverUltratrailRace==='function')resolverUltratrailRace();else{G.screen='ultratrailPostRace';render();}return;}
+  if(!seg){_utFinishRace(race,false);return;}
 
-  // Comprobar si hay que mostrar pantalla de noche
-  const kmDone=segs.slice(0,segIdx).reduce((a,s)=>a+(s.km||0),0);
+  // Comprobar transición nocturna
+  const kmDoneNow=segs.slice(0,segIdx).reduce((a,s)=>a+(s.km||0),0);
   if(race.nocturna&&!G.utNightEntered){
-    const kmAfter=kmDone+(seg.km||0);
+    const kmAfter=kmDoneNow+(seg.km||0);
     if(kmAfter>=(race.nocturnaStart||9999)&&!G.utNocturnaActive){
       G.utNightEntered=true;G.screen='ultratrailNight';render();return;
     }
   }
 
-  // Auto-resolución en modo Exprés (tramos neutros)
+  // Auto-resolución modo Exprés
   const intensity=G.utRaceIntensity||'normal';
   if(intensity==='expres'&&!seg.aid&&(G.runner.energy||0)>20&&(G.combustible||0)>15&&(G.pies||0)>15){
-    const isFinal=segIdx===segs.length-1;
     const cutoffRisk=_utCutoffRisk(race,segs,segIdx);
-    if(!isFinal&&!cutoffRisk){
-      if(typeof utDoPace==='function')utDoPace('conservar',true);
-      return;
-    }
+    if(segIdx<segs.length-1&&!cutoffRisk){utDoPace('conservar',true);return;}
   }
 
   const isNoc=G.utNocturnaActive||false;
-  const typeIcon={climb:'⛰️',descent:'🏃',flat:'➡️'}[seg.type]||'🏃';
   const utRace={id:race.id||'ut_seg',segs,km:race.km||100};
-
-  // Advertencias de ritmo agresivo
   const paceLog=G.utPaceLog||[];
-  const aggressiveStreak=paceLog.slice(-3).filter(p=>p==='allout').length;
+  const alloutStreak=paceLog.slice(-3).filter(p=>p==='allout').length;
   const hardCount=paceLog.slice(-4).filter(p=>p==='allout'||p==='push').length;
-
-  const paceWarning=(id)=>{
-    if(id==='allout'&&aggressiveStreak>=2)return`<div style="font-size:12px;color:#c0392b;margin-top:3px">⚠ ${aggressiveStreak} tramos a tope — fatiga ×${aggressiveStreak>=3?2.2:1.6}</div>`;
-    if((id==='allout'||id==='push')&&hardCount>=3)return`<div style="font-size:12px;color:#c07a10;margin-top:3px">⚠ ${hardCount} tramos duros acumulados</div>`;
-    if(id==='allout'&&seg.type==='descent'&&(G.pies||0)<40)return`<div style="font-size:12px;color:#c0392b;margin-top:3px">⚠ Pies bajos + bajada técnica — riesgo ampolla</div>`;
-    return'';
-  };
-
-  const paceCosts={
-    conservar:{energy:4, legs:2, combustible:3, pies:1, timeMult:1.18},
-    steady:   {energy:9, legs:5, combustible:7, pies:3, timeMult:1.00},
-    push:     {energy:17,legs:10,combustible:13,pies:6, timeMult:0.90},
-    allout:   {energy:27,legs:17,combustible:20,pies:10,timeMult:0.80},
-  };
   const pesoMul=(G.utMochilaPeso||0)>3000?1.15:(G.utMochilaPeso||0)>2000?1.08:1;
-  const baseTime=(seg.base||2000)*pesoMul*(seg.km||5)/60;
-
-  const statsLow=(G.combustible||0)<25||(G.pies||0)<25||(G.runner.energy||0)<25;
   const cutoffRisk=_utCutoffRisk(race,segs,segIdx);
 
+  // Costes idénticos al modo normal + extras UT
+  const paceDefs=[
+    ['conservar','Conservar','Ahorra fuerzas','-4 E, -3 C',1.18],
+    ['steady',   'Ritmo fijo','Equilibrado',  '-9 E, -7 C',1.00],
+    ['push',     'Apretar',   'Rápido, cuesta','-17 E, -13 C',0.90],
+    ['allout',   'A tope',    'Máximo esfuerzo','-27 E, -20 C',0.80],
+  ];
+
   el.innerHTML=`
-    ${utTopBar()}${utProgBar()}
-    <div class="card${isNoc?' ':''}" style="${isNoc?'background:#080818;border-color:#1e1e3e;':''}margin-bottom:10px">
+    ${utTopBar()}${utProgBar()}${utRaceStats()}
+    ${isNoc?`<div style="background:#0a0a1f;border:1px solid #1e1e3e;border-radius:8px;padding:8px 12px;color:#9090ff;font-size:12px;margin-bottom:8px">🌙 Tramo nocturno activo${G.utNightStrategy==='conservar'?' · ritmo reducido':''}</div>`:''}
+    <div class="card" style="${isNoc?'background:#0a0a18;border-color:#1e1e3e;':''}margin-bottom:8px">
       <div id="prof-wrap-utseg">${profSvg(utRace,segIdx,'race',segIdx)}</div>
       <div id="prof-info-utseg" data-sel="${segIdx}" style="min-height:20px">${profSegInfo(utRace,segIdx,'race',segIdx)}</div>
     </div>
-    ${isNoc?'<div style="background:#0a0a1f;border:1px solid #1e1e3e;border-radius:8px;padding:8px 12px;color:#9090ff;font-size:12px;margin-bottom:10px">🌙 Tramo nocturno activo — penalización de ritmo</div>':''}
-    ${utRaceStats()}
+    ${G.raceEvent?`<div class="event-box">${G.raceEvent}</div>`:''}
     ${cutoffRisk?`<div class="warn" style="border-color:#c0392b;background:#fff0ee">⏱️ ${cutoffRisk}</div>`:''}
-    ${statsLow?'<div class="warn">⚠️ Reservas críticas — considera parar en el próximo avituallamiento</div>':''}
-    <div class="section-label">Elige tu ritmo para este tramo</div>
+    ${G.stormActive?`<div class="${G.stormProtected?'note':'danger'}">⛈ Tormenta en curso${G.stormProtected?' · Equipado, hidratación protegida':' · Hidratación penalizada'}</div>`:''}
+    <div class="section-label">Elige tu ritmo:</div>
     <div class="pace-grid">
-      ${[['conservar','Conservar','Ahorra fuerzas'],['steady','Ritmo fijo','Equilibrado'],['push','Apretar','Rápido, cuesta'],['allout','A tope','Máximo esfuerzo']].map(([id,label,desc])=>{
-        const c=paceCosts[id];
-        const mins=Math.round(baseTime*c.timeMult);
-        const fatMul=id==='allout'&&aggressiveStreak>=3?2.2:id==='allout'&&aggressiveStreak>=2?1.6:hardCount>=3&&(id==='allout'||id==='push')?1.3:1;
-        const energyCost=Math.round(c.energy*fatMul);
-        return`<div class="pace" onclick="if(typeof utDoPace==='function')utDoPace('${id}')">
+      ${paceDefs.map(([id,label,desc,cost,mult])=>{
+        const mins=Math.round((seg.base||2000)*pesoMul*(seg.km||5)/60*mult);
+        const isAllout=id==='allout';const isPush=id==='push';
+        let warningMsg='';let warningCol='';
+        if(isAllout&&alloutStreak>=2){warningMsg=`⚠ ${alloutStreak} tramos a tope — fatiga ×${alloutStreak>=3?2.2:1.6}`;warningCol='#c0392b';}
+        else if((isAllout||isPush)&&hardCount>=3){warningMsg=`⚠ ${hardCount} tramos duros acumulados`;warningCol='#c07a10';}
+        else if(isAllout&&seg.type==='descent'&&(G.pies||0)<40){warningMsg='⚠ Pies bajos + bajada — riesgo ampolla';warningCol='#c0392b';}
+        const fatMul=isAllout&&alloutStreak>=3?2.2:isAllout&&alloutStreak>=2?1.6:hardCount>=3&&(isAllout||isPush)?1.3:1;
+        const adjCost=(isAllout||isPush)&&fatMul>1?cost+` (×${fatMul} fatiga)`:cost;
+        return`<div class="pace" onclick="utDoPace('${id}')">
           <div class="pace-label">${label}</div>
           <div class="pace-desc">${desc}</div>
-          ${paceWarning(id)}
-          <div class="pace-meta"><span>−${energyCost} E · −${c.combustible} C</span><span>~${mins}min</span></div>
+          ${warningMsg?`<div style="font-size:12px;color:${warningCol};margin-bottom:4px">${warningMsg}</div>`:''}
+          <div class="pace-meta"><span style="font-size:12px">${adjCost}</span><span>~${mins} min</span></div>
         </div>`;
       }).join('')}
     </div>
-    ${(G.utGels||0)>(G.utGelsUsed||0)?`<div class="card" style="margin-top:8px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:600">🍬 Gel energético</div><div style="font-size:12px;color:#888">+15 combustible · ${(G.utGels||0)-(G.utGelsUsed||0)} disponibles</div></div><button class="secondary" onclick="G.utGelsUsed=(G.utGelsUsed||0)+1;G.combustible=Math.min(100,(G.combustible||0)+15);showToast('🍬 Gel usado · +15 combustible','#e87820');renderUltratrailSegment()">Usar gel</button></div>`:''}
-    <button class="secondary" style="margin-top:10px;font-size:13px;border-color:#c0392b;color:#c0392b" onclick="if(confirm('¿Abandonar la carrera? Perderás el tiempo invertido y tu ranking se verá afectado.')){G.utDNFReason='abandon';G._utDNFSaved=false;G.screen='ultratrailCutoffDNF';render();}">🛑 Abandonar</button>`;
+    ${(()=>{
+      const r=G.runner;
+      const minStat=Math.min(r.energy,(G.combustible||0),(G.pies||0));
+      if(minStat<10)return`<div style="margin-top:10px;padding:10px 12px;background:#fef0f0;border:1.5px solid #c0392b;border-radius:8px"><div style="font-size:12px;color:#c0392b;font-weight:600;margin-bottom:6px">⚠ Límite físico — continuar tiene consecuencias graves</div><button class="abandon-btn" style="border-color:#c0392b;color:#c0392b;background:#fef0f0;margin-top:0" onclick="if(confirm('¿Abandonar?')){G.utDNFReason='abandon';G._utDNFSaved=false;G.screen='ultratrailCutoffDNF';render();}">Abandonar carrera</button></div>`;
+      if(minStat<30)return`<button class="abandon-btn" style="border-color:#ccc;color:#999;background:#fafafa;margin-top:8px;font-size:13px" onclick="if(confirm('¿Abandonar?')){G.utDNFReason='abandon';G._utDNFSaved=false;G.screen='ultratrailCutoffDNF';render();}">Abandonar carrera</button>`;
+      return'';
+    })()}
+    ${(G.utGels||0)>(G.utGelsUsed||0)?`<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:9px 14px;background:#f2faf0;border:1px solid #b8ddb8;border-radius:8px"><span style="font-size:18px">🍬</span><div style="flex:1;font-size:13px;color:#2d5a2d"><strong>${(G.utGels||0)-(G.utGelsUsed||0)} gel${(G.utGels||0)-(G.utGelsUsed||0)>1?'es':''} disponible${(G.utGels||0)-(G.utGelsUsed||0)>1?'s':''}</strong> · +15 combustible${(G.combustible||0)<50?' — ¡buena idea ahora!':''}</div><button class="secondary" style="font-size:13px;padding:5px 12px;background:#4a8a2a;color:#fff;border-color:#4a8a2a" onclick="G.utGelsUsed=(G.utGelsUsed||0)+1;G.combustible=Math.min(100,(G.combustible||0)+15);G.time+=8;showToast('🍬 Gel · +15 combustible','#4a8a2a');renderUltratrailSegment()">Usar gel</button></div>`:''}`;
   attachProfHandlers(utRace,'utseg','race',segIdx);
 }
 

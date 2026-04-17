@@ -1845,8 +1845,35 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       r.energy=Math.max(0,r.energy-14);G.raceEvent='Mantienes el ritmo de "llano" en un repecho real. −14 energía de golpe. El cuerpo tarda tres kilómetros en recuperarse.';
     }
   }
+  // ── EVENTOS UT-ESPECÍFICOS ─────────────────────────────────────
+  else if(evId==='ut_intrusive'){
+    if(choiceId==='focus_mind'){
+      r.stats.mental=Math.min(100,(r.stats.mental||50)+3);
+      G.raceEvent='Cuentas pasos. La cabeza se calla. +3 Mental — el cuerpo y la mente van juntos de nuevo.';
+    } else {
+      G.raceEvent='Bajas el ritmo pero sigues adelante. Eso ya es mucho. El collado aparece antes de lo esperado.';
+    }
+  }
+  else if(evId==='hunger_crisis'&&choiceId==='use_gel_now'){
+    G.combustible=Math.min(100,(G.combustible||0)+15);
+    G.raceEvent='El gel hace efecto en dos minutos. +15 combustible — el ritmo vuelve a la normalidad.';
+  }
+  else if(evId==='hunger_crisis'&&choiceId==='slow_hunger'){
+    G.combustible=Math.max(0,(G.combustible||0)-8);
+    G.raceEvent='Aguantas sin gel. −8 combustible extra hasta el avituallamiento. El cuerpo protesta.';
+  }
+  else if(evId==='lost'){
+    if(choiceId==='wait_gps'){
+      G.time+=180;G.raceEvent='El GPS recalcula. +3 min pero vas por el camino correcto.';
+    } else {
+      const ok=(G.runner.stats?.mental||50)>=60;
+      if(ok){G.raceEvent='El instinto te lleva bien. La senda correcta aparece en 200m.';}
+      else{G.time+=300;r.energy=Math.max(0,r.energy-8);G.raceEvent='Fallas la dirección. +5 min dando la vuelta. −8 energía por el esfuerzo extra.';}
+    }
+  }
   G.midRaceEvent=null;
-  G.screen='segment';
+  // Routing: si estamos en modo UT volvemos a ultratrailSegment
+  G.screen=G.gameMode==='ultratrail'?'ultratrailSegment':'segment';
   render();
 };
 
@@ -2289,9 +2316,9 @@ function utDoPace(paceId, autoResolve){
   if(!seg)return;
 
   const paceLog=G.utPaceLog||[];
-  const aggressiveStreak=paceLog.slice(-3).filter(p=>p==='allout').length;
+  const alloutStreak=paceLog.slice(-3).filter(p=>p==='allout').length;
   const hardCount=paceLog.slice(-4).filter(p=>p==='allout'||p==='push').length;
-  const fatMul=paceId==='allout'&&aggressiveStreak>=3?2.2:paceId==='allout'&&aggressiveStreak>=2?1.6:hardCount>=3&&(paceId==='allout'||paceId==='push')?1.3:1.0;
+  const fatMul=paceId==='allout'&&alloutStreak>=3?2.2:paceId==='allout'&&alloutStreak>=2?1.6:hardCount>=3&&(paceId==='allout'||paceId==='push')?1.3:1.0;
 
   const baseCosts={
     conservar:{energy:4, legs:2, combustible:3, pies:1, timeMult:1.18},
@@ -2301,7 +2328,6 @@ function utDoPace(paceId, autoResolve){
   };
   const c=baseCosts[paceId]||baseCosts.steady;
 
-  // Stat-based time modifier
   const sub=typeof getEffStat==='function'?getEffStat('subida'):(G.runner.stats.subida||50);
   const baj=typeof getEffStat==='function'?getEffStat('bajada'):(G.runner.stats.bajada||50);
   const vel=typeof getEffStat==='function'?getEffStat('velocidad'):(G.runner.stats.velocidad||50);
@@ -2312,12 +2338,9 @@ function utDoPace(paceId, autoResolve){
   statMod=Math.max(0.7,Math.min(1.4,statMod));
 
   const pesoMul=(G.utMochilaPeso||0)>3000?1.12:(G.utMochilaPeso||0)>2000?1.06:1;
-  const nocMul=G.utNocturnaActive?(G.utNightStrategy==='conservar'?1.20:G.utNightStrategy==='mantener'?1.05:1.10):1.0;
-  const baseTime=(seg.base||2000)*statMod*pesoMul*nocMul*(seg.km||5)/60;
-  const segTime=Math.round(baseTime*c.timeMult*60);
-  G.time=(G.time||0)+segTime;
+  const nocMul=G.utNocturnaActive?(G.utNightStrategy==='conservar'?1.20:G.utNightStrategy==='mantener'&&(G.runner.stats?.mental||50)<60?1.12:1.08):1.0;
+  G.time=(G.time||0)+Math.round((seg.base||2000)*statMod*pesoMul*nocMul*(seg.km||5)/60*c.timeMult*60);
 
-  // Apply stat costs with fatigue multiplier
   const km=seg.km||5;
   G.runner.energy=Math.max(0,(G.runner.energy||0)-(c.energy/5*km*fatMul));
   G.runner.legs=Math.max(0,(G.runner.legs||0)-(c.legs/5*km*fatMul));
@@ -2326,19 +2349,25 @@ function utDoPace(paceId, autoResolve){
   G.pies=Math.max(0,(G.pies||0)-(seg.type==='descent'?c.pies/5*km*1.5:c.pies/5*km));
   G.utBodyLoad=Math.min(100,(G.utBodyLoad||0)+km*0.25);
 
-  // Log pace
+  // raceEvent — igual que modo normal
+  const r=G.runner;
+  const evPool=['','','Terreno complicado, vas con cuidado.','Cruzas un paso rocoso.',''];
+  G.raceEvent=
+    alloutStreak>=3?'Llevas varios tramos a tope — las piernas y el combustible acusan el esfuerzo.':
+    (G.combustible||0)<20?'El combustible se agota — el cuerpo pide parar.':
+    r.hydration<15?'Boca seca. El cuerpo pide agua.':
+    r.legs<25?'Las piernas al límite. Cada zancada en cuesta cuesta el doble.':
+    r.energy<25?'La energía flaquea — necesitas un avituallamiento pronto.':
+    evPool[Math.floor(Math.random()*evPool.length)];
+
   if(!G.utPaceLog)G.utPaceLog=[];
   G.utPaceLog.push(paceId);
 
-  // Update nocturna flag
   if(race.nocturna){
     const kmNow=segs.slice(0,segIdx+1).reduce((a,s)=>a+(s.km||0),0);
-    const wasNoc=G.utNocturnaActive;
     G.utNocturnaActive=(kmNow>=(race.nocturnaStart||9999)&&kmNow<=(race.nocturnaEnd||9999));
-    if(!wasNoc&&G.utNocturnaActive)G.utNightEntered=true;
   }
 
-  // Cutoff check
   const horasT=(G.time||0)/3600;
   const kmDoneT=segs.slice(0,segIdx+1).reduce((a,s)=>a+(s.km||0),0);
   if(race.cutoffs&&!G._mdsMode){
@@ -2346,38 +2375,113 @@ function utDoPace(paceId, autoResolve){
       const m=co.cp.match(/km(\d+)/i);
       const coKm=m?parseInt(m[1]):race.km;
       if(kmDoneT>=coKm&&horasT>co.maxH){
-        G.utDNFReason='cutoff';G._utDNFSaved=false;
-        G._utCrisesThisRace=(G._utCrisesThisRace||0)+1;
-        G.screen='ultratrailCutoffDNF';render();return;
+        G.utDNFReason='cutoff';G._utDNFSaved=false;G.screen='ultratrailCutoffDNF';render();return;
       }
     }
   }
 
-  // Exhaustion check
   if((G.runner.energy||0)<=2||(G.combustible||0)<=2){
     G.utDNFReason='agotamiento';G._utDNFSaved=false;G.utKmAtDNF=kmDoneT;
-    G._utCrisesThisRace=(G._utCrisesThisRace||0)+1;
     G.screen='ultratrailCutoffDNF';render();return;
   }
 
-  // Crisis tracking
-  if((G.runner.energy||0)<20||(G.combustible||0)<15||(G.pies||0)<15){
+  if((G.runner.energy||0)<20||(G.combustible||0)<15||(G.pies||0)<15)
     G._utCrisesThisRace=(G._utCrisesThisRace||0)+1;
-  }
 
   G.seg=(G.seg||0)+1;
   if((G.seg||0)>=segs.length){_utFinishRace(race,false);return;}
 
   const nextSeg=segs[G.seg||0];
-  if(nextSeg&&nextSeg.aid){G.screen='ultratrailAid';}
-  else G.screen='ultratrailSegment';
-  render();
+  if(nextSeg&&nextSeg.aid){G.screen='ultratrailAid';render();return;}
+
+  // Mid-race events (mismo sistema que modo normal)
+  const mre=checkUtMidRaceEvents(race,segs,kmDoneT);
+  if(mre){G.midRaceEvent=mre;G.screen='midRaceEvent';render();return;}
+
+  G.screen='ultratrailSegment';render();
 }
 
-function resolverUltratrailRace(){
-  // Legacy call — use steady pace by default (called from old buttons if still exist)
-  utDoPace('steady');
+function checkUtMidRaceEvents(race,segs,kmDone){
+  const totalKm=race.km||100;
+  const pct=totalKm>0?kmDone/totalKm:0;
+  const mental=typeof getEffStat==='function'?getEffStat('mental'):(G.runner.stats?.mental||50);
+  if(!G.midRaceEventTriggered)G.midRaceEventTriggered={};
+
+  if(!G.stormActive&&!G.midRaceEventTriggered.storm&&totalKm>=35&&kmDone>20){
+    if(Math.random()<0.18){
+      G.midRaceEventTriggered.storm=true;
+      return{id:'storm',title:'⛈ Tormenta sorpresa',
+        desc:`En el km ${Math.round(kmDone)} el cielo se cierra de golpe. Granizo y viento lateral azotan la cresta.`,
+        choices:[{text:'Refugiarse y ponerse el chubasquero (+3 min · hidratación protegida)',id:'shelter'},
+                 {text:'Apretar y cruzar sin parar (pierde más hidratación)',id:'push_through'}]};
+    }
+  }
+
+  if(!G.midRaceEventTriggered.injured_runner&&totalKm>=40&&pct>=0.25&&pct<0.75){
+    if(Math.random()<0.13){
+      G.midRaceEventTriggered.injured_runner=true;
+      return{id:'injured_runner',title:'🩹 Corredor en el suelo',
+        desc:'Un corredor caído al lado de la senda. Se ha torcido el tobillo. Nadie más está cerca.',
+        choices:[{text:'Parar y ayudarle hasta que llegue un voluntario (+2 min · +2 Mental)',id:'help'},
+                 {text:'Avisarle de que llamarás en el siguiente avituallamiento',id:'warn'},
+                 {text:'Seguir tu ritmo',id:'ignore'}]};
+    }
+  }
+
+  if(!G.midRaceEventTriggered.lost&&(G.stormActive||G.utNocturnaActive)&&mental<45&&pct>=0.3&&pct<0.8){
+    if(Math.random()<0.30){
+      G.midRaceEventTriggered.lost=true;
+      return{id:'lost',title:'🌫 Pierdes la marca de ruta',
+        desc:'La niebla o la noche han borrado las señales. Dos sendas posibles.',
+        choices:[{text:'Esperar al GPS (+3 min, camino seguro)',id:'wait_gps'},
+                 {text:`Confiar en el instinto — Mental ${mental} define el resultado`,id:'trust_instinct'}]};
+    }
+  }
+
+  if(!G.midRaceEventTriggered.friends&&pct>=0.15&&pct<0.85){
+    if(Math.random()<0.10){
+      G.midRaceEventTriggered.friends=true;
+      return{id:'friends_cheer',title:'👐 ¡Tu gente está aquí!',
+        desc:'Reconoces caras entre el público. La energía se dispara.',
+        choices:[{text:'Saludar y acelerar un momento (+4 Mental, −3 energía)',id:'sprint'},
+                 {text:'Saludar con la mano y seguir tu ritmo (+4 Mental)',id:'wave'}]};
+    }
+  }
+
+  if(!G.midRaceEventTriggered.hunger_crisis&&pct>=0.35&&pct<0.75){
+    if(Math.random()<0.14){
+      G.midRaceEventTriggered.hunger_crisis=true;
+      return{id:'hunger_crisis',title:'🍬 Bajón de combustible',
+        desc:`Km ${Math.round(kmDone)}. El combustible baja en seco. El ritmo cae sin querer.`,
+        choices:[{text:'Usar un gel ahora (+15 combustible)',id:'use_gel_now'},
+                 {text:'Aguantar hasta el próximo avituallamiento (−8 combustible extra)',id:'slow_hunger'}]};
+    }
+  }
+
+  if(!G.midRaceEventTriggered.blister_ut&&(G.pies||0)<40&&pct>=0.4){
+    if(Math.random()<0.20){
+      G.midRaceEventTriggered.blister_ut=true;
+      return{id:'sock_adjust',title:'🦶 Los pies avisan',
+        desc:`Ampolla en formación en el km ${Math.round(kmDone)}. Si no actúas ahora, la bajada se complica.`,
+        choices:[{text:'Parar 2 min a cambiar el calcetín (+2 min, +12 pies)',id:'fix_sock'},
+                 {text:'Aguantar — ya llegarás con ello (−10 pies al final)',id:'ignore_sock'}]};
+    }
+  }
+
+  if(!G.midRaceEventTriggered.ut_intrusive&&pct>=0.5&&pct<0.85&&(G.runner.energy||0)<50){
+    if(Math.random()<0.12){
+      G.midRaceEventTriggered.ut_intrusive=true;
+      return{id:'ut_intrusive',title:'🧠 El ruido de la cabeza',
+        desc:'A estas horas todo se relativiza. Una voz dice que tienes excusa para parar. Otra recuerda para qué entrenaste.',
+        choices:[{text:'Escuchar la segunda voz — cuentas pasos hasta el collado (+3 Mental)',id:'focus_mind'},
+                 {text:'Gestionar — bajas el ritmo y te mantienes en movimiento',id:'manage_mind'}]};
+    }
+  }
+
+  return null;
 }
+
+function resolverUltratrailRace(){utDoPace('steady');}
 
 function _utFinishRace(race,dnf){
   const year=G.utYear||1;
