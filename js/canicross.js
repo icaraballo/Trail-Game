@@ -36,6 +36,24 @@ const CN_EVENTS_SPECIAL=[
    options:[{label:'Retirar (sin penalización vínculo)',retire:true,bondMod:2},{label:'Continuar (riesgo lesión grave)',injuryRisk:true,injurySevere:true,bondMod:-3}]},
 ];
 
+const CN_PACES=[
+  {id:'suave',   label:'Suave',         desc:'Conserváis energía juntos',      timeMult:1.18, energyCost:5,  dogCost:4,  bondMod:2 },
+  {id:'ritmo',   label:'Ritmo conjunto',desc:'Equilibrado — buena sincronía',  timeMult:1.00, energyCost:10, dogCost:8,  bondMod:0 },
+  {id:'apretar', label:'Apretar',       desc:'Rápido, el perro va al límite',  timeMult:0.90, energyCost:17, dogCost:14, bondMod:-2},
+  {id:'atope',   label:'A tope',        desc:'Máximo esfuerzo — riesgo real',  timeMult:0.82, energyCost:25, dogCost:21, bondMod:-5},
+];
+const CN_SEG_NAMES={
+  flat:    ['Pista forestal','Camino llano','Senda suave','Llano abierto','Recta de velocidad'],
+  climb:   ['Repecho sostenido','Subida técnica','Cuesta exigente','Rampa pronunciada','Ascenso en zigzag'],
+  descent: ['Bajada técnica','Descenso rápido','Pendiente suelta','Tramo de bajada','Descenso en pista'],
+};
+const CN_RIVAL_NAMES=[
+  'Elena & Nala','Carlos & Thor','Ana & Kira','Javi & Bolt','Laura & Max',
+  'Pedro & Zara','Marta & Rex','Iñaki & Txuri','Sara & Nina','Pol & Ares',
+  'Eva & Lola','Tomás & Figo','Noa & Coco','Rubén & Draco','Lidia & Hera',
+  'Diego & Rayo','Claudia & Kira','Andrei & Boss',
+];
+
 // ── STATE HELPERS ─────────────────────────────────────
 function cnInitDog(name,breed){
   const m=CN_BREED_MODS[breed]||CN_BREED_MODS.mestizo;
@@ -151,6 +169,37 @@ function cnCheckBirthday(){
   }
 }
 
+function cnGenerateSegs(race){
+  const n=Math.min(6,Math.max(3,Math.ceil((race.km||8)/2)));
+  const kmPerSeg=Math.round((race.km||8)/n*10)/10;
+  const typeSeq=['flat','climb','flat','descent','climb','flat'];
+  return Array.from({length:n},(_,i)=>{
+    const type=typeSeq[i%typeSeq.length];
+    const gain=type==='climb'?Math.round(40+Math.random()*70):type==='descent'?-Math.round(30+Math.random()*50):0;
+    const names=CN_SEG_NAMES[type];
+    return{km:kmPerSeg,type,gain,name:names[Math.floor(Math.random()*names.length)]};
+  });
+}
+
+function cnGenerateRivals(race){
+  const n=(race.tier||1)*4+Math.floor(Math.random()*4)+3;
+  const base={1:360,2:390,3:415,4:440}[race.tier||1]||390;
+  const pool=[...CN_RIVAL_NAMES].sort(()=>Math.random()-0.5).slice(0,Math.min(n,CN_RIVAL_NAMES.length));
+  while(pool.length<n)pool.push('Equipo #'+(pool.length+1));
+  return pool.map(name=>{
+    const skill=0.80+Math.random()*0.40;
+    return{name,estimatedTime:Math.round(base/skill*(race.km||8))};
+  });
+}
+
+function cnLivePosition(rs){
+  if(!rs.rivals||!rs.rivals.length)return{pos:1,total:1};
+  const myTime=(rs.time||0)+(rs.timePenalty||0);
+  const total=rs.rivals.length+1;
+  const pos=rs.rivals.filter(r=>r.estimatedTime<myTime).length+1;
+  return{pos,total};
+}
+
 // ── RACE FINISH ───────────────────────────────────────
 function cnFinishRace(){
   const rs=G.cnRaceState;if(!rs)return;
@@ -162,16 +211,10 @@ function cnFinishRace(){
   d.bond=Math.max(0,Math.min(100,d.bond+totalBond));
   d.peakBond=Math.max(d.peakBond||0,d.bond);
 
-  const basePace={1:360,2:390,3:415,4:440}[race.tier]||390;
-  const statBonus=((d.speed||50)+(d.stamina||50)+(G.runner.stats.resistencia||50)+(rs.speedBonus||0)+(mods.speedMod||0)*3)/3;
-  const paceAdj=Math.max(200,basePace-Math.round((statBonus-50)*1.8));
-  let totalTime=paceAdj*(race.km||8)+(rs.timePenalty||0);
-  totalTime=Math.round(totalTime);
-
-  const numRivals=(race.tier||1)*4+Math.floor(Math.random()*5)+2;
-  const beatChance=Math.min(0.92,Math.max(0.05,(statBonus-30)/70+(d.bond/250)));
-  const beaten=Math.floor(numRivals*beatChance);
-  const pos=Math.max(1,numRivals-beaten+1);
+  let totalTime=Math.round((rs.time||0)+(rs.timePenalty||0));
+  const rivals=rs.rivals||[];
+  const numRivals=rivals.length||((race.tier||1)*4+5);
+  const pos=Math.max(1,rivals.filter(r=>r.estimatedTime<totalTime).length+1);
 
   const prize=pos===1?race.prize:pos===2?Math.round(race.prize*0.6):pos===3?Math.round(race.prize*0.4):0;
   G.cnMoney=(G.cnMoney||0)+prize;
@@ -327,10 +370,13 @@ window.cnStartRace=idx=>{
   const race=(G.cnSelectedRaces||[])[idx];
   if(!race){showToast('Carrera no disponible','#c0392b');return;}
   G.cnCurrentRaceIdx=idx;
-  const numSegs=Math.min(6,Math.max(3,Math.ceil((race.km||8)/2)));
+  const segs=cnGenerateSegs(race);
+  const numSegs=segs.length;
+  const basePace={1:360,2:390,3:415,4:440}[race.tier]||390;
   G.cnRaceState={
     raceId:race.id,raceName:race.name,km:race.km,tier:race.tier,month:race.month,
-    numSegs,currentSeg:0,pendingEvent:null,decisionMade:false,
+    numSegs,segs,rivals:cnGenerateRivals(race),basePace,
+    currentSeg:0,pendingEvent:null,decisionMade:false,paceChosen:false,
     time:0,bondDelta:0,energyBonus:0,speedBonus:0,timePenalty:0,
     dogHealth:G.dog.health,dogBond:G.dog.bond,runnerEnergy:100+(G.cnDogFoodPremium?5:0),
     eventLog:[],retired:false,injuryPending:null,done:false,
@@ -342,18 +388,9 @@ window.cnGoToRace=()=>{G.screen='canicrossSegment';render();};
 
 window.cnNextSegment=()=>{
   const rs=G.cnRaceState;if(!rs)return;
-  rs.currentSeg++;rs.pendingEvent=null;rs.decisionMade=false;
-  // Advance base time for segment
-  const secPerSeg=Math.round((rs.km||8)/rs.numSegs*90);
-  rs.time=(rs.time||0)+secPerSeg;
+  rs.currentSeg++;
+  rs.pendingEvent=null;rs.decisionMade=false;rs.paceChosen=false;
   if(rs.currentSeg>=rs.numSegs){cnFinishRace();return;}
-  const ev=cnPickEvent(rs.month||1);
-  if(ev&&!ev.decision){
-    cnApplyEventAuto(ev,rs);
-    rs.eventLog.push({seg:rs.currentSeg,event:ev,resolved:true});
-  } else if(ev&&ev.decision){
-    rs.pendingEvent=ev;
-  }
   render();
 };
 
@@ -367,6 +404,49 @@ window.cnMakeDecision=optIdx=>{
   if(opt.retire)rs.retired=true;
   rs.eventLog.push({seg:rs.currentSeg,event:ev,choice:optIdx,resolved:true});
   rs.pendingEvent=null;rs.decisionMade=true;
+  render();
+};
+
+window.cnChoosePace=paceId=>{
+  const rs=G.cnRaceState;if(!rs)return;
+  const pace=CN_PACES.find(p=>p.id===paceId);if(!pace)return;
+  const d=G.dog;
+  const seg=rs.segs?.[rs.currentSeg];
+  const basePace=rs.basePace||390;
+  const kmPerSeg=(rs.km||8)/rs.numSegs;
+  const speedFactor=Math.max(0.7,Math.min(1.3,(d?.speed||50)/50));
+  const staminaFactor=Math.max(0.8,(d?.stamina||50)/100);
+
+  let tm=Math.round(basePace*kmPerSeg*pace.timeMult/speedFactor);
+  let ec=pace.energyCost;
+  let dc=Math.round(pace.dogCost/staminaFactor);
+  let bm=pace.bondMod;
+
+  if(seg?.type==='climb'){tm=Math.round(tm*1.15);ec=Math.round(ec*1.3);dc=Math.round(dc*1.2);}
+  if(seg?.type==='descent'){tm=Math.round(tm*0.88);ec=Math.round(ec*0.8);dc=Math.round(dc*0.85);}
+
+  rs.time=(rs.time||0)+tm;
+  rs.runnerEnergy=Math.max(0,(rs.runnerEnergy||100)-ec);
+  rs.dogHealth=Math.max(0,(rs.dogHealth||100)-dc);
+  rs.bondDelta=(rs.bondDelta||0)+bm;
+
+  if(paceId==='atope'&&d?.commands?.forward){
+    rs.time=Math.max(0,(rs.time||0)-10);rs.bondDelta=(rs.bondDelta||0)+1;
+    setTimeout(()=>showToast(esc(d.name)+' responde "Adelante" ✓ −10s','#4a8a2a'),50);
+  }
+  if(paceId==='suave'&&d?.commands?.hold){
+    rs.dogHealth=Math.min(100,(rs.dogHealth||100)+4);
+    setTimeout(()=>showToast(esc(d.name)+' mantiene el ritmo — "Aguanta" ✓','#4a8a2a'),50);
+  }
+
+  const ev=cnPickEvent(rs.month||1);
+  if(ev&&!ev.decision){
+    cnApplyEventAuto(ev,rs);
+    rs.eventLog.push({seg:rs.currentSeg,event:ev,resolved:true});
+  }else if(ev&&ev.decision){
+    rs.pendingEvent=ev;
+  }
+  rs.paceChosen=true;
   render();
 };
 
@@ -894,6 +974,24 @@ function renderCanicrossPreRace(){
       ${race.month===12||race.month===1?`<div style="font-size:12px;color:#4a90d9;margin-top:3px">❄️ Carrera invernal — posibles eventos de nieve</div>`:''}
     </div>
 
+    ${(()=>{
+      const rs=G.cnRaceState;
+      if(!rs?.segs?.length)return'';
+      const tCol={flat:'#888780',climb:'#639922',descent:'#E24B4A'};
+      const tBg={flat:'#F1EFE8',climb:'#EAF3DE',descent:'#FCEBEB'};
+      const tLabel={flat:'▶ Llano',climb:'▲ Subida',descent:'▼ Bajada'};
+      return`<div class="card" style="margin-bottom:16px">
+        <div class="sec-title-sm">Recorrido — ${rs.segs.length} tramos</div>
+        ${rs.segs.map((s,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:${i<rs.segs.length-1?'1px solid #f5f4f0':'none'}">
+          <div style="min-width:18px;font-size:12px;font-weight:600;color:#aaa">${i+1}</div>
+          <div style="padding:2px 8px;border-radius:5px;background:${tBg[s.type]};font-size:12px;font-weight:600;color:${tCol[s.type]};white-space:nowrap">${tLabel[s.type]}</div>
+          <div style="flex:1;font-size:13px">${esc(s.name)}</div>
+          <div style="font-size:12px;color:#888;white-space:nowrap">${s.km}km${s.gain>0?' +'+s.gain+'m':s.gain<0?' '+s.gain+'m':''}</div>
+        </div>`).join('')}
+        <div style="font-size:12px;color:#888;margin-top:8px">Rivales: ${rs.rivals?.length||0} equipos</div>
+      </div>`;
+    })()}
+
     ${G.cnDogFoodPremium?`<div class="note" style="margin-bottom:12px">🥩 Manutención premium: +5 energía en carrera</div>`:''}
 
     <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="cnGoToRace()">¡A correr! 🐕 →</button>
@@ -907,45 +1005,97 @@ function renderCanicrossSegment(){
   const race=(G.cnSelectedRaces||[])[G.cnCurrentRaceIdx];
   if(!race){G.screen='canicrossHub';G.activeTab='game';render();return;}
   const d=G.dog;
+  const seg=rs.segs?.[rs.currentSeg];
+  const kmDone=Math.round((race.km||8)*rs.currentSeg/rs.numSegs*10)/10;
+  const kmLeft=Math.round(((race.km||8)-kmDone)*10)/10;
   const pct=Math.round(rs.currentSeg/rs.numSegs*100);
-  const kmDone=Math.round((race.km||8)*rs.currentSeg/rs.numSegs);
-  const ev=rs.pendingEvent;
   const isLastSeg=rs.currentSeg+1>=rs.numSegs;
+  const ev=rs.pendingEvent;
+  const curBond=Math.max(0,Math.min(100,(rs.dogBond||0)+(rs.bondDelta||0)));
+
   const evBg={pos:'#eaf4ea',neg:'#fef0f0',special:'#fef9ec',rare:'#f0f6ff'}[ev?.eventType]||'#f5f4f0';
   const evBorder={pos:'#b8ddb8',neg:'#f5b8b8',special:'#e8c97a',rare:'#b8d4f0'}[ev?.eventType]||'#e8e6e0';
-  const curBond=Math.max(0,Math.min(100,(rs.dogBond||0)+(rs.bondDelta||0)));
+
+  const segTypeLabel={flat:'▶ Llano',climb:'▲ Subida',descent:'▼ Bajada'}[seg?.type||'flat'];
+  const segTypeCol={flat:'#888780',climb:'#639922',descent:'#E24B4A'}[seg?.type||'flat'];
+  const segTypeBg={flat:'#F1EFE8',climb:'#EAF3DE',descent:'#FCEBEB'}[seg?.type||'flat'];
+
+  const livePos=cnLivePosition(rs);
+  const posCol=livePos.pos===1?'#c07a10':livePos.pos<=3?'#4a8a2a':livePos.pos<=Math.ceil(livePos.total*0.4)?'#555':'#aaa';
+  const posLabel=livePos.pos===1?'🥇 Líder':livePos.pos===2?'🥈 2.º':livePos.pos===3?'🥉 3.º':livePos.pos<=Math.ceil(livePos.total*0.4)?'Top pelotón':'Pelotón';
+
+  const lastLogEntry=rs.eventLog?.length>0&&!ev?rs.eventLog[rs.eventLog.length-1]:null;
 
   el.innerHTML=`
     <div class="flex-between-center" style="margin-bottom:10px">
-      <span style="font-size:12px;color:#999">${esc(race.name)} · Seg ${rs.currentSeg+1}/${rs.numSegs}</span>
+      <span style="font-size:12px;color:#999">${esc(race.name)} · Tramo ${rs.currentSeg+1}/${rs.numSegs}</span>
       <span style="font-size:13px;font-weight:600">${fmt((rs.time||0)+(rs.timePenalty||0))}</span>
     </div>
-    <div class="prog-wrap" style="margin-bottom:12px">
-      <div class="prog-meta"><span>${kmDone}km</span><span>${(race.km||8)-kmDone}km restantes</span></div>
+
+    <div class="prog-wrap" style="margin-bottom:10px">
+      <div class="prog-meta"><span>${kmDone}km hechos</span><span>${kmLeft}km restantes</span></div>
       <div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div>
     </div>
+
     <div class="card" style="margin-bottom:10px">
-      ${[['Vínculo',curBond,'#c07a10'],['Salud perro',rs.dogHealth||100,'#e74c3c'],['Energía',rs.runnerEnergy||100,'#4a8a2a']].map(([l,v,c])=>`<div class="bar-row"><span class="bar-label">${l}</span><div class="bar-track" style="flex:1"><div class="bar-fill" style="width:${Math.round(v)}%;background:${c}"></div></div><span class="bar-pct">${Math.round(v)}</span></div>`).join('')}
+      ${[['Vínculo',curBond,'#c07a10'],['Salud '+esc(d?.name||'perro'),rs.dogHealth||100,'#e74c3c'],['Energía corredor',rs.runnerEnergy||100,'#4a8a2a']].map(([l,v,c])=>`<div class="bar-row"><span class="bar-label" style="color:${v<25?'#c0392b':'#666'}">${l}${v<25?' ⚠':''}</span><div class="bar-track" style="flex:1"><div class="bar-fill" style="width:${Math.round(Math.max(0,v))}%;background:${c}"></div></div><span class="bar-pct">${Math.round(Math.max(0,v))}</span></div>`).join('')}
     </div>
 
-    ${rs.eventLog&&rs.eventLog.length>0&&!ev?(()=>{
-      const le=rs.eventLog[rs.eventLog.length-1];const lev=le.event||{};
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 13px;background:#f8f7f3;border-radius:8px;margin-bottom:10px">
+      <div>
+        <span style="font-size:14px;font-weight:700;color:${posCol}">#${livePos.pos}</span>
+        <span style="font-size:12px;color:#888"> de ${livePos.total} equipos</span>
+      </div>
+      <span style="font-size:12px;color:${posCol};font-weight:600">${posLabel}</span>
+    </div>
+
+    ${seg?`<div style="padding:9px 13px;border-left:3px solid ${segTypeCol};background:${segTypeBg};border-radius:0 8px 8px 0;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:600;color:${segTypeCol}">${segTypeLabel} — ${esc(seg.name)}</div>
+      <div style="font-size:12px;color:#777">${seg.km}km${seg.gain>0?` · +${seg.gain}m desnivel`:seg.gain<0?` · ${seg.gain}m desnivel`:' · llano'}</div>
+    </div>`:''}
+
+    ${lastLogEntry?(()=>{
+      const lev=lastLogEntry.event||{};
       const bg={pos:'#eaf4ea',neg:'#fef0f0',special:'#fef9ec',rare:'#f0f6ff'}[lev.eventType]||'#f5f4f0';
       const border={pos:'#b8ddb8',neg:'#f5b8b8',special:'#e8c97a',rare:'#b8d4f0'}[lev.eventType]||'#e8e6e0';
-      const label={pos:'✨ Evento',neg:'⚡ Evento',special:'🌟 Especial',rare:'💫 Raro'}[lev.eventType]||'📍 Evento';
-      return `<div style="background:${bg};border:1px solid ${border};border-radius:10px;padding:14px;margin-bottom:14px"><div style="font-size:12px;color:#888;margin-bottom:4px">${label}</div><div style="font-size:14px;font-weight:600">${cnReplaceVars(lev.text||'')}</div></div>`;
+      const label={pos:'✨ Evento positivo',neg:'⚡ Evento',special:'🌟 Especial',rare:'💫 Raro'}[lev.eventType]||'📍 Evento';
+      return`<div style="background:${bg};border:1px solid ${border};border-radius:10px;padding:12px;margin-bottom:10px"><div style="font-size:12px;color:#888;margin-bottom:3px">${label}</div><div style="font-size:14px;font-weight:600">${cnReplaceVars(lev.text||'')}</div></div>`;
     })():''}
 
-    ${ev?`
-    <div style="background:${evBg};border:1px solid ${evBorder};border-radius:10px;padding:14px;margin-bottom:14px">
+    ${ev?`<div style="background:${evBg};border:1px solid ${evBorder};border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="font-size:14px;font-weight:600;margin-bottom:10px">${cnReplaceVars(ev.text||'')}</div>
       ${(ev.options||[]).map((opt,i)=>`<button class="main" style="margin-top:6px;font-size:13px" onclick="cnMakeDecision(${i})">${esc(opt.label)}</button>`).join('')}
     </div>`:''}
 
-    ${!ev?`<button class="main" style="${isLastSeg?'background:#1a1a1a;color:#fff;border-color:#1a1a1a':''}" onclick="cnNextSegment()">${isLastSeg?'Terminar carrera 🏁':'Siguiente segmento →'}</button>`:''}
-    ${rs.decisionMade&&!ev?`<button class="main" onclick="cnNextSegment()" style="margin-top:8px;${isLastSeg?'background:#1a1a1a;color:#fff;border-color:#1a1a1a':''}">${isLastSeg?'Terminar carrera 🏁':'Continuar →'}</button>`:''}
+    ${!rs.paceChosen&&!ev?`
+    <div class="section-label">Elige el ritmo del tramo:</div>
+    <div class="pace-grid">
+      ${CN_PACES.map(p=>{
+        const basePace=rs.basePace||390;
+        const kmPerSeg=(rs.km||8)/rs.numSegs;
+        const speedFactor=Math.max(0.7,Math.min(1.3,(d?.speed||50)/50));
+        let tm=Math.round(basePace*kmPerSeg*p.timeMult/speedFactor);
+        if(seg?.type==='climb')tm=Math.round(tm*1.15);
+        if(seg?.type==='descent')tm=Math.round(tm*0.88);
+        const mins=Math.floor(tm/60);const secs=tm%60;
+        const timeStr=mins+'m'+(secs>0?' '+secs+'s':'');
+        const dogWarn=p.dogCost>14&&(rs.dogHealth||100)<35?`<div style="font-size:11px;color:#c0392b;margin:3px 0">⚠ ${esc(d?.name||'perro')} al límite</div>`:'';
+        const bondBadge=p.bondMod>0?`<span style="font-size:11px;color:#4a8a2a">vínculo +${p.bondMod}</span>`:p.bondMod<0?`<span style="font-size:11px;color:#c07a10">vínculo ${p.bondMod}</span>`:'';
+        return`<div class="pace" onclick="cnChoosePace('${p.id}')">
+          <div class="pace-label">${p.label}</div>
+          <div class="pace-desc">${p.desc}</div>
+          ${dogWarn}
+          <div class="pace-meta">
+            <div style="display:flex;flex-direction:column;gap:2px">${bondBadge}<span style="font-size:11px;color:#aaa">−${p.energyCost} energía · −${p.dogCost} salud</span></div>
+            <span>~${timeStr}</span>
+          </div>
+        </div>`;}).join('')}
+    </div>`:''}
 
-    ${(rs.bondDelta||0)!==0?`<div style="font-size:12px;color:#888;text-align:center;margin-top:8px">Vínculo: ${Math.round(curBond)} <span style="color:${(rs.bondDelta||0)>=0?'#4a8a2a':'#c0392b'}">(${(rs.bondDelta||0)>=0?'+':''}${rs.bondDelta||0})</span></div>`:''}`;
+    ${rs.paceChosen&&!ev?`<button class="main" style="${isLastSeg||rs.retired?'background:#1a1a1a;color:#fff;border-color:#1a1a1a':''}" onclick="${rs.retired?'cnFinishRace()':'cnNextSegment()'}">${isLastSeg||rs.retired?'Terminar carrera 🏁':'Siguiente tramo →'}</button>`:''}
+
+    ${(rs.bondDelta||0)!==0?`<div style="font-size:12px;color:#888;text-align:center;margin-top:10px">Vínculo acumulado: <span style="color:${(rs.bondDelta||0)>=0?'#4a8a2a':'#c0392b'};font-weight:600">${(rs.bondDelta||0)>=0?'+':''}${rs.bondDelta||0}</span></div>`:''}
+  `;
 }
 
 function renderCanicrossPostRace(){
