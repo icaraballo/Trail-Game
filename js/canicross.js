@@ -212,6 +212,7 @@ window.doStartCanicross=()=>{
   G.cnMoney=500;G.cnSeason=1;
   G.cnSelectedRaces=[];G.cnCurrentRaceIdx=0;G.cnRaceResults=[];
   G.cnTrainingBlock=null;G.cnWeek=0;
+  G.cnRestWeeksLeft=3;G.cnOpenMonths=[];
   G.cnTrainAdrainSessions={left:0,hold:0,forward:0};
   G.equipment={dogHarness:'basic_harness',humanBelt:'basic_belt',line:'basic_line'};
   G.cnOwnedEquipment={dogHarness:['basic_harness'],humanBelt:['basic_belt'],line:['basic_line']};
@@ -237,6 +238,33 @@ window.doCreateDog=()=>{
 
 window.cnSelectBreed=breed=>{G._cnDogBreed=breed;const nm=document.getElementById('dogname');if(nm)G._cnDogName=nm.value;render();};
 window.cnSelectTraining=id=>{G.cnTrainingBlock=id;render();};
+
+window.cnToggleMonth=m=>{
+  if(!G.cnOpenMonths)G.cnOpenMonths=[];
+  const i=G.cnOpenMonths.indexOf(m);
+  if(i>=0)G.cnOpenMonths.splice(i,1);else G.cnOpenMonths.push(m);
+  render();
+};
+
+window.cnAdvanceRestWeek=()=>{
+  if((G.cnRestWeeksLeft??3)<=0){showToast('Sin semanas de descanso disponibles','#c0392b');return;}
+  const d=G.dog;
+  if(d){
+    d.health=Math.min(100,(d.health||100)+6);
+    d.bond=Math.min(100,(d.bond||0)+3);
+    d.peakBond=Math.max(d.peakBond||0,d.bond);
+  }
+  if(G.runner?.stats?.mental!==undefined)G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+4);
+  G.cnRestWeeksLeft=Math.max(0,(G.cnRestWeeksLeft??3)-1);
+  G.cnWeek=(G.cnWeek||0)+1;
+  if((G.cnWeek||0)%4===0){
+    const cost=cnMonthlyDogCost();
+    G.cnMoney=Math.max(0,(G.cnMoney||0)-cost);
+    showToast('Gastos del perro: -€'+cost+'/mes','#c07a10');
+  }
+  autoSave();render();
+  setTimeout(()=>showToast('Semana de descanso — '+esc(d?.name||'el perro')+' se recupera ✓','#4a8a2a'),150);
+};
 
 window.cnAdvanceWeek=()=>{
   if(!G.cnTrainingBlock){showToast('Elige un bloque de entrenamiento','#c0392b');return;}
@@ -424,7 +452,7 @@ window.cnEndSeason=()=>{
 window.cnDoSeasonTransition=function cnDoSeasonTransition(){
   G.cnSeason=(G.cnSeason||1)+1;
   G.cnWeek=0;G.cnSelectedRaces=[];G.cnCurrentRaceIdx=0;
-  G.cnTrainingBlock=null;
+  G.cnTrainingBlock=null;G.cnRestWeeksLeft=3;G.cnOpenMonths=[];
   G.cnTrainAdrainSessions={left:0,hold:0,forward:0};
   G.cnRaceState=null;
   G.activeTab='game';G.screen='canicrossHub';
@@ -513,6 +541,11 @@ function renderCnCorredorTab(){
   const doneIds=(G.cnRaceResults||[]).filter(r=>r.season===G.cnSeason).map(r=>r.raceId);
   const pendingRaces=races.filter(r=>!doneIds.includes(r.id));
   const allRaceDone=races.length>0&&pendingRaces.length===0;
+  const curMonth=cnCurrentMonth();
+  const MONTHS=[10,11,12,1,2,3];
+  const MONTH_NAMES={10:'Octubre',11:'Noviembre',12:'Diciembre',1:'Enero',2:'Febrero',3:'Marzo'};
+  const mIdx=m=>MONTHS.indexOf(m);
+  const restLeft=G.cnRestWeeksLeft??3;
 
   cnCheckBirthday();
 
@@ -552,53 +585,55 @@ function renderCnCorredorTab(){
         </div>
       </div>`).join('')}
 
+    <div class="card" style="margin-top:12px;margin-bottom:4px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="card-title">🏖 Semanas de descanso</div>
+        <div style="font-size:12px;color:#888">${restLeft}/3 disponibles</div>
+      </div>
+      ${restLeft>0?`
+        <div style="font-size:12px;color:#555;margin-bottom:8px">Avanza sin entrenar: +6 salud ${d?esc(d.name):'perro'} · +3 vínculo · +4 mental corredor.</div>
+        <button class="secondary" onclick="cnAdvanceRestWeek()">Tomar semana de descanso →</button>
+      `:`<div style="font-size:12px;color:#aaa">Sin semanas de descanso disponibles esta temporada.</div>`}
+    </div>
+
     <button class="main" style="margin-top:10px" onclick="cnAdvanceWeek()">Avanzar semana de entrenamiento →</button>
 
-    ${(()=>{
-      if(!races.length)return'';
-      const cur=cnCurrentMonth();
-      const mIdx=m=>[10,11,12,1,2,3].indexOf(m);
-      const pastMissed=races.find(r=>mIdx(r.month)<mIdx(cur)&&!doneIds.includes(r.id));
-      const raceNow=races.find(r=>r.month===cur&&!doneIds.includes(r.id));
-      let html='';
-      if(pastMissed)html+=`<div class="warn" style="margin-top:14px">⏱ Plazo superado — ${esc(pastMissed.name)}</div>`;
-      if(raceNow){
-        const idx=races.indexOf(raceNow);
-        html+=`<div class="card" style="margin-top:14px;border-color:#4a8a2a;background:#f0f7f0">
-          <div class="sec-title-sm" style="color:#2d7a2d">🏁 Próxima carrera — este mes</div>
-          <div class="card-title">${esc(raceNow.name)}</div>
-          <div class="card-sub">${esc(raceNow.location)} · ${raceNow.km}km · Tier ${raceNow.tier}</div>
-          ${canRace?`<button class="main" style="margin-top:10px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="cnStartRace(${idx})">Correr ahora →</button>`:
-            d&&d.bond<30?`<div class="note" style="margin-top:8px">Vínculo insuficiente (${d.bond}/30) para competir</div>`:
-            `<div class="note" style="margin-top:8px">El perro no puede correr ahora</div>`}
-        </div>`;
-      }
-      return html;
-    })()}
-
-    ${races.length>0?`
-    <div class="section-label" style="margin-top:18px">Calendario de la temporada</div>
-    ${races.map((r,i)=>{
-      const done=doneIds.includes(r.id);
-      const canStart=!done&&canRace;
-      const result=(G.cnRaceResults||[]).find(res=>res.raceId===r.id&&res.season===G.cnSeason);
-      return `<div class="card" style="${done?'opacity:0.7':''}">
-        <div class="flex-between-center">
-          <div>
-            <div class="card-title">${esc(r.name)}</div>
-            <div class="card-sub">${esc(r.location)} · ${r.km}km · ${r.monthName} · Tier ${r.tier}</div>
-            ${!done&&d&&d.bond<30?`<div class="text-warn">Vínculo insuficiente (${d.bond}/30)</div>`:''}
-            ${!done&&d&&d.injury&&d.injuryRaces>0?`<div class="text-warn">🤕 Baja: ${d.injuryRaces} carrera(s)</div>`:''}
+    <div class="section-label" style="margin-top:18px">📅 Carreras de temporada</div>
+    ${races.length>0?MONTHS.map(m=>{
+      const mName=MONTH_NAMES[m];
+      const race=races.find(r=>r.month===m);
+      const isCurrent=m===curMonth;
+      const isPast=mIdx(m)<mIdx(curMonth);
+      const isOpen=(G.cnOpenMonths||[]).includes(m);
+      const done=race&&doneIds.includes(race.id);
+      const result=done?(G.cnRaceResults||[]).find(res=>res.raceId===race.id&&res.season===G.cnSeason):null;
+      const overdue=isPast&&race&&!done;
+      const idx=race?races.indexOf(race):-1;
+      return `<div style="border:1px solid ${isCurrent?'#b8ddb8':'#e8e6e0'};border-radius:10px;margin-bottom:6px;overflow:hidden;${isCurrent?'background:#f8fdf8':'background:#fff'}">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 14px;cursor:${race?'pointer':'default'}" ${race?`onclick="cnToggleMonth(${m})"`:''}">
+          <div style="flex:1;min-width:0">
+            <span style="font-size:14px;font-weight:600;color:${isCurrent?'#2d7a2d':isPast?'#aaa':'#1a1a1a'}">${mName}</span>
+            ${race?`<span style="font-size:12px;color:${isPast&&!done?'#bbb':'#888'};margin-left:6px">· ${esc(race.name)} · ${race.km}km · Tier ${race.tier}</span>`
+                  :`<span style="font-size:12px;color:#ccc;margin-left:6px">· Sin carrera</span>`}
           </div>
-          <div style="text-align:right;flex-shrink:0;margin-left:8px">
-            ${done&&result?`<span style="color:${result.dnf?'#c0392b':'#4a8a2a'};font-weight:600">${result.dnf?'DNF':'#'+result.pos}</span>`:
-              canStart?`<button class="secondary" onclick="cnStartRace(${i})">Correr →</button>`:
-              done?`<span style="color:#4a8a2a;font-weight:700">✅</span>`:
-              `<span style="color:#aaa;font-size:12px">Pendiente</span>`}
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:8px">
+            ${done?`<span style="font-size:13px;font-weight:600;color:${result?.dnf?'#c0392b':'#4a8a2a'}">${result?.dnf?'DNF':'#'+(result?.pos||'?')}</span>`
+                  :overdue?`<span style="font-size:12px;color:#bbb">⏱</span>`
+                  :isCurrent&&race?`<span style="font-size:12px;color:#4a8a2a;font-weight:600">← Ahora</span>`:''}
+            ${race?`<span style="font-size:11px;color:#bbb;display:inline-block;transition:transform .2s;transform:${isOpen?'rotate(90deg)':'rotate(0)'}">▶</span>`:''}
           </div>
         </div>
-      </div>`;}).join('')}
-    `:`<div class="hint" style="margin-top:14px">Ve a <strong>📅 Calendario</strong> para seleccionar tus carreras de temporada (oct–mar).</div>`}
+        ${race&&isOpen?`<div style="padding:0 14px 14px;border-top:1px solid #f0ede8">
+          <div style="font-size:12px;color:#888;margin:8px 0 6px">${esc(race.location)} · €${race.cost} inscr. · €${race.prize} premio 1º</div>
+          ${done?`<div style="font-size:13px;font-weight:600;color:${result?.dnf?'#c0392b':'#4a8a2a'}">${result?.dnf?'DNF — Retirado':'Posición #'+(result?.pos||'?')}${(result?.prize||0)>0?' · +€'+result.prize:''}</div>`
+                :overdue?`<div style="font-size:13px;color:#bbb">⏱ Plazo superado — no se puede correr</div>`
+                :canRace?`<button class="main" style="margin-top:6px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="cnStartRace(${idx})">Correr ahora →</button>`
+                :d&&d.bond<30?`<div class="note" style="margin-top:6px">Vínculo insuficiente (${d.bond}/30)</div>`
+                :`<div class="note" style="margin-top:6px">El perro no puede correr ahora</div>`}
+        </div>`:''}
+      </div>`;
+    }).join('')
+    :`<div class="hint">Ve a <strong>📅 Calendario</strong> para seleccionar tus carreras de temporada (oct–mar).</div>`}
 
     ${allRaceDone?`<button class="main" style="margin-top:12px;border-color:#4a8a2a;color:#2d7a2d" onclick="G.screen='canicrossSeasonBalance';render()">Cerrar temporada ${G.cnSeason} →</button>`:''}
   `;
