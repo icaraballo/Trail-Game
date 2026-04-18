@@ -827,7 +827,7 @@ function renderCnCalendarioTab(){
   const spent=selIds.reduce((a,id)=>{const r=CANICROSS_RACES.find(x=>x.id===id);return a+(r?.cost||0);},0);
   const budget=G.cnMoney||0;
   const pct=budget>0?Math.min(100,Math.round(spent/budget*100)):0;
-  if(!G.cnOpenSeasonMonths)G.cnOpenSeasonMonths=[];
+  if(!G.cnOpenSeasonMonths||G.cnOpenSeasonMonths.length===0)G.cnOpenSeasonMonths=[10,11,12,1,2,3];
   const tierColor={1:'#4a8a2a',2:'#4a90d9',3:'#c07a10',4:'#c0392b'};
   const tierLabel={1:'Tier 1',2:'Tier 2',3:'Tier 3',4:'Tier 4'};
 
