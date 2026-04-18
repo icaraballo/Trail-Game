@@ -94,8 +94,18 @@ function cnMonthlyDogCost(){
   return c;
 }
 
+function cnCurrentMonth(){
+  const w=G.cnWeek||0;
+  if(w<5)return 10;
+  if(w<9)return 11;
+  if(w<13)return 12;
+  if(w<17)return 1;
+  if(w<21)return 2;
+  return 3;
+}
+
 function cnPickEvent(raceMonth){
-  if(Math.random()>0.35)return null;
+  if(Math.random()>0.60)return null;
   const d=G.dog;if(!d)return null;
   const isWinter=raceMonth===12||raceMonth===1||raceMonth===2;
   const r=Math.random();
@@ -544,6 +554,28 @@ function renderCnCorredorTab(){
 
     <button class="main" style="margin-top:10px" onclick="cnAdvanceWeek()">Avanzar semana de entrenamiento →</button>
 
+    ${(()=>{
+      if(!races.length)return'';
+      const cur=cnCurrentMonth();
+      const mIdx=m=>[10,11,12,1,2,3].indexOf(m);
+      const pastMissed=races.find(r=>mIdx(r.month)<mIdx(cur)&&!doneIds.includes(r.id));
+      const raceNow=races.find(r=>r.month===cur&&!doneIds.includes(r.id));
+      let html='';
+      if(pastMissed)html+=`<div class="warn" style="margin-top:14px">⏱ Plazo superado — ${esc(pastMissed.name)}</div>`;
+      if(raceNow){
+        const idx=races.indexOf(raceNow);
+        html+=`<div class="card" style="margin-top:14px;border-color:#4a8a2a;background:#f0f7f0">
+          <div class="sec-title-sm" style="color:#2d7a2d">🏁 Próxima carrera — este mes</div>
+          <div class="card-title">${esc(raceNow.name)}</div>
+          <div class="card-sub">${esc(raceNow.location)} · ${raceNow.km}km · Tier ${raceNow.tier}</div>
+          ${canRace?`<button class="main" style="margin-top:10px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="cnStartRace(${idx})">Correr ahora →</button>`:
+            d&&d.bond<30?`<div class="note" style="margin-top:8px">Vínculo insuficiente (${d.bond}/30) para competir</div>`:
+            `<div class="note" style="margin-top:8px">El perro no puede correr ahora</div>`}
+        </div>`;
+      }
+      return html;
+    })()}
+
     ${races.length>0?`
     <div class="section-label" style="margin-top:18px">Calendario de la temporada</div>
     ${races.map((r,i)=>{
@@ -666,26 +698,75 @@ function renderCnCalendarioTab(){
   const el=document.getElementById('main');
   const sel=G.cnSelectedRaces||[];
   const selIds=sel.map(r=>r.id);
+  const MONTHS=[10,11,12,1,2,3];
+  const MONTH_NAMES={10:'Octubre',11:'Noviembre',12:'Diciembre',1:'Enero',2:'Febrero',3:'Marzo'};
+  const doneIds=(G.cnRaceResults||[]).filter(r=>r.season===G.cnSeason).map(r=>r.raceId);
+  const curMonth=cnCurrentMonth();
+  const mIdx=m=>MONTHS.indexOf(m);
 
-  el.innerHTML=`
-    <h2>📅 Calendario</h2>
-    <p class="sub">Temporada oct–mar · Máximo 5 carreras</p>
-    <div class="note" style="margin-bottom:12px">Seleccionadas: <strong>${sel.length}/5</strong> · Inscripciones: €${sel.reduce((a,r)=>a+(r.cost||0),0)}</div>
-    ${CANICROSS_RACES.map(r=>{
-      const isSel=selIds.includes(r.id);
-      const tierLabel=['','🟢 Tier 1','🟡 Tier 2','🟠 Tier 3','🔴 Tier 4'][r.tier]||'';
-      return `<div class="race-card ${isSel?'sel':''}" onclick="cnToggleRace('${r.id}')">
-        <div class="flex-between">
-          <div>
-            <div class="card-title">${esc(r.name)}</div>
-            <div class="card-sub">${esc(r.location)} · ${r.km}km · ${r.monthName}</div>
-            <div style="margin-top:4px;font-size:12px">${tierLabel} · €${r.cost} inscripción · €${r.prize} premio 1º</div>
+  if(!sel.length){
+    const byMonth={};
+    CANICROSS_RACES.forEach(r=>{if(!byMonth[r.month])byMonth[r.month]=[];byMonth[r.month].push(r);});
+    el.innerHTML=`
+      <h2>📅 Calendario</h2>
+      <p class="sub">Temporada oct–mar · Máximo 5 carreras</p>
+      <div class="note" style="margin-bottom:12px">Seleccionadas: <strong>${selIds.length}/5</strong> · Inscripciones: €${CANICROSS_RACES.filter(r=>selIds.includes(r.id)).reduce((a,r)=>a+(r.cost||0),0)}</div>
+      ${MONTHS.map(m=>{
+        const races=(byMonth[m]||[]);
+        if(!races.length)return'';
+        const tierIcon=['','🟢','🟡','🟠','🔴'];
+        return`<div class="section-label">${MONTH_NAMES[m]}</div>
+        ${races.map(r=>{
+          const isSel=selIds.includes(r.id);
+          return`<div class="race-card ${isSel?'sel':''}" onclick="cnToggleRace('${r.id}')">
+            <div class="flex-between">
+              <div>
+                <div class="card-title">${esc(r.name)}</div>
+                <div class="card-sub">${esc(r.location)} · ${r.km}km</div>
+                <div style="margin-top:4px;font-size:12px">${tierIcon[r.tier]||''} Tier ${r.tier} · €${r.cost} inscr. · €${r.prize} premio 1º</div>
+              </div>
+              ${isSel?`<span style="color:#4a8a2a;font-size:20px;font-weight:700;margin-left:8px;flex-shrink:0">✓</span>`:''}
+            </div>
+          </div>`;}).join('')}`;}).join('')}
+      <button class="main" style="margin-top:10px" onclick="cnConfirmCalendar()">Confirmar calendario →</button>
+    `;
+  } else {
+    el.innerHTML=`
+      <h2>📅 Calendario confirmado</h2>
+      <p class="sub">Temporada ${G.cnSeason||1} · Semana ${G.cnWeek||0}</p>
+      <div style="border-radius:10px;overflow:hidden;border:1px solid #e8e6e0;margin-bottom:14px">
+      ${MONTHS.map(m=>{
+        const race=sel.find(r=>r.month===m);
+        const mName=MONTH_NAMES[m];
+        const isCurrent=m===curMonth;
+        const isPast=mIdx(m)<mIdx(curMonth);
+        const bg=isCurrent?'#f0f7f0':isPast?'#fafaf8':'#fff';
+        const monthColor=isCurrent?'#2d7a2d':isPast?'#aaa':'#555';
+        if(!race){
+          return`<div style="display:flex;align-items:center;padding:11px 14px;border-bottom:1px solid #f0ede8;background:${bg}">
+            <div style="min-width:80px;font-size:13px;font-weight:600;color:${monthColor}">${mName}</div>
+            <div style="font-size:13px;color:#ccc;font-style:italic">Sin carrera</div>
+          </div>`;
+        }
+        const isDone=doneIds.includes(race.id);
+        const result=(G.cnRaceResults||[]).find(r=>r.raceId===race.id&&r.season===G.cnSeason);
+        const overdue=isPast&&!isDone;
+        return`<div style="padding:11px 14px;border-bottom:1px solid #f0ede8;background:${bg}">
+          <div style="display:flex;align-items:flex-start;gap:10px">
+            <div style="min-width:80px;font-size:13px;font-weight:600;color:${monthColor};padding-top:2px">${mName}</div>
+            <div style="flex:1">
+              <div style="font-size:14px;font-weight:600;${overdue?'color:#bbb':''}">${esc(race.name)}</div>
+              <div style="font-size:12px;color:#888">${esc(race.location)} · ${race.km}km · Tier ${race.tier}</div>
+              ${isDone&&result?`<div style="margin-top:3px;font-size:13px;font-weight:600;color:${result.dnf?'#c0392b':'#4a8a2a'}">${result.dnf?'DNF':'#'+result.pos}${(result.prize||0)>0?' · +€'+result.prize:''}</div>`:
+                overdue?`<div style="margin-top:3px;font-size:12px;color:#bbb">⏱ Plazo superado</div>`:
+                isCurrent?`<div style="margin-top:3px;font-size:12px;color:#4a8a2a;font-weight:600">← Mes actual</div>`:''}
+            </div>
           </div>
-          ${isSel?`<span style="color:#4a8a2a;font-size:20px;font-weight:700;margin-left:8px;flex-shrink:0">✓</span>`:''}
-        </div>
-      </div>`;}).join('')}
-    <button class="main" style="margin-top:10px" onclick="cnConfirmCalendar()">Confirmar calendario →</button>
-  `;
+        </div>`;}).join('')}
+      </div>
+      <button class="secondary" style="font-size:12px" onclick="if(confirm('¿Reiniciar el calendario? Perderás las carreras seleccionadas.')){G.cnSelectedRaces=[];render()}">Reiniciar selección</button>
+    `;
+  }
 }
 
 // ── TAB: FINANZAS ─────────────────────────────────────
@@ -812,7 +893,13 @@ function renderCanicrossSegment(){
       ${[['Vínculo',curBond,'#c07a10'],['Salud perro',rs.dogHealth||100,'#e74c3c'],['Energía',rs.runnerEnergy||100,'#4a8a2a']].map(([l,v,c])=>`<div class="bar-row"><span class="bar-label">${l}</span><div class="bar-track" style="flex:1"><div class="bar-fill" style="width:${Math.round(v)}%;background:${c}"></div></div><span class="bar-pct">${Math.round(v)}</span></div>`).join('')}
     </div>
 
-    ${rs.eventLog&&rs.eventLog.length>0&&!ev?`<div class="event-box">${cnReplaceVars((rs.eventLog[rs.eventLog.length-1].event||{}).text||'')}</div>`:''}
+    ${rs.eventLog&&rs.eventLog.length>0&&!ev?(()=>{
+      const le=rs.eventLog[rs.eventLog.length-1];const lev=le.event||{};
+      const bg={pos:'#eaf4ea',neg:'#fef0f0',special:'#fef9ec',rare:'#f0f6ff'}[lev.eventType]||'#f5f4f0';
+      const border={pos:'#b8ddb8',neg:'#f5b8b8',special:'#e8c97a',rare:'#b8d4f0'}[lev.eventType]||'#e8e6e0';
+      const label={pos:'✨ Evento',neg:'⚡ Evento',special:'🌟 Especial',rare:'💫 Raro'}[lev.eventType]||'📍 Evento';
+      return `<div style="background:${bg};border:1px solid ${border};border-radius:10px;padding:14px;margin-bottom:14px"><div style="font-size:12px;color:#888;margin-bottom:4px">${label}</div><div style="font-size:14px;font-weight:600">${cnReplaceVars(lev.text||'')}</div></div>`;
+    })():''}
 
     ${ev?`
     <div style="background:${evBg};border:1px solid ${evBorder};border-radius:10px;padding:14px;margin-bottom:14px">
