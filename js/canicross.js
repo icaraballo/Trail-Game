@@ -255,7 +255,7 @@ window.doStartCanicross=()=>{
   G.cnMoney=500;G.cnSeason=1;
   G.cnSelectedRaces=[];G.cnCurrentRaceIdx=0;G.cnRaceResults=[];
   G.cnTrainingBlock=null;G.cnWeek=0;
-  G.cnRestWeeksLeft=3;G.cnOpenMonths=[];G.cnOpenSeasonMonths=[];
+  G.cnVacationDays=15;G.cnVacationUsed=0;G.cnVacationThisSeason=0;G.cnOpenMonths=[];G.cnOpenSeasonMonths=[];
   G.cnTrainAdrainSessions={left:0,hold:0,forward:0};
   G.equipment={dogHarness:'basic_harness',humanBelt:'basic_belt',line:'basic_line'};
   G.cnOwnedEquipment={dogHarness:['basic_harness'],humanBelt:['basic_belt'],line:['basic_line']};
@@ -287,10 +287,12 @@ window.cnConfirmTraining=()=>{
   G.screen='canicrossCalendarSetup';render();
 };
 
-window.cnChangeRestWeeks=delta=>{
-  const cur=G.cnRestWeeksLeft??3;
-  const next=Math.max(0,Math.min(3,cur+delta));
-  G.cnRestWeeksLeft=next;render();
+window.cnChangeVacDays=delta=>{
+  const used=G.cnVacationUsed||0;
+  const total=G.cnVacationDays||15;
+  const planned=G.cnVacationPlanned||0;
+  const next=Math.max(0,Math.min(total-used,planned+delta));
+  G.cnVacationPlanned=next;render();
 };
 
 window.cnToggleSeasonMonth=m=>{
@@ -308,15 +310,20 @@ window.cnToggleMonth=m=>{
 };
 
 window.cnAdvanceRestWeek=()=>{
-  if((G.cnRestWeeksLeft??3)<=0){showToast('Sin semanas de descanso disponibles','#c0392b');return;}
+  const daysLeft=(G.cnVacationDays||0)-(G.cnVacationUsed||0);
+  if(daysLeft<=0){showToast('Sin días de vacaciones disponibles','#c0392b');return;}
   const d=G.dog;
+  const days=Math.min(7,daysLeft);
+  const healthBonus=Math.round(days*1.2);
+  const bondBonus=Math.round(days*0.6);
+  const mentalBonus=Math.round(days*0.8);
   if(d){
-    d.health=Math.min(100,(d.health||100)+6);
-    d.bond=Math.min(100,(d.bond||0)+3);
+    d.health=Math.min(100,(d.health||100)+healthBonus);
+    d.bond=Math.min(100,(d.bond||0)+bondBonus);
     d.peakBond=Math.max(d.peakBond||0,d.bond);
   }
-  if(G.runner?.stats?.mental!==undefined)G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+4);
-  G.cnRestWeeksLeft=Math.max(0,(G.cnRestWeeksLeft??3)-1);
+  if(G.runner?.stats?.mental!==undefined)G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+mentalBonus);
+  G.cnVacationUsed=(G.cnVacationUsed||0)+days;
   G.cnWeek=(G.cnWeek||0)+1;
   if((G.cnWeek||0)%4===0){
     const cost=cnMonthlyDogCost();
@@ -324,29 +331,24 @@ window.cnAdvanceRestWeek=()=>{
     showToast('Gastos del perro: -€'+cost+'/mes','#c07a10');
   }
   autoSave();render();
-  setTimeout(()=>showToast('Semana de descanso — '+esc(d?.name||'el perro')+' se recupera ✓','#4a8a2a'),150);
+  setTimeout(()=>showToast(days+'d de vacaciones — '+esc(d?.name||'el perro')+' descansa ✓','#4a8a2a'),150);
 };
 
-window.cnAdvanceWeek=()=>{
-  if(!G.cnTrainingBlock){showToast('Elige un bloque de entrenamiento','#c0392b');return;}
+function cnApplyOneWeekTraining(){
   const block=(CANICROSS_TRAINING_BLOCKS||[]).find(b=>b.id===G.cnTrainingBlock);
   if(!block)return;
   const d=G.dog;
-
   Object.entries(block.runnerMod||{}).forEach(([k,v])=>{
     if(G.runner.stats[k]!==undefined)G.runner.stats[k]=Math.min(100,G.runner.stats[k]+(v||0));
   });
-
   if(d){
-    if(block.dogMod&&block.dogMod.speed)d.speed=Math.min(100,(d.speed||50)+(block.dogMod.speed||0));
-    if(block.dogMod&&block.dogMod.stamina)d.stamina=Math.min(100,(d.stamina||50)+(block.dogMod.stamina||0));
-    if(block.dogMod&&block.dogMod.health)d.health=Math.min(100,(d.health||100)+(block.dogMod.health||0));
-
+    if(block.dogMod?.speed)d.speed=Math.min(100,(d.speed||50)+(block.dogMod.speed||0));
+    if(block.dogMod?.stamina)d.stamina=Math.min(100,(d.stamina||50)+(block.dogMod.stamina||0));
+    if(block.dogMod?.health)d.health=Math.min(100,(d.health||100)+(block.dogMod.health||0));
     let bMod=block.bondMod||0;
     if(d.breed==='malinois'&&block.id==='solo')bMod-=CN_BREED_MODS.malinois.bondDecayPerWeek;
     d.bond=Math.max(0,Math.min(100,(d.bond||0)+bMod));
     d.peakBond=Math.max(d.peakBond||0,d.bond);
-
     if(block.teachCommand){
       const next=cnNextCommand();
       if(next){
@@ -354,27 +356,29 @@ window.cnAdvanceWeek=()=>{
         G.cnTrainAdrainSessions[next]=(G.cnTrainAdrainSessions[next]||0)+1;
         if(G.cnTrainAdrainSessions[next]>=2){
           d.commands[next]=true;G.cnTrainAdrainSessions[next]=0;
-          showToast('¡'+esc(d.name)+' aprende "'+cnCommandLabel(next)+'"! ✅','#4a8a2a');
-        } else {
-          showToast(esc(d.name)+' practica "'+cnCommandLabel(next)+'" (1/2)','#c07a10');
+          setTimeout(()=>showToast('¡'+esc(d.name)+' aprende "'+cnCommandLabel(next)+'"! ✅','#4a8a2a'),50);
         }
-      } else {
-        showToast('¡'+esc(d.name)+' ya conoce todos los comandos! 🌟','#4a8a2a');
       }
     }
-
     if(G.cnDogSupplements)d.stamina=Math.min(100,(d.stamina||50)+1);
   }
+}
 
-  G.cnWeek=(G.cnWeek||0)+1;
-  if((G.cnWeek||0)%4===0){
-    const cost=cnMonthlyDogCost();
-    G.cnMoney=Math.max(0,(G.cnMoney||0)-cost);
-    showToast('Gastos del perro: -€'+cost+'/mes','#c07a10');
+window.cnAdvanceWeek=()=>{
+  if(!G.cnTrainingBlock){showToast('Elige un bloque de entrenamiento','#c0392b');return;}
+  // Avanzar 4 semanas (1 mes) de una vez
+  for(let i=0;i<4;i++){
+    cnApplyOneWeekTraining();
+    G.cnWeek=(G.cnWeek||0)+1;
+    if((G.cnWeek||0)%4===0){
+      const cost=cnMonthlyDogCost();
+      G.cnMoney=Math.max(0,(G.cnMoney||0)-cost);
+    }
   }
-
+  const curMonth=cnCurrentMonth();
+  const MONTH_NAMES={10:'Octubre',11:'Noviembre',12:'Diciembre',1:'Enero',2:'Febrero',3:'Marzo'};
   autoSave();render();
-  setTimeout(()=>showToast('Semana '+(G.cnWeek)+' completada ✓','#4a8a2a'),150);
+  setTimeout(()=>showToast((MONTH_NAMES[curMonth]||'Mes')+' completado ✓','#4a8a2a'),150);
 };
 
 window.cnStartRace=idx=>{
@@ -422,7 +426,9 @@ window.cnMakeDecision=optIdx=>{
   if(opt.retire)rs.retired=true;
   rs.eventLog.push({seg:rs.currentSeg,event:ev,choice:optIdx,resolved:true});
   rs.pendingEvent=null;rs.decisionMade=true;
-  render();
+  if(rs.retired){cnFinishRace();}
+  else if(rs.currentSeg+1>=rs.numSegs){cnFinishRace();}
+  else{cnNextSegment();}
 };
 
 window.cnChoosePace=paceId=>{
@@ -465,7 +471,13 @@ window.cnChoosePace=paceId=>{
     rs.pendingEvent=ev;
   }
   rs.paceChosen=true;
-  render();
+  if(!rs.pendingEvent){
+    if(rs.retired){cnFinishRace();}
+    else if(rs.currentSeg+1>=rs.numSegs){cnFinishRace();}
+    else{cnNextSegment();}
+  } else {
+    render();
+  }
 };
 
 window.cnToggleRace=id=>{
@@ -551,7 +563,7 @@ window.cnEndSeason=()=>{
 window.cnDoSeasonTransition=function cnDoSeasonTransition(){
   G.cnSeason=(G.cnSeason||1)+1;
   G.cnWeek=0;G.cnSelectedRaces=[];G.cnCurrentRaceIdx=0;
-  G.cnTrainingBlock=null;G.cnRestWeeksLeft=3;G.cnOpenMonths=[];
+  G.cnTrainingBlock=null;G.cnVacationUsed=0;G.cnVacationPlanned=0;G.cnVacationDays=15;G.cnOpenMonths=[];
   G.cnTrainAdrainSessions={left:0,hold:0,forward:0};
   G.cnRaceState=null;
   G.activeTab='game';G.screen='canicrossHub';
@@ -683,16 +695,33 @@ function renderCnCorredorTab(){
       </div>`;
     })()}
 
-    ${restLeft>0?`<div class="card" style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div style="font-size:14px;font-weight:700">🏖 Semanas de descanso</div>
-        <div style="font-size:12px;color:#888">${restLeft}/3 disponibles</div>
-      </div>
-      <div style="font-size:12px;color:#555;margin-bottom:8px">+6 salud ${d?esc(d.name):'perro'} · +3 vínculo · +4 mental corredor</div>
-      <button class="secondary" onclick="cnAdvanceRestWeek()">Tomar semana de descanso →</button>
-    </div>`:''}
+    ${(()=>{
+      const vacLeft=(G.cnVacationDays||15)-(G.cnVacationUsed||0);
+      if(vacLeft<=0)return'';
+      return`<div class="card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-size:14px;font-weight:700">🏖 Vacaciones</div>
+          <div style="font-size:12px;color:#888">${vacLeft} / ${G.cnVacationDays||15} días disponibles</div>
+        </div>
+        <div style="font-size:12px;color:#555;margin-bottom:8px">Usa 7 días: +salud ${d?esc(d.name):'perro'} · +vínculo · +mental</div>
+        <button class="secondary" onclick="cnAdvanceRestWeek()">Usar vacaciones (7 días) →</button>
+      </div>`;
+    })()}
 
-    <button class="main" style="margin-top:4px;margin-bottom:14px" onclick="cnAdvanceWeek()">Avanzar semana de entrenamiento →</button>
+    ${(()=>{
+      const nextRace=pendingRaces.find(r=>r.month===curMonth)||pendingRaces[0];
+      const raceThisMonth=pendingRaces.find(r=>r.month===curMonth);
+      if(raceThisMonth&&canRace){
+        const idx=races.indexOf(raceThisMonth);
+        return`<button class="main" style="margin-top:4px;margin-bottom:8px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="cnStartRace(${idx})">🏁 Correr ${esc(raceThisMonth.name)} →</button>
+        <button class="main" style="margin-top:0;margin-bottom:14px;opacity:0.5;font-size:13px" onclick="cnAdvanceWeek()">Saltar este mes sin correr →</button>`;
+      }
+      const MONTH_NAMES={10:'Octubre',11:'Noviembre',12:'Diciembre',1:'Enero',2:'Febrero',3:'Marzo'};
+      const nextMonthNames=[10,11,12,1,2,3];
+      const curIdx=nextMonthNames.indexOf(curMonth);
+      const nextM=nextMonthNames[curIdx+1];
+      return`<button class="main" style="margin-top:4px;margin-bottom:14px" onclick="cnAdvanceWeek()">Avanzar a ${nextM?MONTH_NAMES[nextM]:'siguiente mes'} →</button>`;
+    })()}
 
     <div class="section-label" style="margin-top:18px">📅 Carreras de temporada</div>
     ${races.length>0?MONTHS.map(m=>{
@@ -860,21 +889,31 @@ function renderCanicrossTrainingSetup(){
       </div>`;
     }).join('')}
 
-    <div class="card" style="margin-top:16px;margin-bottom:20px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-size:15px;font-weight:700">🏖 Semanas de descanso</div>
-        <div style="font-size:12px;color:#888">${restLeft} / 3 disponibles este año</div>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <button class="secondary" style="width:44px;height:44px;font-size:20px;padding:0;text-align:center" onclick="cnChangeRestWeeks(-1)" ${restLeft<=0?'disabled':''}>−</button>
-        <div style="text-align:center">
-          <div style="font-size:32px;font-weight:700;color:${restLeft>0?'#c07a10':'#aaa'}">${restLeft}</div>
-          <div style="font-size:12px;color:#888">semanas reservadas</div>
+    ${(()=>{
+      const total=G.cnVacationDays||15;
+      const used=G.cnVacationUsed||0;
+      const planned=G.cnVacationPlanned||0;
+      const available=total-used;
+      const pct=Math.round(used/total*100);
+      return`<div class="card" style="margin-top:16px;margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-size:15px;font-weight:700">🏖 Vacaciones este temporada</div>
+          <div style="font-size:12px;color:#888">${used} / ${total} días usados este año</div>
         </div>
-        <button class="secondary" style="width:44px;height:44px;font-size:20px;padding:0;text-align:center" onclick="cnChangeRestWeeks(1)" ${restLeft>=3?'disabled':''}>+</button>
-      </div>
-      <div style="font-size:12px;color:#888">Cada semana de descanso da +6 salud ${d?esc(d.name):'perro'} · +3 vínculo · +4 mental corredor. Máximo 3 por temporada.</div>
-    </div>
+        <div style="height:4px;background:#e8e6e0;border-radius:2px;overflow:hidden;margin-bottom:12px">
+          <div style="height:100%;width:${pct}%;background:#c07a10;border-radius:2px"></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <button class="secondary" style="width:44px;height:44px;font-size:20px;padding:0;text-align:center" onclick="cnChangeVacDays(-1)" ${planned<=0?'disabled':''}>−</button>
+          <div style="text-align:center">
+            <div style="font-size:32px;font-weight:700;color:${planned>0?'#c07a10':'#aaa'}">${planned}</div>
+            <div style="font-size:12px;color:#888">días esta temporada</div>
+          </div>
+          <button class="secondary" style="width:44px;height:44px;font-size:20px;padding:0;text-align:center" onclick="cnChangeVacDays(1)" ${planned>=available?'disabled':''}>+</button>
+        </div>
+        <div style="font-size:12px;color:#888">Cada día de vacaciones añade +1.2 salud ${d?esc(d.name):'perro'} · +0.6 vínculo · +0.8 mental corredor. Te quedan ${available} días este año.</div>
+      </div>`;
+    })()}
 
     <div class="grid-2" style="margin-top:4px">
       <button class="main" style="margin-top:0;opacity:0.6" onclick="G.screen='canicrossHub';G.activeTab='game';render()">← Volver</button>
@@ -1255,7 +1294,6 @@ function renderCanicrossSegment(){
         </div>`;}).join('')}
     </div>`:''}
 
-    ${rs.paceChosen&&!ev?`<button class="main" style="${isLastSeg||rs.retired?'background:#1a1a1a;color:#fff;border-color:#1a1a1a':''}" onclick="${rs.retired?'cnFinishRace()':'cnNextSegment()'}">${isLastSeg||rs.retired?'Terminar carrera 🏁':'Siguiente tramo →'}</button>`:''}
 
     ${(rs.bondDelta||0)!==0?`<div style="font-size:12px;color:#888;text-align:center;margin-top:10px">Vínculo acumulado: <span style="color:${(rs.bondDelta||0)>=0?'#4a8a2a':'#c0392b'};font-weight:600">${(rs.bondDelta||0)>=0?'+':''}${rs.bondDelta||0}</span></div>`:''}
   `;
