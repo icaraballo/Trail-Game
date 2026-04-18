@@ -255,7 +255,7 @@ window.doStartCanicross=()=>{
   G.cnMoney=500;G.cnSeason=1;
   G.cnSelectedRaces=[];G.cnCurrentRaceIdx=0;G.cnRaceResults=[];
   G.cnTrainingBlock=null;G.cnWeek=0;
-  G.cnRestWeeksLeft=3;G.cnOpenMonths=[];
+  G.cnRestWeeksLeft=3;G.cnOpenMonths=[];G.cnOpenSeasonMonths=[];
   G.cnTrainAdrainSessions={left:0,hold:0,forward:0};
   G.equipment={dogHarness:'basic_harness',humanBelt:'basic_belt',line:'basic_line'};
   G.cnOwnedEquipment={dogHarness:['basic_harness'],humanBelt:['basic_belt'],line:['basic_line']};
@@ -281,6 +281,13 @@ window.doCreateDog=()=>{
 
 window.cnSelectBreed=breed=>{G._cnDogBreed=breed;const nm=document.getElementById('dogname');if(nm)G._cnDogName=nm.value;render();};
 window.cnSelectTraining=id=>{G.cnTrainingBlock=id;render();};
+
+window.cnToggleSeasonMonth=m=>{
+  if(!G.cnOpenSeasonMonths)G.cnOpenSeasonMonths=[];
+  const i=G.cnOpenSeasonMonths.indexOf(m);
+  if(i>=0)G.cnOpenSeasonMonths.splice(i,1);else G.cnOpenSeasonMonths.push(m);
+  render();
+};
 
 window.cnToggleMonth=m=>{
   if(!G.cnOpenMonths)G.cnOpenMonths=[];
@@ -815,73 +822,78 @@ function renderCnCalendarioTab(){
   const selIds=sel.map(r=>r.id);
   const MONTHS=[10,11,12,1,2,3];
   const MONTH_NAMES={10:'Octubre',11:'Noviembre',12:'Diciembre',1:'Enero',2:'Febrero',3:'Marzo'};
+  const MONTH_SHORT={10:'Oct',11:'Nov',12:'Dic',1:'Ene',2:'Feb',3:'Mar'};
   const doneIds=(G.cnRaceResults||[]).filter(r=>r.season===G.cnSeason).map(r=>r.raceId);
-  const curMonth=cnCurrentMonth();
-  const mIdx=m=>MONTHS.indexOf(m);
+  const spent=selIds.reduce((a,id)=>{const r=CANICROSS_RACES.find(x=>x.id===id);return a+(r?.cost||0);},0);
+  const budget=G.cnMoney||0;
+  const pct=budget>0?Math.min(100,Math.round(spent/budget*100)):0;
+  if(!G.cnOpenSeasonMonths)G.cnOpenSeasonMonths=[];
+  const tierColor={1:'#4a8a2a',2:'#4a90d9',3:'#c07a10',4:'#c0392b'};
+  const tierLabel={1:'Tier 1',2:'Tier 2',3:'Tier 3',4:'Tier 4'};
 
-  if(!sel.length){
-    const byMonth={};
-    CANICROSS_RACES.forEach(r=>{if(!byMonth[r.month])byMonth[r.month]=[];byMonth[r.month].push(r);});
-    el.innerHTML=`
-      <h2>📅 Calendario</h2>
-      <p class="sub">Temporada oct–mar · Máximo 5 carreras</p>
-      <div class="note" style="margin-bottom:12px">Seleccionadas: <strong>${selIds.length}/5</strong> · Inscripciones: €${CANICROSS_RACES.filter(r=>selIds.includes(r.id)).reduce((a,r)=>a+(r.cost||0),0)}</div>
-      ${MONTHS.map(m=>{
-        const races=(byMonth[m]||[]);
-        if(!races.length)return'';
-        const tierIcon=['','🟢','🟡','🟠','🔴'];
-        return`<div class="section-label">${MONTH_NAMES[m]}</div>
-        ${races.map(r=>{
-          const isSel=selIds.includes(r.id);
-          return`<div class="race-card ${isSel?'sel':''}" onclick="cnToggleRace('${r.id}')">
-            <div class="flex-between">
-              <div>
-                <div class="card-title">${esc(r.name)}</div>
-                <div class="card-sub">${esc(r.location)} · ${r.km}km</div>
-                <div style="margin-top:4px;font-size:12px">${tierIcon[r.tier]||''} Tier ${r.tier} · €${r.cost} inscr. · €${r.prize} premio 1º</div>
-              </div>
-              ${isSel?`<span style="color:#4a8a2a;font-size:20px;font-weight:700;margin-left:8px;flex-shrink:0">✓</span>`:''}
-            </div>
-          </div>`;}).join('')}`;}).join('')}
-      <button class="main" style="margin-top:10px" onclick="cnConfirmCalendar()">Confirmar calendario →</button>
-    `;
-  } else {
-    el.innerHTML=`
-      <h2>📅 Calendario confirmado</h2>
-      <p class="sub">Temporada ${G.cnSeason||1} · Semana ${G.cnWeek||0}</p>
-      <div style="border-radius:10px;overflow:hidden;border:1px solid #e8e6e0;margin-bottom:14px">
-      ${MONTHS.map(m=>{
-        const race=sel.find(r=>r.month===m);
-        const mName=MONTH_NAMES[m];
-        const isCurrent=m===curMonth;
-        const isPast=mIdx(m)<mIdx(curMonth);
-        const bg=isCurrent?'#f0f7f0':isPast?'#fafaf8':'#fff';
-        const monthColor=isCurrent?'#2d7a2d':isPast?'#aaa':'#555';
-        if(!race){
-          return`<div style="display:flex;align-items:center;padding:11px 14px;border-bottom:1px solid #f0ede8;background:${bg}">
-            <div style="min-width:80px;font-size:13px;font-weight:600;color:${monthColor}">${mName}</div>
-            <div style="font-size:13px;color:#ccc;font-style:italic">Sin carrera</div>
-          </div>`;
-        }
-        const isDone=doneIds.includes(race.id);
-        const result=(G.cnRaceResults||[]).find(r=>r.raceId===race.id&&r.season===G.cnSeason);
-        const overdue=isPast&&!isDone;
-        return`<div style="padding:11px 14px;border-bottom:1px solid #f0ede8;background:${bg}">
-          <div style="display:flex;align-items:flex-start;gap:10px">
-            <div style="min-width:80px;font-size:13px;font-weight:600;color:${monthColor};padding-top:2px">${mName}</div>
-            <div style="flex:1">
-              <div style="font-size:14px;font-weight:600;${overdue?'color:#bbb':''}">${esc(race.name)}</div>
-              <div style="font-size:12px;color:#888">${esc(race.location)} · ${race.km}km · Tier ${race.tier}</div>
-              ${isDone&&result?`<div style="margin-top:3px;font-size:13px;font-weight:600;color:${result.dnf?'#c0392b':'#4a8a2a'}">${result.dnf?'DNF':'#'+result.pos}${(result.prize||0)>0?' · +€'+result.prize:''}</div>`:
-                overdue?`<div style="margin-top:3px;font-size:12px;color:#bbb">⏱ Plazo superado</div>`:
-                isCurrent?`<div style="margin-top:3px;font-size:12px;color:#4a8a2a;font-weight:600">← Mes actual</div>`:''}
-            </div>
+  const byMonth={};
+  CANICROSS_RACES.forEach(r=>{if(!byMonth[r.month])byMonth[r.month]=[];byMonth[r.month].push(r);});
+
+  const raceCard=r=>{
+    const isSel=selIds.includes(r.id);
+    const isDone=doneIds.includes(r.id);
+    const noMoney=!isSel&&(spent+(r.cost||0)>budget);
+    const maxed=!isSel&&selIds.length>=5;
+    const clickable=!isDone&&!maxed&&!(noMoney&&!isSel);
+    return`<div class="race-card ${isSel?'sel':''}" style="${isDone?'opacity:0.55;cursor:default':''}" ${clickable?`onclick="cnToggleRace('${r.id}')"`:''}">
+      <div class="flex-between">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:2px">
+            <span class="card-title">${esc(r.name)}</span>
+            <span style="font-size:12px;font-weight:600;padding:1px 6px;border-radius:4px;background:${tierColor[r.tier]||'#888'}22;color:${tierColor[r.tier]||'#888'}">${tierLabel[r.tier]||''}</span>
           </div>
-        </div>`;}).join('')}
+          <div style="font-size:12px;color:#888">${r.monthName} · ${r.km}km · ${esc(r.location)}</div>
+          ${isDone?`<div style="font-size:12px;color:#4a8a2a;margin-top:2px">✓ Ya corrida esta temporada</div>`:''}
+          ${maxed&&!isSel?`<div style="font-size:12px;color:#c07a10;margin-top:2px">Máx. 5 carreras alcanzado</div>`:''}
+          ${noMoney&&!isSel&&!maxed?`<div style="font-size:12px;color:#c0392b;margin-top:2px">Sin presupuesto</div>`:''}
+        </div>
+        <div class="right-col">
+          <div style="font-size:13px;font-weight:600;color:#4a8a2a">€${r.prize}</div>
+          <div style="font-size:12px;color:#aaa">€${r.cost} inscr.</div>
+          ${isSel?`<div style="font-size:12px;color:#4a8a2a;font-weight:600;margin-top:2px">✓</div>`:''}
+        </div>
       </div>
-      <button class="secondary" style="font-size:12px" onclick="if(confirm('¿Reiniciar el calendario? Perderás las carreras seleccionadas.')){G.cnSelectedRaces=[];render()}">Reiniciar selección</button>
-    `;
-  }
+    </div>`;
+  };
+
+  el.innerHTML=`
+    <h2>📅 Calendario de temporada</h2>
+    <p class="sub">Oct–Mar · Máx. 5 carreras · ${sel.length} seleccionadas</p>
+    <div style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:4px">
+        <span>Presupuesto de inscripciones</span>
+        <span style="font-weight:600;color:${pct>85?'#c0392b':pct>50?'#c07a10':'#888'}">${pct}% (€${spent} / €${budget})</span>
+      </div>
+      <div style="height:4px;background:#e8e6e0;border-radius:2px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${pct>85?'#c0392b':'#4a90d9'};border-radius:2px;transition:width .3s"></div>
+      </div>
+    </div>
+    ${MONTHS.map(m=>{
+      const races=byMonth[m]||[];
+      if(!races.length)return'';
+      const mName=MONTH_NAMES[m];
+      const mShort=MONTH_SHORT[m];
+      const mSel=races.filter(r=>selIds.includes(r.id)).length;
+      const isOpen=G.cnOpenSeasonMonths.includes(m);
+      return`<div class="quarter-wrap">
+        <div class="quarter-toggle ${mSel>0?'has-sel':''}" onclick="cnToggleSeasonMonth(${m})">
+          <span style="font-size:14px;font-weight:600;flex:1">${mName} <span style="font-size:12px;font-weight:400;color:#aaa">· ${mShort}</span></span>
+          ${mSel>0?`<span style="font-size:12px;color:#4a8a2a;font-weight:600">${mSel} ✓</span>`:''}
+          <span style="font-size:12px;color:#aaa;display:inline-block;transform:${isOpen?'rotate(90deg)':''};transition:transform .2s">▶</span>
+        </div>
+        ${isOpen?`<div style="padding:4px 0 8px">${races.map(r=>raceCard(r)).join('')}</div>`:''}
+      </div>`;}).join('')}
+    ${sel.length===0?`<div class="hint" style="margin-top:4px">Sin carreras — puedes continuar igualmente.</div>`:''}
+    <div class="grid-2" style="margin-top:16px">
+      <button class="main" style="margin-top:0" onclick="G.activeTab='game';render()">← Volver</button>
+      <button class="main" style="margin-top:0" onclick="cnConfirmCalendar()">Confirmar →</button>
+    </div>
+  `;
 }
 
 // ── TAB: FINANZAS ─────────────────────────────────────
@@ -977,18 +989,18 @@ function renderCanicrossPreRace(){
     ${(()=>{
       const rs=G.cnRaceState;
       if(!rs?.segs?.length)return'';
-      const tCol={flat:'#888780',climb:'#639922',descent:'#E24B4A'};
-      const tBg={flat:'#F1EFE8',climb:'#EAF3DE',descent:'#FCEBEB'};
-      const tLabel={flat:'▶ Llano',climb:'▲ Subida',descent:'▼ Bajada'};
+      const cnRaceObj={id:'cn_pre',km:rs.km,segs:rs.segs};
       return`<div class="card" style="margin-bottom:16px">
-        <div class="sec-title-sm">Recorrido — ${rs.segs.length} tramos</div>
-        ${rs.segs.map((s,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:${i<rs.segs.length-1?'1px solid #f5f4f0':'none'}">
-          <div style="min-width:18px;font-size:12px;font-weight:600;color:#aaa">${i+1}</div>
-          <div style="padding:2px 8px;border-radius:5px;background:${tBg[s.type]};font-size:12px;font-weight:600;color:${tCol[s.type]};white-space:nowrap">${tLabel[s.type]}</div>
-          <div style="flex:1;font-size:13px">${esc(s.name)}</div>
-          <div style="font-size:12px;color:#888;white-space:nowrap">${s.km}km${s.gain>0?' +'+s.gain+'m':s.gain<0?' '+s.gain+'m':''}</div>
-        </div>`).join('')}
-        <div style="font-size:12px;color:#888;margin-top:8px">Rivales: ${rs.rivals?.length||0} equipos</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:2px">${esc(race.name)}</div>
+        <div style="font-size:12px;color:#888;margin-bottom:10px">${race.km}km · Tier ${race.tier} · ${esc(race.location)}</div>
+        <div id="prof-wrap-cn-pre">${profSvg(cnRaceObj,-1,'preview',0)}</div>
+        <div id="prof-info-cn-pre" data-sel="-1" style="min-height:20px">${profSegInfo(cnRaceObj,null,'preview',0)}</div>
+        <div style="display:flex;gap:10px;font-size:12px;color:#aaa;margin-top:8px;flex-wrap:wrap">
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#EAF3DE;border:1px solid #639922;margin-right:3px;vertical-align:middle"></span>Subida</span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#FCEBEB;border:1px solid #E24B4A;margin-right:3px;vertical-align:middle"></span>Bajada</span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#F1EFE8;border:1px solid #888;margin-right:3px;vertical-align:middle"></span>Llano</span>
+        </div>
+        <div style="font-size:12px;color:#888;margin-top:8px">${rs.rivals?.length||0} equipos rivales en carrera</div>
       </div>`;
     })()}
 
@@ -996,6 +1008,11 @@ function renderCanicrossPreRace(){
 
     <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="cnGoToRace()">¡A correr! 🐕 →</button>
     <button class="main" style="margin-top:6px;opacity:0.5" onclick="G.screen='canicrossHub';G.activeTab='game';render()">← Volver</button>`;
+  const rs=G.cnRaceState;
+  if(rs?.segs?.length){
+    const cnRaceObj={id:'cn_pre',km:rs.km,segs:rs.segs};
+    attachProfHandlers(cnRaceObj,'cn-pre','preview',0);
+  }
 }
 
 function renderCanicrossSegment(){
@@ -1049,10 +1066,14 @@ function renderCanicrossSegment(){
       <span style="font-size:12px;color:${posCol};font-weight:600">${posLabel}</span>
     </div>
 
-    ${seg?`<div style="padding:9px 13px;border-left:3px solid ${segTypeCol};background:${segTypeBg};border-radius:0 8px 8px 0;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:600;color:${segTypeCol}">${segTypeLabel} — ${esc(seg.name)}</div>
-      <div style="font-size:12px;color:#777">${seg.km}km${seg.gain>0?` · +${seg.gain}m desnivel`:seg.gain<0?` · ${seg.gain}m desnivel`:' · llano'}</div>
-    </div>`:''}
+    ${(()=>{
+      if(!rs.segs?.length)return'';
+      const cnRaceObj={id:'cn_race',km:rs.km,segs:rs.segs};
+      return`<div class="card" style="margin-bottom:10px;padding:10px 10px 6px">
+        <div id="prof-wrap-cn-race">${profSvg(cnRaceObj,rs.currentSeg,'race',rs.currentSeg)}</div>
+        <div id="prof-info-cn-race" data-sel="${rs.currentSeg}" style="min-height:20px">${profSegInfo(cnRaceObj,rs.currentSeg,'race',rs.currentSeg)}</div>
+      </div>`;
+    })()}
 
     ${lastLogEntry?(()=>{
       const lev=lastLogEntry.event||{};
@@ -1096,6 +1117,10 @@ function renderCanicrossSegment(){
 
     ${(rs.bondDelta||0)!==0?`<div style="font-size:12px;color:#888;text-align:center;margin-top:10px">Vínculo acumulado: <span style="color:${(rs.bondDelta||0)>=0?'#4a8a2a':'#c0392b'};font-weight:600">${(rs.bondDelta||0)>=0?'+':''}${rs.bondDelta||0}</span></div>`:''}
   `;
+  if(rs.segs?.length){
+    const cnRaceObj={id:'cn_race',km:rs.km,segs:rs.segs};
+    attachProfHandlers(cnRaceObj,'cn-race','race',rs.currentSeg);
+  }
 }
 
 function renderCanicrossPostRace(){
