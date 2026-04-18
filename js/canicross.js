@@ -273,7 +273,7 @@ window.doCreateDog=()=>{
   if(!G._cnDogBreed){showToast('Elige una raza','#c0392b');return;}
   G.dog=cnInitDog(name,G._cnDogBreed);
   G._cnDogBreed=null;G._cnDogName=null;
-  G.activeTab='game';G.screen='canicrossHub';
+  G.activeTab='game';G.screen='canicrossTrainingSetup';
   autoSave();
   showToast('¡'+esc(G.dog.name)+' se une a tu equipo! 🐕','#4a8a2a');
   render();
@@ -281,6 +281,17 @@ window.doCreateDog=()=>{
 
 window.cnSelectBreed=breed=>{G._cnDogBreed=breed;const nm=document.getElementById('dogname');if(nm)G._cnDogName=nm.value;render();};
 window.cnSelectTraining=id=>{G.cnTrainingBlock=id;render();};
+
+window.cnConfirmTraining=()=>{
+  if(!G.cnTrainingBlock){showToast('Elige un bloque de entrenamiento','#c0392b');return;}
+  G.screen='canicrossCalendarSetup';render();
+};
+
+window.cnChangeRestWeeks=delta=>{
+  const cur=G.cnRestWeeksLeft??3;
+  const next=Math.max(0,Math.min(3,cur+delta));
+  G.cnRestWeeksLeft=next;render();
+};
 
 window.cnToggleSeasonMonth=m=>{
   if(!G.cnOpenSeasonMonths)G.cnOpenSeasonMonths=[];
@@ -472,7 +483,8 @@ window.cnToggleRace=id=>{
 window.cnConfirmCalendar=()=>{
   if(!(G.cnSelectedRaces||[]).length){showToast('Selecciona al menos una carrera','#c0392b');return;}
   G.cnSelectedRaces=[...G.cnSelectedRaces].sort((a,b)=>a.month-b.month);
-  G.activeTab='game';
+  G.activeTab='game';G.screen='canicrossHub';
+  autoSave();
   showToast('Calendario confirmado: '+G.cnSelectedRaces.length+' carrera(s)','#4a8a2a');
   render();
 };
@@ -652,38 +664,35 @@ function renderCnCorredorTab(){
       ${Object.entries(G.runner.stats||{}).slice(0,4).map(([k,v])=>`<div class="bar-row"><span class="bar-label">${k.charAt(0).toUpperCase()+k.slice(1)}</span><div class="bar-track" style="flex:1"><div class="bar-fill" style="width:${v}%;background:${v>=70?'#4a8a2a':v>=50?'#4a90d9':'#c07a10'}"></div></div><span class="bar-pct">${v}</span></div>`).join('')}
     </div>
 
-    ${d&&d.breed==='malinois'&&G.cnTrainingBlock==='solo'?`<div class="warn">⚠ Malinois + entreno solo → -${CN_BREED_MODS.malinois.bondDecayPerWeek} vínculo extra esta semana.</div>`:''}
-
-    <div class="section-label">Bloque de entrenamiento semanal</div>
-    ${(CANICROSS_TRAINING_BLOCKS||[]).map(b=>`
-      <div class="train-card ${G.cnTrainingBlock===b.id?'sel':''}" onclick="cnSelectTraining('${b.id}')">
-        <div class="flex-between-center">
-          <div>
-            <div class="card-title">${b.label}</div>
-            <div class="card-sub">${b.desc}</div>
-          </div>
-          <span style="font-size:12px;color:#888;flex-shrink:0">${b.hours}h</span>
+    ${(()=>{
+      const b=(CANICROSS_TRAINING_BLOCKS||[]).find(x=>x.id===G.cnTrainingBlock);
+      if(!b)return`<div class="warn" style="margin-bottom:12px">⚠ Sin bloque de entrenamiento. <button class="secondary" onclick="G.screen='canicrossTrainingSetup';render()">Configurar →</button></div>`;
+      const warnMalinois=d&&d.breed==='malinois'&&b.id==='solo';
+      return`<div class="card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-size:14px;font-weight:700">🏋️ ${b.label}</div>
+          <button class="secondary" style="font-size:12px;padding:3px 10px" onclick="G.screen='canicrossTrainingSetup';render()">Cambiar</button>
         </div>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px">
-          ${Object.entries(b.runnerMod||{}).filter(([,v])=>v).map(([k,v])=>`<span style="font-size:11px;background:#eaf4ea;color:#2d5a2d;padding:1px 6px;border-radius:4px">corredor ${k} ${v>0?'+'+v:v}</span>`).join('')}
-          ${b.dogMod?Object.entries(b.dogMod).filter(([,v])=>v).map(([k,v])=>`<span style="font-size:11px;background:#f0f6ff;color:#2d4fa0;padding:1px 6px;border-radius:4px">perro ${k} ${v>0?'+'+v:v}</span>`).join(''):''}
-          ${b.bondMod!=null?`<span style="font-size:11px;background:${b.bondMod>=0?'#fef9ec':'#fef0f0'};color:${b.bondMod>=0?'#c07a10':'#c0392b'};padding:1px 6px;border-radius:4px">vínculo ${b.bondMod>=0?'+'+b.bondMod:b.bondMod}</span>`:''}
-          ${b.teachCommand?`<span style="font-size:11px;background:#f0ede8;color:#555;padding:1px 6px;border-radius:4px">enseña comando</span>`:''}
+        <div style="font-size:12px;color:#666;margin-bottom:6px">${b.desc} · ${b.hours}h/sem</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          ${Object.entries(b.runnerMod||{}).filter(([,v])=>v).map(([k,v])=>`<span style="font-size:11px;color:${v>0?'#4a8a2a':'#c0392b'}">corredor ${k} ${v>0?'+'+v:v}</span>`).join('')}
+          ${b.dogMod?Object.entries(b.dogMod).filter(([,v])=>v).map(([k,v])=>`<span style="font-size:11px;color:${v>0?'#4a90d9':'#c0392b'}">perro ${k} ${v>0?'+'+v:v}</span>`).join(''):''}
+          ${b.bondMod!=null?`<span style="font-size:11px;color:${b.bondMod>=0?'#c07a10':'#c0392b'}">vínculo ${b.bondMod>=0?'+'+b.bondMod:b.bondMod}</span>`:''}
         </div>
-      </div>`).join('')}
+        ${warnMalinois?`<div class="warn" style="margin-top:6px;font-size:12px">⚠ Malinois + entreno solo → -${CN_BREED_MODS.malinois.bondDecayPerWeek} vínculo extra</div>`:''}
+      </div>`;
+    })()}
 
-    <div class="card" style="margin-top:12px;margin-bottom:4px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div class="card-title">🏖 Semanas de descanso</div>
+    ${restLeft>0?`<div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:14px;font-weight:700">🏖 Semanas de descanso</div>
         <div style="font-size:12px;color:#888">${restLeft}/3 disponibles</div>
       </div>
-      ${restLeft>0?`
-        <div style="font-size:12px;color:#555;margin-bottom:8px">Avanza sin entrenar: +6 salud ${d?esc(d.name):'perro'} · +3 vínculo · +4 mental corredor.</div>
-        <button class="secondary" onclick="cnAdvanceRestWeek()">Tomar semana de descanso →</button>
-      `:`<div style="font-size:12px;color:#aaa">Sin semanas de descanso disponibles esta temporada.</div>`}
-    </div>
+      <div style="font-size:12px;color:#555;margin-bottom:8px">+6 salud ${d?esc(d.name):'perro'} · +3 vínculo · +4 mental corredor</div>
+      <button class="secondary" onclick="cnAdvanceRestWeek()">Tomar semana de descanso →</button>
+    </div>`:''}
 
-    <button class="main" style="margin-top:10px" onclick="cnAdvanceWeek()">Avanzar semana de entrenamiento →</button>
+    <button class="main" style="margin-top:4px;margin-bottom:14px" onclick="cnAdvanceWeek()">Avanzar semana de entrenamiento →</button>
 
     <div class="section-label" style="margin-top:18px">📅 Carreras de temporada</div>
     ${races.length>0?MONTHS.map(m=>{
@@ -812,6 +821,139 @@ function renderCnEquipoTab(){
     ${renderSection('Arnés del perro','dogHarness')}
     ${renderSection('Cinturón del corredor','humanBelt')}
     ${renderSection('Línea de tiro','line')}
+  `;
+}
+
+// ── SETUP: ENTRENAMIENTO + SEMANAS DESCANSO ───────────
+function renderCanicrossTrainingSetup(){
+  const el=document.getElementById('main');
+  const d=G.dog;
+  const restLeft=G.cnRestWeeksLeft??3;
+  const sel=G.cnTrainingBlock;
+
+  el.innerHTML=`
+    <h2>🏋️ Plan de entrenamiento</h2>
+    <p class="sub">Temporada ${G.cnSeason||1} · elige un bloque para toda la temporada</p>
+
+    ${d?`<div class="card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:14px;font-weight:600">🐕 ${esc(d.name)}</span>
+        <span style="font-size:12px;color:#888">Vínculo ${d.bond}/100 · Salud ${d.health}</span>
+      </div>
+    </div>`:''}
+
+    ${(CANICROSS_TRAINING_BLOCKS||[]).map(b=>{
+      const isSel=sel===b.id;
+      return`<div class="card ${isSel?'sel':''}" style="margin-bottom:10px;cursor:pointer;${isSel?'border-color:#1a1a1a;box-shadow:0 0 0 2px #1a1a1a18':''}" onclick="cnSelectTraining('${b.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:700;margin-bottom:2px">${b.label} <span style="font-size:12px;font-weight:400;color:#888">· ${b.hours}h/sem</span>${isSel?`<span style="float:right;color:#4a8a2a;font-size:14px">✓</span>`:''}</div>
+            <div style="font-size:13px;color:#666;margin-bottom:8px">${b.desc}</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${Object.entries(b.runnerMod||{}).filter(([,v])=>v).map(([k,v])=>`<span style="font-size:12px;color:${v>0?'#4a8a2a':'#c0392b'}">Corredor ${k.charAt(0).toUpperCase()+k.slice(1)} ${v>0?'+'+v:v}</span>`).join('')}
+              ${b.dogMod?Object.entries(b.dogMod).filter(([,v])=>v).map(([k,v])=>`<span style="font-size:12px;color:${v>0?'#4a90d9':'#c0392b'}">Perro ${k} ${v>0?'+'+v:v}</span>`).join(''):''}
+              ${b.bondMod!=null?`<span style="font-size:12px;color:${b.bondMod>=0?'#c07a10':'#c0392b'}">Vínculo ${b.bondMod>=0?'+'+b.bondMod:b.bondMod}</span>`:''}
+              ${b.teachCommand?`<span style="font-size:12px;color:#888">🎓 Enseña comandos</span>`:''}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+
+    <div class="card" style="margin-top:16px;margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:15px;font-weight:700">🏖 Semanas de descanso</div>
+        <div style="font-size:12px;color:#888">${restLeft} / 3 disponibles este año</div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <button class="secondary" style="width:44px;height:44px;font-size:20px;padding:0;text-align:center" onclick="cnChangeRestWeeks(-1)" ${restLeft<=0?'disabled':''}>−</button>
+        <div style="text-align:center">
+          <div style="font-size:32px;font-weight:700;color:${restLeft>0?'#c07a10':'#aaa'}">${restLeft}</div>
+          <div style="font-size:12px;color:#888">semanas reservadas</div>
+        </div>
+        <button class="secondary" style="width:44px;height:44px;font-size:20px;padding:0;text-align:center" onclick="cnChangeRestWeeks(1)" ${restLeft>=3?'disabled':''}>+</button>
+      </div>
+      <div style="font-size:12px;color:#888">Cada semana de descanso da +6 salud ${d?esc(d.name):'perro'} · +3 vínculo · +4 mental corredor. Máximo 3 por temporada.</div>
+    </div>
+
+    <div class="grid-2" style="margin-top:4px">
+      <button class="main" style="margin-top:0;opacity:0.6" onclick="G.screen='canicrossHub';G.activeTab='game';render()">← Volver</button>
+      <button class="main" style="margin-top:0;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="cnConfirmTraining()">Ver calendario →</button>
+    </div>
+  `;
+}
+
+// ── SETUP: CALENDARIO DE TEMPORADA ────────────────────
+function renderCanicrossCalendarSetup(){
+  // Reutiliza renderCnCalendarioTab pero con navegación diferente
+  const el=document.getElementById('main');
+  const sel=G.cnSelectedRaces||[];
+  const selIds=sel.map(r=>r.id);
+  const MONTHS=[10,11,12,1,2,3];
+  const MONTH_NAMES={10:'Octubre',11:'Noviembre',12:'Diciembre',1:'Enero',2:'Febrero',3:'Marzo'};
+  const doneIds=(G.cnRaceResults||[]).filter(r=>r.season===G.cnSeason).map(r=>r.raceId);
+  const spent=selIds.reduce((a,id)=>{const r=CANICROSS_RACES.find(x=>x.id===id);return a+(r?.cost||0);},0);
+  const budget=G.cnMoney||0;
+  const pct=budget>0?Math.min(100,Math.round(spent/budget*100)):0;
+  if(!G.cnOpenSeasonMonths||G.cnOpenSeasonMonths.length===0)G.cnOpenSeasonMonths=[10,11,12,1,2,3];
+  const tierColor={1:'#4a8a2a',2:'#4a90d9',3:'#c07a10',4:'#c0392b'};
+  const tierLabel={1:'Tier 1',2:'Tier 2',3:'Tier 3',4:'Tier 4'};
+  const byMonth={};
+  CANICROSS_RACES.forEach(r=>{if(!byMonth[r.month])byMonth[r.month]=[];byMonth[r.month].push(r);});
+  const raceCard=r=>{
+    const isSel=selIds.includes(r.id);const isDone=doneIds.includes(r.id);
+    const noMoney=!isSel&&(spent+(r.cost||0)>budget);const maxed=!isSel&&selIds.length>=5;
+    const clickable=!isDone&&!maxed&&!(noMoney&&!isSel);
+    return`<div class="race-card ${isSel?'sel':''}" style="${isDone?'opacity:0.55;cursor:default':''}" ${clickable?`onclick="cnToggleRace('${r.id}')"`:''}">
+      <div class="flex-between">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:2px">
+            <span class="card-title">${esc(r.name)}</span>
+            <span style="font-size:12px;font-weight:600;padding:1px 6px;border-radius:4px;background:${tierColor[r.tier]||'#888'}22;color:${tierColor[r.tier]||'#888'}">${tierLabel[r.tier]||''}</span>
+          </div>
+          <div style="font-size:12px;color:#888">${r.monthName} · ${r.km}km · ${esc(r.location)}</div>
+          ${noMoney&&!isSel&&!maxed?`<div style="font-size:12px;color:#c0392b;margin-top:2px">Sin presupuesto</div>`:maxed&&!isSel?`<div style="font-size:12px;color:#c07a10;margin-top:2px">Máx. 5 carreras</div>`:''}
+        </div>
+        <div class="right-col">
+          <div style="font-size:13px;font-weight:600;color:#4a8a2a">€${r.prize}</div>
+          <div style="font-size:12px;color:#aaa">€${r.cost} inscr.</div>
+          ${isSel?`<div style="font-size:12px;color:#4a8a2a;font-weight:600;margin-top:2px">✓</div>`:''}
+        </div>
+      </div>
+    </div>`;
+  };
+
+  el.innerHTML=`
+    <h2>📅 Calendario de temporada</h2>
+    <p class="sub">Oct–Mar · Máx. 5 carreras · ${sel.length} seleccionadas</p>
+    <div style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:4px">
+        <span>Presupuesto de inscripciones</span>
+        <span style="font-weight:600;color:${pct>85?'#c0392b':pct>50?'#c07a10':'#888'}">${pct}% (€${spent} / €${budget})</span>
+      </div>
+      <div style="height:4px;background:#e8e6e0;border-radius:2px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${pct>85?'#c0392b':'#4a90d9'};border-radius:2px;transition:width .3s"></div>
+      </div>
+    </div>
+    ${MONTHS.map(m=>{
+      const races=byMonth[m]||[];if(!races.length)return'';
+      const mName=MONTH_NAMES[m];
+      const mSel=races.filter(r=>selIds.includes(r.id)).length;
+      const isOpen=G.cnOpenSeasonMonths.includes(m);
+      return`<div class="quarter-wrap">
+        <div class="quarter-toggle ${mSel>0?'has-sel':''}" onclick="cnToggleSeasonMonth(${m})">
+          <span style="font-size:14px;font-weight:600;flex:1">${mName} <span style="font-size:12px;font-weight:400;color:#aaa">· ${races.length} carrera${races.length>1?'s':''}</span></span>
+          ${mSel>0?`<span style="font-size:12px;color:#4a8a2a;font-weight:600">${mSel} ✓</span>`:''}
+          <span style="font-size:12px;color:#aaa;display:inline-block;transform:${isOpen?'rotate(90deg)':''};transition:transform .2s">▶</span>
+        </div>
+        ${isOpen?`<div style="padding:4px 0 8px">${races.map(r=>raceCard(r)).join('')}</div>`:''}
+      </div>`;
+    }).join('')}
+    ${sel.length===0?`<div class="hint" style="margin-top:4px">Sin carreras — puedes empezar igualmente y añadir desde el hub.</div>`:''}
+    <div class="grid-2" style="margin-top:16px">
+      <button class="main" style="margin-top:0;opacity:0.6" onclick="G.screen='canicrossTrainingSetup';render()">← Entreno</button>
+      <button class="main" style="margin-top:0;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="cnConfirmCalendar()">¡Empezar temporada! →</button>
+    </div>
   `;
 }
 

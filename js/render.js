@@ -201,6 +201,8 @@ function render(){
     mdsBivouac:renderMDSBivouac,
     mdsFinal:renderMDSFinal,
     canicrossCreateDog:renderCnCreateDog,
+    canicrossTrainingSetup:renderCanicrossTrainingSetup,
+    canicrossCalendarSetup:renderCanicrossCalendarSetup,
     canicrossHub:renderCnCorredorTab,
     canicrossPreRace:renderCanicrossPreRace,
     canicrossSegment:renderCanicrossSegment,
