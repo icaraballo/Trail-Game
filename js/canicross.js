@@ -210,14 +210,6 @@ function cnGenerateRivals(race){
   });
 }
 
-function cnLivePosition(rs){
-  if(!rs.rivals||!rs.rivals.length)return{pos:1,total:1};
-  const myTime=(rs.time||0)+(rs.timePenalty||0);
-  const total=rs.rivals.length+1;
-  const pos=rs.rivals.filter(r=>r.estimatedTime<myTime).length+1;
-  return{pos,total};
-}
-
 // ── RACE FINISH ───────────────────────────────────────
 function cnFinishRace(){
   const rs=G.cnRaceState;if(!rs)return;
@@ -237,8 +229,7 @@ function cnFinishRace(){
   const catRivals=rivals.filter(r=>cnGetCategory(r.age||30).id===myCat.id);
   const catPos=Math.max(1,catRivals.filter(r=>r.estimatedTime<totalTime).length+1);
 
-  const prize=pos===1?race.prize:pos===2?Math.round(race.prize*0.6):pos===3?Math.round(race.prize*0.4):0;
-  G.cnMoney=(G.cnMoney||0)+prize;
+  const prize=rs.retired?0:(pos===1?race.prize:pos===2?Math.round(race.prize*0.6):pos===3?Math.round(race.prize*0.4):0);
 
   if(rs.injuryPending){
     d.injury=rs.injuryPending;
@@ -249,9 +240,9 @@ function cnFinishRace(){
     d.races=(d.races||0)+1;
     d.kmTogether=(d.kmTogether||0)+(race.km||0);
     G.cnMoney=Math.max(0,(G.cnMoney||0)-(race.cost||0));
+    G.cnMoney=(G.cnMoney||0)+prize;
+    G.followers=(G.followers||0)+Math.round((pos<=3?150:pos<=10?80:30)*(race.tier||1));
   }
-
-  G.followers=(G.followers||0)+Math.round((pos<=3?150:pos<=10?80:30)*(race.tier||1));
 
   if(!G.cnRaceResults)G.cnRaceResults=[];
   G.cnRaceResults.push({
@@ -273,6 +264,8 @@ window.doStartCanicross=()=>{
   if(!G.runner.name.trim())G.runner.name='Corredor';
   G.runner.stats=applyAgeToStats({...SPEC_STATS[G.runner.specialty]},G.runner.age||25);
   G.canicrossMode=true;
+  G.gameMode='canicross';
+  if(G._saveSlot==null)G._saveSlot=0;
   G.cnMoney=500;G.cnSeason=1;
   G.cnSelectedRaces=[];G.cnCurrentRaceIdx=0;G.cnRaceResults=[];
   G.cnTrainingBlock=null;G.cnWeek=0;
@@ -416,7 +409,7 @@ window.cnStartRace=idx=>{
   if(!cnCanRace()){
     const d=G.dog;
     if(!d){showToast('Sin perro asignado','#c0392b');return;}
-    if(d.bond<30){showToast('Vínculo insuficiente — necesitas ≥30 para competir (actual: '+d.bond+')','#c0392b');return;}
+    if(d.bond<cnRaceThreshold()){showToast('Vínculo insuficiente — necesitas ≥'+cnRaceThreshold()+' para competir (actual: '+d.bond+')','#c0392b');return;}
     if(d.injury&&d.injuryRaces>0){showToast(esc(d.name)+' está de baja ('+d.injuryRaces+' carreras)','#c0392b');return;}
     showToast('El perro no puede correr ahora','#c0392b');return;
   }
@@ -429,7 +422,7 @@ window.cnStartRace=idx=>{
   G.cnRaceState={
     raceId:race.id,raceName:race.name,km:race.km,tier:race.tier,month:race.month,
     numSegs,segs,rivals:cnGenerateRivals(race),basePace,
-    currentSeg:0,pendingEvent:null,decisionMade:false,paceChosen:false,
+    currentSeg:0,pendingEvent:null,paceChosen:false,
     time:0,bondDelta:0,energyBonus:0,speedBonus:0,timePenalty:0,
     dogHealth:G.dog.health,dogBond:G.dog.bond,runnerEnergy:100+(G.cnDogFoodPremium?5:0),
     eventLog:[],retired:false,injuryPending:null,done:false,
@@ -442,7 +435,7 @@ window.cnGoToRace=()=>{G.screen='canicrossSegment';render();};
 window.cnNextSegment=()=>{
   const rs=G.cnRaceState;if(!rs)return;
   rs.currentSeg++;
-  rs.pendingEvent=null;rs.decisionMade=false;rs.paceChosen=false;
+  rs.pendingEvent=null;rs.paceChosen=false;
   if(rs.currentSeg>=rs.numSegs){cnFinishRace();return;}
   render();
 };
@@ -456,7 +449,7 @@ window.cnMakeDecision=optIdx=>{
   if(opt.injuryRisk&&Math.random()<0.4)rs.injuryPending=opt.injurySevere?'luxacion':'almohadillas';
   if(opt.retire)rs.retired=true;
   rs.eventLog.push({seg:rs.currentSeg,event:ev,choice:optIdx,resolved:true});
-  rs.pendingEvent=null;rs.decisionMade=true;
+  rs.pendingEvent=null;
   if(rs.retired){cnFinishRace();}
   else if(rs.currentSeg+1>=rs.numSegs){cnFinishRace();}
   else{cnNextSegment();}
@@ -575,13 +568,13 @@ window.cnSelectEquip=(category,id)=>{
 window.cnEndSeason=()=>{
   const d=G.dog;
   if(d&&!d.retired){
-    d.age=(d.age||1)+1;
     if((d.injuryRaces||0)>0){d.injuryRaces=Math.max(0,d.injuryRaces-1);if(d.injuryRaces===0)d.injury=null;}
-    if(d.age>=6&&!G._cnAgingWarned){G._cnAgingWarned=true;}
-    // Displasia: 8% chance, ages 4-7, once
+    // Displasia: 8% chance, ages 4-7, once — evaluate BEFORE incrementing age
     if(d.age>=4&&d.age<=7&&!G._cnDislasiaEvent&&Math.random()<0.08){
       G._cnDislasiaEvent=true;G.screen='canicrossDisplasia';render();return;
     }
+    d.age=(d.age||1)+1;
+    G._cnAgingWarned=d.age>=6;
     // Neglect health decay age 7+
     if(d.age>=7){
       d.health=Math.max(0,(d.health||100)-5);
@@ -628,6 +621,8 @@ window.cnRetireDog=()=>{
 window.cnNewDogAfterRetirement=()=>{
   if(G.dog&&!G.dog.retired)G.dog.retired=true;
   G._cnDogBreed=null;G._cnDogName=null;
+  delete G._cnDislasiaEvent;
+  delete G._cnAgingWarned;
   // Reset dog training sessions
   G.cnTrainAdrainSessions={left:0,hold:0,forward:0};
   G.screen='canicrossCreateDog';render();
@@ -674,7 +669,7 @@ window.cnDoPreseasonAct=id=>{
   if(act.bondBonus&&d){d.bond=Math.min(100,(d.bond||0)+act.bondBonus);d.peakBond=Math.max(d.peakBond||0,d.bond);}
   if(act.healthBonus&&d)d.health=Math.min(100,(d.health||100)+act.healthBonus);
   if(act.mentalBonus&&G.runner?.stats)G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+act.mentalBonus);
-  if(act.teachFirst&&d){d.commands=d.commands||{};d.commands.forward=true;showToast(esc(d.name)+' aprende "Adelante" en el entreno ✅','#4a8a2a');}
+  if(act.teachFirst&&d){d.commands=d.commands||{};if(!d.commands.forward){d.commands.forward=true;showToast(esc(d.name)+' aprende "Adelante" en el entreno ✅','#4a8a2a');}}
   G.cnPreseasonDone.push(id);
   autoSave();render();
   setTimeout(()=>showToast(act.label+' completado ✓','#4a8a2a'),100);
@@ -810,14 +805,13 @@ function renderCnCorredorTab(){
   const canRace=cnCanRace();
   const races=G.cnSelectedRaces||[];
   const doneIds=(G.cnRaceResults||[]).filter(r=>r.season===G.cnSeason).map(r=>r.raceId);
-  const pendingRaces=races.filter(r=>!doneIds.includes(r.id));
-  const allRaceDone=races.length>0&&pendingRaces.length===0;
   const curMonth=cnCurrentMonth();
   const MONTHS=[10,11,12,1,2,3];
   const MONTH_NAMES={10:'Octubre',11:'Noviembre',12:'Diciembre',1:'Enero',2:'Febrero',3:'Marzo'};
   const mIdx=m=>MONTHS.indexOf(m);
-  const restLeft=G.cnRestWeeksLeft??3;
-
+  const isPastMonth=m=>mIdx(m)<mIdx(curMonth);
+  const pendingRaces=races.filter(r=>!doneIds.includes(r.id)&&!isPastMonth(r.month));
+  const allRaceDone=races.length>0&&pendingRaces.length===0;
   cnCheckBirthday();
 
   el.innerHTML=`
@@ -869,7 +863,6 @@ function renderCnCorredorTab(){
     })()}
 
     ${(()=>{
-      const nextRace=pendingRaces.find(r=>r.month===curMonth)||pendingRaces[0];
       const raceThisMonth=pendingRaces.find(r=>r.month===curMonth);
       if(raceThisMonth&&canRace){
         const idx=races.indexOf(raceThisMonth);
@@ -913,7 +906,7 @@ function renderCnCorredorTab(){
           ${done?`<div style="font-size:13px;font-weight:600;color:${result?.dnf?'#c0392b':'#4a8a2a'}">${result?.dnf?'DNF — Retirado':'Posición #'+(result?.pos||'?')}${(result?.prize||0)>0?' · +€'+result.prize:''}</div>`
                 :overdue?`<div style="font-size:13px;color:#bbb">⏱ Plazo superado — no se puede correr</div>`
                 :canRace?`<button class="main" style="margin-top:6px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="cnStartRace(${idx})">Correr ahora →</button>`
-                :d&&d.bond<30?`<div class="note" style="margin-top:6px">Vínculo insuficiente (${d.bond}/30)</div>`
+                :d&&d.bond<cnRaceThreshold()?`<div class="note" style="margin-top:6px">Vínculo insuficiente (${d.bond}/${cnRaceThreshold()})</div>`
                 :`<div class="note" style="margin-top:6px">El perro no puede correr ahora</div>`}
         </div>`:''}
       </div>`;
@@ -941,7 +934,7 @@ function renderCnPerroTab(){
 
     ${isOld?`<div class="warn">🦴 ${esc(d.name)} ya nota el paso del tiempo (${d.age} años). Su rendimiento puede empezar a decrecer.</div>`:''}
     ${d.injury?`<div class="danger">🤕 Lesión: <strong>${{almohadillas:'Almohadillas rozadas',luxacion:'Luxación',golpe_calor:'Golpe de calor'}[d.injury]||d.injury}</strong> · ${d.injuryRaces} carrera(s) de baja<br><span style="font-size:12px;color:#c0392b">Usa el veterinario para reducir la baja</span></div>`:''}
-    ${!d.injury&&d.bond<30?`<div class="note">⚡ Vínculo insuficiente para competir. Necesita ≥30 (actual: <strong>${d.bond}</strong>). Entrena juntos.</div>`:''}
+    ${!d.injury&&d.bond<cnRaceThreshold()?`<div class="note">⚡ Vínculo insuficiente para competir. Necesita ≥${cnRaceThreshold()} (actual: <strong>${d.bond}</strong>). Entrena juntos.</div>`:''}
 
     <div class="card" style="margin-bottom:12px">
       <div class="sec-title-sm">Stats</div>
@@ -1017,7 +1010,6 @@ function renderCnEquipoTab(){
 function renderCanicrossTrainingSetup(){
   const el=document.getElementById('main');
   const d=G.dog;
-  const restLeft=G.cnRestWeeksLeft??3;
   const sel=G.cnTrainingBlock;
 
   el.innerHTML=`
@@ -1356,7 +1348,7 @@ function renderCanicrossPreRace(){
       </div>
       ${d?`<div class="flex-between-center">
         <span style="font-size:14px">🐕 ${esc(d.name)}</span>
-        <span style="color:${d.bond>=30?'#4a8a2a':'#c0392b'};font-size:13px">Vínculo ${d.bond}/100</span>
+        <span style="color:${d.bond>=cnRaceThreshold()?'#4a8a2a':'#c0392b'};font-size:13px">Vínculo ${d.bond}/100</span>
       </div>`:''}
     </div>
 

@@ -1448,6 +1448,7 @@ window.doCoachRaceFinish=()=>{
   G.coachRaceIdx++;G.coachRaceData=null;
   G.coachRaceEventPending=null;G.coachDayCondition=null;
 
+  const isDnf=pos>=99;
   // Registrar decisión positiva si hubo podio
   if(pos<=3&&!isDnf)logCoachDecision('podio_logrado','El atleta consiguió podio',true);
   if(isDnf)logCoachDecision('dnf_carrera','El atleta abandonó una carrera',false);
@@ -3380,7 +3381,6 @@ function generateCoachSeasonObjective(){
   const totalDnfs=(hist.reduce((s,h)=>{
     const r=h.raceResults||[];return s+r.filter(x=>x.dnf).length;},0));
   const prevBest=lastSeason?.bestPos||999;
-  const hadInjury=lastSeason&&G.coachInjury;
 
   // Pool base por personalidad
   const basePool=COACH_SEASON_OBJECTIVES[a.personality]||COACH_SEASON_OBJECTIVES.obediente;
@@ -3449,7 +3449,7 @@ function generateCoachSeasonObjective(){
 function generateCoachSponsorPool(){
   const season=G.coachSeason||1;
   const tier=season<=1?1:2;
-  const pool=[...COACH_SPONSORS_POOL].filtershuffle((s=>s.tier<=tier));
+  const pool=shuffle([...COACH_SPONSORS_POOL].filter(s=>s.tier<=tier));
   G.coachSponsorPool=pool.slice(0,3);
 }
 

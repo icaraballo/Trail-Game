@@ -20,7 +20,7 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
-const GAME_BUILD=46; // incrementar con cada versión del juego
+const GAME_BUILD=55; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
@@ -63,10 +63,22 @@ function migrateState(saved){
    'seasonDiary','aidSelected','paceLog','rivalChildren','lifePendingAthletes',
    'coachSelectedRaces','coachRaceResults','coachAthleteHistory','coachDecisionLog',
    'coachEventLog','coachRoster','coachSponsors','unlockedAchievements',
-   'utCalendar','utResults','utCrew','utPaceLog','backyardHistory','backyardRivalState','mdsHistorialEtapas']
+   'utCalendar','utResults','utCrew','utPaceLog','backyardHistory','backyardRivalState','mdsHistorialEtapas',
+   'clubLegadoAthletes','clubMilestones','ownBrandEvents','cnVetHistory','cnRaceResults','cnSelectedRaces']
     .forEach(k=>{if(!Array.isArray(merged[k]))merged[k]=Array.isArray(base[k])?[...base[k]]:[];});
   merged.utMochila={...(saved.utMochila||{})};
   merged.backyardMochila={...(saved.backyardMochila||{})};
+  // Deep-merge de objetos anidados adicionales
+  if(saved.dog)          merged.dog={...base.dog,...saved.dog};
+  if(saved.club)         merged.club={...base.club,...saved.club};
+  if(saved.clubModeData) merged.clubModeData={...base.clubModeData,...saved.clubModeData};
+  if(saved.ownBrand)     merged.ownBrand={...base.ownBrand,...saved.ownBrand};
+  if(saved.cnRaceState)  merged.cnRaceState={...base.cnRaceState,...saved.cnRaceState};
+  if(saved.coachAthlete) merged.coachAthlete={...base.coachAthlete,...saved.coachAthlete};
+  if(saved.lifeAthlete)  merged.lifeAthlete={...base.lifeAthlete,...saved.lifeAthlete};
+  if(saved.legadoData)   merged.legadoData={...base.legadoData,...saved.legadoData};
+  if(saved.trainingMomentum) merged.trainingMomentum={...base.trainingMomentum,...saved.trainingMomentum};
+  if(saved.trainingBlock)merged.trainingBlock={...base.trainingBlock,...saved.trainingBlock};
   return merged;
 }
 

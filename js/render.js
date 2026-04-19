@@ -657,7 +657,7 @@ function renderSaveScreen(){
   const autoData=loadFromSlot('auto');
   el.innerHTML=`
     <h1>Juego Trail</h1>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v50</span></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v56</span></div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
       <p class="sub" style="margin-bottom:0;flex:1">Partidas guardadas</p>
       <button onclick="showTutorial()" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid #ddd;border-radius:20px;background:#fff;font-size:12px;font-weight:600;color:#888;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background='#fff'">📖 Tutorial</button>
@@ -718,6 +718,7 @@ window.loadSlot=slot=>{
     if(!data||!data.state){alert('Ranura vacía o no se pudo leer.');return;}
     const savedBuild=data.state._build||0;
     Object.assign(G,freshState(),data.state);
+    G._saveSlot=slot;
     if(G.carreraVida&&G.lifecyclePhase==='overlap'&&G.lifeAthlete){
       G.screen='overlapHub';
     }
@@ -1263,7 +1264,7 @@ function renderIntro(){
   el.innerHTML=`
     <h1>Juego Trail</h1>
     <p class="sub">Crea tu corredor y empieza tu carrera deportiva</p>
-    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v50</div>
+    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v56</div>
     ${G.gameMode==='expres'?`<div class="warn" style="margin-bottom:14px">⚡ <strong>Carrera Exprés</strong> — 3 temporadas · sin gestión de jornada · ganancias de entrenamiento ×1.5</div>`:''}
     <label class="field-label">Nombre de la partida</label>
     <input id="runname" type="text" placeholder="Ej: Temporada del reto, Sin trabajo año 1..." value="${esc(G.runName||'')}" maxlength="30" style="margin-bottom:14px"/>
@@ -2339,7 +2340,7 @@ function renderSeasonBalance(){
     </div>
 
     <div class="section-label">¿En qué inviertes para la próxima temporada?</div>
-    <p style="font-size:13px;color:#aaa;margin-bottom:10px">Ahorros actuales: €${G.money+yearNet>0?G.money+yearNet:0}</p>
+    <p style="font-size:13px;color:#aaa;margin-bottom:10px">Ahorros actuales: €${Math.max(0,G.money+yearNet)}</p>
     ${[['fisio','Fisioterapeuta','Reduce riesgo de lesión. Recuperación más rápida.',200],['entrenador','Entrenador personal','Bloques de entrenamiento +20% efectivos.',250],['suplementos','Suplementos y nutrición','Avituallamientos más eficaces. +3 Nutrición.',100]].map(([id,l,d,cost])=>`
       <div class="aid-row ${G.spending[id]?'sel-aid':''}" onclick="toggleSpend('${id}',${cost},${yearNet})">
         <div><div class="aid-name">${l}${G.spending[id]?` <span style="font-size:12px;color:#4a90d9;font-weight:400">· contratado</span>`:''}</div><div class="aid-effect">${d}</div></div>
@@ -2970,8 +2971,12 @@ function renderOverlapHub(){
 
 window.goToCoachFromOverlap=()=>{
   if(!G.lifeAthlete){showToast('Sin atleta asignado todavía','#c0392b');return;}
-  // Preparar el modo entrenador con lifeAthlete como atleta activo
   if(!G.coachAthlete)G.coachAthlete={...G.lifeAthlete};
+  if(!Array.isArray(G.coachRoster))G.coachRoster=[];
+  if(!Array.isArray(G.coachSelectedRaces))G.coachSelectedRaces=[];
+  if(!Array.isArray(G.coachRaceResults))G.coachRaceResults=[];
+  if(G.coachRaceIdx==null)G.coachRaceIdx=0;
+  if(G.coachSeason==null)G.coachSeason=1;
   G.screen='coachHome';render();
 };
 
