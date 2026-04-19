@@ -80,9 +80,12 @@ function cnCanRace(){
   const d=G.dog;
   if(!d||d.retired)return false;
   if(d.injury&&d.injuryRaces>0)return false;
-  if(d.bond<30)return false;
+  const threshold=(G.cnSeason||1)===1?20:30;
+  if(d.bond<threshold)return false;
   return true;
 }
+
+function cnRaceThreshold(){return(G.cnSeason||1)===1?20:30;}
 
 function cnNextCommand(){
   if(!G.dog)return null;
@@ -289,9 +292,19 @@ window.doCreateDog=()=>{
   const name=(nm?nm.value:'').trim();
   if(!name){showToast('Ponle nombre al perro primero','#c0392b');return;}
   if(!G._cnDogBreed){showToast('Elige una raza','#c0392b');return;}
+  if(!G._cnAdoptionOrigin){showToast('Elige cómo llegó el perro a ti','#c0392b');return;}
   G.dog=cnInitDog(name,G._cnDogBreed);
-  G._cnDogBreed=null;G._cnDogName=null;
-  G.activeTab='game';G.screen='canicrossTrainingSetup';
+  // Apply adoption origin bond
+  const origin=CN_ADOPTION_ORIGINS.find(o=>o.id===G._cnAdoptionOrigin);
+  if(origin){
+    G.dog.bond=origin.bondStart;
+    G.dog.peakBond=origin.bondStart;
+    G.dog.adoptionOrigin=G._cnAdoptionOrigin;
+    if(G._cnAdoptionOrigin==='retirado')G.dog.commands.forward=true;
+  }
+  G.cnPreseasonDone=[];
+  G._cnDogBreed=null;G._cnDogName=null;G._cnAdoptionOrigin=null;
+  G.activeTab='game';G.screen='canicrossPreseason';
   autoSave();
   showToast('¡'+esc(G.dog.name)+' se une a tu equipo! 🐕','#4a8a2a');
   render();
@@ -624,14 +637,78 @@ window.cnNewDogAfterRetirement=()=>{
 //  RENDER — CANICROSS
 // ══════════════════════════════════════════════════════
 
+const CN_ADOPTION_ORIGINS=[
+  {id:'cachorro', icon:'🐶', label:'Cachorro propio',
+   desc:'Lo has criado desde pequeño. El vínculo es frágil al principio pero puede ser el más fuerte.',
+   bondStart:5, note:'Vínculo inicial 5'},
+  {id:'rescate', icon:'🏠', label:'Rescate / protectora',
+   desc:'Lo adoptaste de una protectora. Ya sabe confiar. Llega con historia y con ganas de empezar de nuevo.',
+   bondStart:15, note:'Vínculo inicial 15'},
+  {id:'retirado', icon:'🏅', label:'De corredor retirado',
+   desc:'Su anterior compañero tuvo que dejarlo. Viene entrenado, sabe lo que es una carrera y ya conoce la orden "Adelante".',
+   bondStart:25, note:'Vínculo inicial 25 · sabe "Adelante"'},
+];
+
+const CN_PRESEASON_ACTS=[
+  {id:'salida',  icon:'🌄', label:'Primera salida juntos',
+   desc:'Un paseo largo por el monte para conoceros. Sin cronómetro, sin presión. Solo vosotros.',
+   bondBonus:8, healthBonus:5, mentalBonus:3},
+  {id:'vet',     icon:'🩺', label:'Revisión veterinaria',
+   desc:'Chequeo completo antes de la temporada. El perro sale sano, con las vacunas al día y el chip actualizado.',
+   healthBonus:12, bondBonus:2},
+  {id:'adiest',  icon:'🎓', label:'Adiestramiento básico',
+   desc:'Primeras sesiones de órdenes juntos. Aprende a leerte. Tú aprendes a leerle a él.',
+   bondBonus:7, teachFirst:true},
+  {id:'social',  icon:'👥', label:'Entreno con otros equipos',
+   desc:'Os unís a un grupo de canicross. El perro aprende a ignorar distracciones. Vosotros hacéis contactos.',
+   bondBonus:5, mentalBonus:6},
+];
+
+window.cnSelectOrigin=id=>{G._cnAdoptionOrigin=id;render();};
+
+window.cnDoPreseasonAct=id=>{
+  const act=CN_PRESEASON_ACTS.find(a=>a.id===id);if(!act)return;
+  if(!G.cnPreseasonDone)G.cnPreseasonDone=[];
+  if(G.cnPreseasonDone.includes(id))return;
+  const d=G.dog;
+  if(act.bondBonus&&d){d.bond=Math.min(100,(d.bond||0)+act.bondBonus);d.peakBond=Math.max(d.peakBond||0,d.bond);}
+  if(act.healthBonus&&d)d.health=Math.min(100,(d.health||100)+act.healthBonus);
+  if(act.mentalBonus&&G.runner?.stats)G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+act.mentalBonus);
+  if(act.teachFirst&&d){d.commands=d.commands||{};d.commands.forward=true;showToast(esc(d.name)+' aprende "Adelante" en el entreno ✅','#4a8a2a');}
+  G.cnPreseasonDone.push(id);
+  autoSave();render();
+  setTimeout(()=>showToast(act.label+' completado ✓','#4a8a2a'),100);
+};
+
 function renderCnCreateDog(){
   const el=document.getElementById('main');
   const breed=G._cnDogBreed;
+  const origin=G._cnAdoptionOrigin;
+  const originData=CN_ADOPTION_ORIGINS.find(o=>o.id===origin);
+  const bondPreview=originData?originData.bondStart:0;
+
   el.innerHTML=`
     <h2>🐕 Tu compañero</h2>
-    <p class="sub">Elige el perro con el que competirás</p>
+    <p class="sub">Elige el perro con el que competirás toda la temporada</p>
+
     <label class="field-label">Nombre del perro</label>
-    <input id="dogname" type="text" placeholder="Ej: Txuri, Luna, Thor..." maxlength="20" value="${esc(G._cnDogName||'')}" style="margin-bottom:14px"/>
+    <input id="dogname" type="text" placeholder="Ej: Txuri, Luna, Thor..." maxlength="20" value="${esc(G._cnDogName||'')}" style="margin-bottom:18px"/>
+
+    <label class="field-label">¿Cómo llegó a ti?</label>
+    <div style="display:grid;gap:8px;margin-bottom:18px">
+      ${CN_ADOPTION_ORIGINS.map(o=>`
+        <div class="card ${origin===o.id?'sel':''}" style="cursor:pointer;${origin===o.id?'border-color:#1a1a1a':'border-color:#e8e6e0'}" onclick="cnSelectOrigin('${o.id}')">
+          <div style="display:flex;align-items:flex-start;gap:10px">
+            <span style="font-size:24px;flex-shrink:0">${o.icon}</span>
+            <div style="flex:1">
+              <div style="font-size:14px;font-weight:700;margin-bottom:2px">${o.label} ${origin===o.id?'<span style="color:#4a8a2a">✓</span>':''}</div>
+              <div style="font-size:12px;color:#666;margin-bottom:4px">${o.desc}</div>
+              <div style="font-size:12px;color:#c07a10;font-weight:600">${o.note}</div>
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>
+
     <label class="field-label">Raza</label>
     <div class="grid2" style="margin-bottom:18px">
       ${Object.entries(CN_BREED_MODS).map(([id,m])=>`
@@ -642,23 +719,88 @@ function renderCnCreateDog(){
           ${m.bondDecayPerWeek>0?`<div style="font-size:11px;color:#c0392b;margin-top:2px">⚠ -${m.bondDecayPerWeek} vínculo/sem sin entreno</div>`:''}
         </div>`).join('')}
     </div>
-    ${breed?(()=>{
+
+    ${breed&&origin?(()=>{
       const m=CN_BREED_MODS[breed];
       const spd=50+(m.speed||0);const sta=50+(m.stamina||0);
-      return `<div class="card" style="margin-bottom:16px">
+      return`<div class="card" style="margin-bottom:16px">
         <div class="sec-title-sm">Stats iniciales</div>
-        <div class="bar-row"><span class="bar-label">Velocidad</span><div class="bar-track" style="flex:1"><div class="bar-fill" style="width:${spd}%;background:${spd>=60?'#4a90d9':'#c07a10'}"></div></div><span class="bar-pct">${spd}</span></div>
-        <div class="bar-row"><span class="bar-label">Resistencia</span><div class="bar-track" style="flex:1"><div class="bar-fill" style="width:${sta}%;background:${sta>=60?'#4a8a2a':'#c07a10'}"></div></div><span class="bar-pct">${sta}</span></div>
-        <div class="bar-row"><span class="bar-label">Vínculo</span><div class="bar-track" style="flex:1"><div class="bar-fill" style="width:0%;background:#c07a10"></div></div><span class="bar-pct">0</span></div>
+        <div class="bar-row"><span class="bar-label">Velocidad</span><div class="bar-track" style="flex:1"><div class="bar-fill" style="width:${spd}%;background:#4a90d9"></div></div><span class="bar-pct">${spd}</span></div>
+        <div class="bar-row"><span class="bar-label">Resistencia</span><div class="bar-track" style="flex:1"><div class="bar-fill" style="width:${sta}%;background:#4a8a2a"></div></div><span class="bar-pct">${sta}</span></div>
+        <div class="bar-row"><span class="bar-label">Vínculo inicial</span><div class="bar-track" style="flex:1"><div class="bar-fill" style="width:${bondPreview}%;background:#c07a10"></div></div><span class="bar-pct">${bondPreview}</span></div>
+        ${origin==='retirado'?`<div style="font-size:12px;color:#4a8a2a;margin-top:6px">🏅 Ya conoce la orden "Adelante"</div>`:''}
       </div>`;
-    })():`<div class="hint" style="margin-bottom:16px">Elige una raza para ver los stats iniciales</div>`}
-    <div class="note" style="margin-bottom:14px">El perro empieza con vínculo <strong>0</strong>. Necesitas <strong>≥30 para competir</strong>. Entrena juntos cada semana.</div>
-    <button class="main" onclick="doCreateDog()">Crear perro y empezar →</button>
+    })():`<div class="hint" style="margin-bottom:16px">Elige origen y raza para ver los stats iniciales</div>`}
+
+    <div class="note" style="margin-bottom:14px">Necesitas <strong>vínculo ≥20</strong> para correr en tu primera temporada. Habrá una pretemporada de septiembre para construirlo.</div>
+    <button class="main" onclick="doCreateDog()" ${!breed||!origin?'disabled style="opacity:0.4"':''}>Continuar → Pretemporada</button>
     <button class="main" style="margin-top:6px;opacity:0.5" onclick="G.screen='modeSelect';render()">← Volver al menú</button>`;
   setTimeout(()=>{
     const i=document.getElementById('dogname');
     if(i){i.oninput=e=>{G._cnDogName=e.target.value;};if(G._cnDogName)i.value=G._cnDogName;}
   },0);
+}
+
+// ── PRETEMPORADA ──────────────────────────────────────
+function renderCanicrossPreseason(){
+  const el=document.getElementById('main');
+  const d=G.dog;
+  if(!d){G.screen='canicrossHub';render();return;}
+  const done=G.cnPreseasonDone||[];
+  const allDone=CN_PRESEASON_ACTS.every(a=>done.includes(a.id));
+  const bondThreshold=(G.cnSeason||1)===1?20:30;
+
+  el.innerHTML=`
+    <h2>🍂 Pretemporada — Septiembre</h2>
+    <p class="sub">Antes de que empiece la temporada (Oct–Mar) tienes un mes para preparar a ${esc(d.name)}</p>
+
+    ${d?`<div class="card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:14px;font-weight:700">🐕 ${esc(d.name)}</span>
+        <span style="font-size:12px;color:#888">${d.adoptionOrigin==='cachorro'?'🐶 Cachorro propio':d.adoptionOrigin==='rescate'?'🏠 De protectora':d.adoptionOrigin==='retirado'?'🏅 De corredor retirado':''}</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">Vínculo</span>
+        <div class="bar-track" style="flex:1">
+          <div class="bar-fill" style="width:${d.bond}%;background:#c07a10"></div>
+          <div style="position:absolute;left:${bondThreshold}%;top:0;bottom:0;width:2px;background:#c0392b;opacity:0.6"></div>
+        </div>
+        <span class="bar-pct" style="color:${d.bond>=bondThreshold?'#4a8a2a':'#c0392b'}">${d.bond}</span>
+      </div>
+      <div style="font-size:12px;color:${d.bond>=bondThreshold?'#4a8a2a':'#c07a10'};margin-top:4px">
+        ${d.bond>=bondThreshold?`✓ Vínculo suficiente para competir esta temporada`:`Necesitas vínculo ≥${bondThreshold} para competir · faltan ${bondThreshold-d.bond} puntos`}
+      </div>
+    </div>`:''}
+
+    <div style="font-size:13px;font-weight:600;color:#888;margin-bottom:10px">Actividades de pretemporada</div>
+    <div style="display:grid;gap:8px;margin-bottom:20px">
+      ${CN_PRESEASON_ACTS.map(a=>{
+        const isDone=done.includes(a.id);
+        return`<div class="card" style="${isDone?'opacity:0.7;background:#f8fdf8;border-color:#b8ddb8':'cursor:pointer'}" ${!isDone?`onclick="cnDoPreseasonAct('${a.id}')"`:''}">
+          <div style="display:flex;align-items:flex-start;gap:10px">
+            <span style="font-size:22px;flex-shrink:0">${a.icon}</span>
+            <div style="flex:1">
+              <div style="font-size:14px;font-weight:700;margin-bottom:2px">${a.label} ${isDone?'<span style="color:#4a8a2a">✓</span>':''}</div>
+              <div style="font-size:12px;color:#666;margin-bottom:4px">${a.desc}</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px">
+                ${a.bondBonus?`<span style="color:#c07a10">Vínculo +${a.bondBonus}</span>`:''}
+                ${a.healthBonus?`<span style="color:#e74c3c">Salud +${a.healthBonus}</span>`:''}
+                ${a.mentalBonus?`<span style="color:#4a90d9">Mental +${a.mentalBonus}</span>`:''}
+                ${a.teachFirst?`<span style="color:#4a8a2a">🎓 Enseña "Adelante"</span>`:''}
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    ${done.length>0&&!allDone?`<div class="hint" style="margin-bottom:12px">${done.length}/${CN_PRESEASON_ACTS.length} actividades completadas. Puedes continuar cuando quieras.</div>`:''}
+    ${allDone?`<div class="note" style="margin-bottom:12px;background:#eaf4ea;border-color:#b8ddb8">✓ Pretemporada completada — ${esc(d.name)} está listo.</div>`:''}
+
+    <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="G.screen='canicrossTrainingSetup';render()">
+      ${allDone?'Empezar temporada →':'Saltar pretemporada y empezar →'}
+    </button>
+  `;
 }
 
 // ── TAB: CORREDOR ─────────────────────────────────────
