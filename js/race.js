@@ -2527,6 +2527,26 @@ function generateLegadoData(){
   const bestPos=finishes>0?Math.min(...results.filter(r=>!r.dnf&&r.pos).map(r=>r.pos)):null;
   return{totalRaces:results.length,finishes,totalKm:Math.round(totalKm),eliteFinishes,bestPos,title};
 }
+window.generateLegadoData=generateLegadoData;
+
+window.initUltratrailRace=function(){
+  const race=(G.utCalendar||[])[G.utCurrentRaceIdx]||(ULTRATRAIL_RACES[G.utYear||1]||[])[G.utCurrentRaceIdx||0];
+  if(!race){G.screen='ultratrailSeasonBalance';render();return;}
+  G.combustible=100;G.pies=100;
+  G.runner.energy=Math.min(100,G.runner.energy||80);
+  G.runner.legs=Math.min(100,G.runner.legs||80);
+  G.seg=0;G.time=0;
+  G.utFueraConcurso=false;
+  G.utCrewSaved=false;
+  G.utGelsUsed=0;
+  G._utSegApplied={};
+  G._utNightEvDone={};
+  G._utDNFSaved=false;
+  G.utNocturnaActive=false;
+  G.screen='ultratrailSegment';render();
+};
+
+window.resolverUltratrailRace=function(){utDoPace('steady');};
 
 function initBackyard(){
   const cfg=BACKYARD_CONFIG;
@@ -2535,9 +2555,11 @@ function initBackyard(){
     name:r.name,flag:r.flag,active:true,
     dropLoop:Math.round(12+i*2+(Math.random()*8))
   }));
-  G.backyardCurrentLoop=0;G.backyardNocturna=false;G._backyardInit=true;
+  G.backyardCurrentLoop=0;G.backyardNocturna=false;G._backyardConfigInit=false;
+  G.combustible=100;G.pies=100;
   G.screen='backyardLoop';render();
 }
+window.initBackyard=initBackyard;
 
 function resolveBackyardLoop(){
   G.backyardCurrentLoop=(G.backyardCurrentLoop||0)+1;
@@ -2549,31 +2571,30 @@ function resolveBackyardLoop(){
   G.runner.legs=Math.max(0,G.runner.legs-effort*3);
   G.combustible=Math.max(0,(G.combustible||0)-effort*5);
   G.pies=Math.max(0,(G.pies||0)-effort*2);
-  if(isNoc)G.runner.energy=Math.max(0,G.runner.energy-3);
-
-  if((G.combustible||0)<25){
-    const stock=(G.backyardMochila&&G.backyardMochila.racion_solida)||0;
-    if(stock>0){G.backyardMochila.racion_solida--;G.combustible=Math.min(100,(G.combustible||0)+25);showToast('🍞 Ración consumida','#c07a10');}
-  }
+  if(isNoc){G.runner.energy=Math.max(0,G.runner.energy-3);G.runner.stats.mental=Math.max(0,(G.runner.stats.mental||50)-2);}
 
   G.backyardRivalState=(G.backyardRivalState||[]).map(r=>{
     if(r.active&&loop>=r.dropLoop)return{...r,active:false};return r;
   });
   const active=(G.backyardRivalState||[]).filter(r=>r.active);
 
-  if((G.runner.energy||0)<=3||(G.combustible||0)<=3){resolverBackyard(false);return;}
-  if(active.length===0){resolverBackyard(true);return;}
+  if((G.runner.stats.mental||50)<=5){resolverBackyard('mental');return;}
+  if((G.runner.energy||0)<=3||(G.combustible||0)<=3){resolverBackyard('colapso');return;}
+  if(active.length===0){resolverBackyard('victoria');return;}
   G.screen='backyardLoop';render();
 }
+window.resolveBackyardLoop=resolveBackyardLoop;
 
-function resolverBackyard(winner){
+function resolverBackyard(motivo){
   const loops=G.backyardCurrentLoop||0;
   const km=Math.round(loops*BACKYARD_CONFIG.loopKm*10)/10;
+  const isVictoria=motivo==='victoria';
   G.backyardHistory=G.backyardHistory||[];
-  G.backyardHistory.push({year:G.utYear||1,loops,km,winner,activeAtEnd:(G.backyardRivalState||[]).filter(r=>r.active).length});
+  G.backyardHistory.push({year:G.utYear||1,loops,km,motivo,activeAtEnd:(G.backyardRivalState||[]).filter(r=>r.active).length});
   G.utResults=G.utResults||[];
-  G.utResults.push({raceId:'backyard',raceName:'Backyard Ultra',year:G.utYear||1,dnf:!winner,loops,km,isBackyard:true});
-  if(winner)G.utRanking=Math.max(1,(G.utRanking||999)-50);
+  G.utResults.push({raceId:'backyard',raceName:'Backyard Ultra',year:G.utYear||1,dnf:!isVictoria,loops,km,isBackyard:true,motivo});
+  if(isVictoria)G.utRanking=Math.max(1,(G.utRanking||999)-50);
   G.screen='backyardResult';render();
 }
+window.resolverBackyard=resolverBackyard;
 
