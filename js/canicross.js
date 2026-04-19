@@ -182,6 +182,18 @@ function cnGenerateSegs(race){
   });
 }
 
+const CN_CATEGORIES=[
+  {id:'junior',  label:'Junior',      min:0,  max:19},
+  {id:'senior',  label:'Senior',      min:20, max:39},
+  {id:'vetA',    label:'Veterano A',  min:40, max:49},
+  {id:'vetB',    label:'Veterano B',  min:50, max:59},
+  {id:'vetC',    label:'Veterano C',  min:60, max:99},
+];
+
+function cnGetCategory(age){
+  return CN_CATEGORIES.find(c=>age>=c.min&&age<=c.max)||CN_CATEGORIES[1];
+}
+
 function cnGenerateRivals(race){
   const n=(race.tier||1)*4+Math.floor(Math.random()*4)+3;
   const base={1:360,2:390,3:415,4:440}[race.tier||1]||390;
@@ -189,7 +201,9 @@ function cnGenerateRivals(race){
   while(pool.length<n)pool.push('Equipo #'+(pool.length+1));
   return pool.map(name=>{
     const skill=0.80+Math.random()*0.40;
-    return{name,estimatedTime:Math.round(base/skill*(race.km||8))};
+    // Realistic age distribution: mostly 25-50
+    const age=Math.round(18+Math.random()*45);
+    return{name,estimatedTime:Math.round(base/skill*(race.km||8)),age};
   });
 }
 
@@ -214,8 +228,11 @@ function cnFinishRace(){
 
   let totalTime=Math.round((rs.time||0)+(rs.timePenalty||0));
   const rivals=rs.rivals||[];
-  const numRivals=rivals.length||((race.tier||1)*4+5);
   const pos=Math.max(1,rivals.filter(r=>r.estimatedTime<totalTime).length+1);
+  const myAge=G.runner.age||28;
+  const myCat=cnGetCategory(myAge);
+  const catRivals=rivals.filter(r=>cnGetCategory(r.age||30).id===myCat.id);
+  const catPos=Math.max(1,catRivals.filter(r=>r.estimatedTime<totalTime).length+1);
 
   const prize=pos===1?race.prize:pos===2?Math.round(race.prize*0.6):pos===3?Math.round(race.prize*0.4):0;
   G.cnMoney=(G.cnMoney||0)+prize;
@@ -240,7 +257,7 @@ function cnFinishRace(){
     bondDelta:totalBond,prize,km:race.km||0,
   });
 
-  rs.finalPos=pos;rs.finalTime=totalTime;rs.finalPrize=prize;rs.done=true;
+  rs.finalPos=pos;rs.finalCatPos=catPos;rs.finalCatTotal=catRivals.length+1;rs.finalCat=myCat.label;rs.finalTime=totalTime;rs.finalPrize=prize;rs.done=true;
   autoSave();
   G.screen='canicrossPostRace';
   render();
@@ -1129,18 +1146,40 @@ function cnLiveClassPanel(rs){
   if(!rs||!rs.rivals?.length||rs.currentSeg===0)return'';
   const myTime=(rs.time||0)+(rs.timePenalty||0);
   const segFrac=rs.currentSeg/rs.numSegs;
+  const myAge=G.runner.age||28;
+  const myCat=cnGetCategory(myAge);
+
   const all=[
-    {name:G.runner.name||'Tú',time:myTime,me:true},
-    ...rs.rivals.map(r=>({name:r.name,time:Math.round(r.estimatedTime*segFrac),me:false}))
+    {name:G.runner.name||'Tú',time:myTime,me:true,age:myAge},
+    ...rs.rivals.map(r=>({name:r.name,time:Math.round(r.estimatedTime*segFrac),me:false,age:r.age||30}))
   ].sort((a,b)=>a.time-b.time);
+
   const myPos=all.findIndex(x=>x.me);
   const start=Math.max(0,myPos-2);
-  const end=Math.min(all.length,start+5);
-  const slice=all.slice(start,end);
-  return`<div class="live-class" style="margin-bottom:10px">
-    <div class="live-class-title">Clasificación · ${myPos+1}º de ${all.length}</div>
+  const slice=all.slice(start,Math.min(all.length,start+5));
+
+  // Category ranking
+  const catAll=all.filter(r=>cnGetCategory(r.age).id===myCat.id);
+  const myCatPos=catAll.findIndex(x=>x.me);
+  const catStart=Math.max(0,myCatPos-1);
+  const catSlice=catAll.slice(catStart,Math.min(catAll.length,catStart+3));
+
+  return`<div class="live-class" style="margin-bottom:6px">
+    <div class="live-class-title">General · ${myPos+1}º de ${all.length}</div>
     ${slice.map((r,i)=>{
       const absPos=start+i;
+      const gap=r.me?'—':r.time<myTime?'−'+fmt(myTime-r.time):'+'+fmt(r.time-myTime);
+      return`<div class="live-row ${r.me?'me':''}">
+        <span class="live-pos" style="color:${absPos===0?'#c07a10':'#bbb'}">${absPos+1}º</span>
+        <span class="live-name">${esc(r.name)}${r.me?' ◀':''}</span>
+        <span class="live-gap">${gap}</span>
+      </div>`;
+    }).join('')}
+  </div>
+  <div class="live-class" style="margin-bottom:10px">
+    <div class="live-class-title">${myCat.label} · ${myCatPos+1}º de ${catAll.length}</div>
+    ${catSlice.map((r,i)=>{
+      const absPos=catStart+i;
       const gap=r.me?'—':r.time<myTime?'−'+fmt(myTime-r.time):'+'+fmt(r.time-myTime);
       return`<div class="live-row ${r.me?'me':''}">
         <span class="live-pos" style="color:${absPos===0?'#c07a10':'#bbb'}">${absPos+1}º</span>
@@ -1342,7 +1381,8 @@ function renderCanicrossPostRace(){
 
     ${!rs.retired?`<div class="card" style="margin-bottom:12px">
       <div class="stat-grid">
-        <div class="stat"><div class="stat-label">Posición</div><div class="stat-val">#${rs.finalPos||'—'}</div></div>
+        <div class="stat"><div class="stat-label">General</div><div class="stat-val">#${rs.finalPos||'—'}</div></div>
+        <div class="stat"><div class="stat-label">${rs.finalCat||'Categoría'}</div><div class="stat-val" style="color:#4a90d9">#${rs.finalCatPos||'—'}<span style="font-size:11px;color:#aaa"> / ${rs.finalCatTotal||'—'}</span></div></div>
         <div class="stat"><div class="stat-label">Premio</div><div class="stat-val" style="color:${(rs.finalPrize||0)>0?'#2d7a2d':'#1a1a1a'}">€${rs.finalPrize||0}</div></div>
         <div class="stat"><div class="stat-label">Vínculo</div><div class="stat-val" style="color:${(rs.bondDelta||0)>=0?'#4a8a2a':'#c0392b'}">${(rs.bondDelta||0)>=0?'+':''}${rs.bondDelta||0}</div></div>
       </div>
