@@ -4295,7 +4295,8 @@ function renderUltratrailNight(){
         <div style="font-size:14px;font-weight:700">${opt.icon} ${opt.label}</div>
         <div style="font-size:13px;color:#555;margin-top:3px">${opt.desc}</div>
         <div style="font-size:12px;color:#aaa;margin-top:2px">${opt.detail}</div>
-      </div>`).join('')}`;
+      </div>`).join('')}
+    <button class="abandon-btn" style="border-color:#ddd;color:#bbb;margin-top:12px;font-size:12px" onclick="if(confirm('¿Confirmas el abandono?')){G.utDNFReason='abandon';G._utDNFSaved=false;G.screen='ultratrailCutoffDNF';render();}">Abandonar carrera</button>`;
   window.utResolveNight=function(strategy){
     G.utNightStrategy=strategy;
     G.utNocturnaActive=true;
@@ -4315,23 +4316,24 @@ function renderUltratrailCutoffDNF(){
     G._utDNFSaved=true;
     G.utCutoffWarnings=(G.utCutoffWarnings||0)+1;
   }
+  const isAbandon=reason==='abandon';
   el.innerHTML=`
-    <h2>⏱️ Tiempo límite superado</h2>
+    <h2>${isAbandon?'🛑 Abandono voluntario':'⏱️ Tiempo límite superado'}</h2>
     <div class="card" style="background:#1e0808;border-color:#4e1818">
-      <p style="color:#ff9a9a;margin:0 0 8px 0">"El tiempo límite ha hablado. No es un abandono — es la montaña marcando sus propias reglas."</p>
-      <div style="font-size:13px;color:#999;display:flex;justify-content:space-between;padding:3px 0"><span>CP</span><span>${reason==='abandon'?'Abandono voluntario':reason==='cutoff'?'Cutoff':'Agotamiento'}</span></div>
+      <p style="color:#ff9a9a;margin:0 0 8px 0">${isAbandon?'"Decidiste parar. Conoces tu cuerpo y sabes cuándo el riesgo no vale la pena."':'"El tiempo límite ha hablado. No es un abandono — es la montaña marcando sus propias reglas."'}</p>
+      <div style="font-size:13px;color:#999;display:flex;justify-content:space-between;padding:3px 0"><span>Motivo</span><span>${isAbandon?'Abandono voluntario':reason==='cutoff'?'Cutoff':'Agotamiento'}</span></div>
       <div style="font-size:13px;color:#999;display:flex;justify-content:space-between;padding:3px 0"><span>Recorrido</span><span style="color:#ff8a8a">${kmDone}km / ${race.km||0}km</span></div>
       <div style="font-size:13px;color:#999;display:flex;justify-content:space-between;padding:3px 0"><span>Tiempo empleado</span><span>${fmt(G.time||0)}</span></div>
     </div>
     ${utRaceStats()}
     <div class="section-label">¿Qué haces?</div>
-    <div class="work-card" style="margin-bottom:8px" onclick="G.utFueraConcurso=true;G.screen='ultratrailSegment';render()">
+    ${!isAbandon?`<div class="work-card" style="margin-bottom:8px" onclick="G.utFueraConcurso=true;G.screen='ultratrailSegment';render()">
       <div style="font-weight:700">Continuar fuera de concurso</div>
       <div style="font-size:13px;color:#888;margin-top:3px">Sin clasificación oficial, pero de cabo a rabo. Eso no te lo quita nadie.</div>
-    </div>
+    </div>`:''}
     <div class="work-card" onclick="window.utAfterDNF()">
       <div style="font-weight:700;color:#c0392b">Retirarme aquí</div>
-      <div style="font-size:13px;color:#888;margin-top:3px">Cada DNF enseña algo. La próxima carrera empieza aquí.</div>
+      <div style="font-size:13px;color:#888;margin-top:3px">${isAbandon?'Guardas energía para la próxima. Decisión inteligente.':'Cada DNF enseña algo. La próxima carrera empieza aquí.'}</div>
     </div>`;
   window.utAfterDNF=function(){
     G._utDNFSaved=false;
@@ -4499,7 +4501,7 @@ function renderUltratrailSeasonBalance(){
     <div class="card">${srow('Resistencia',G.runner.stats.resistencia)}${srow('Mental',G.runner.stats.mental)}</div>
     ${isLast
       ?`<button class="main" onclick="G.screen='ultratrailLegado';render()">🏆 Ver tu Legado →</button>`
-      :`<button class="main" onclick="G._seasonBalanceDone=false;G.utYear=(G.utYear||1)+1;G.screen='ultratrailSeasonStart';render()">Año ${year+1} →</button>`
+      :`<button class="main" onclick="G._seasonBalanceDone=false;G.utYear=(G.utYear||1)+1;G.utCalendar=[];G.utCurrentRaceIdx=0;G._utSeasonSelected=[];G.utGels=0;G.utGelsUsed=0;G.utCrew=[];G.utCrewSaved=false;G.screen='ultratrailSeasonStart';render()">Año ${year+1} →</button>`
     }`;
 }
 function renderUltratrailLegado(){
