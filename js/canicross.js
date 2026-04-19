@@ -51,7 +51,8 @@ const CN_RIVAL_NAMES=[
   'Elena & Nala','Carlos & Thor','Ana & Kira','Javi & Bolt','Laura & Max',
   'Pedro & Zara','Marta & Rex','Iñaki & Txuri','Sara & Nina','Pol & Ares',
   'Eva & Lola','Tomás & Figo','Noa & Coco','Rubén & Draco','Lidia & Hera',
-  'Diego & Rayo','Claudia & Kira','Andrei & Boss',
+  'Diego & Rayo','Claudia & Kira','Andrei & Boss','Miriam & Cuco','Sergio & Nyx',
+  'Verónica & Ares','Pau & Llamp','Sofía & Koda','Alberto & Zeus',
 ];
 
 // ── STATE HELPERS ─────────────────────────────────────
@@ -1124,6 +1125,32 @@ function renderCnFinanzasTab(){
   `;
 }
 
+function cnLiveClassPanel(rs){
+  if(!rs||!rs.rivals?.length||rs.currentSeg===0)return'';
+  const myTime=(rs.time||0)+(rs.timePenalty||0);
+  const segFrac=rs.currentSeg/rs.numSegs;
+  const all=[
+    {name:G.runner.name||'Tú',time:myTime,me:true},
+    ...rs.rivals.map(r=>({name:r.name,time:Math.round(r.estimatedTime*segFrac),me:false}))
+  ].sort((a,b)=>a.time-b.time);
+  const myPos=all.findIndex(x=>x.me);
+  const start=Math.max(0,myPos-2);
+  const end=Math.min(all.length,start+5);
+  const slice=all.slice(start,end);
+  return`<div class="live-class" style="margin-bottom:10px">
+    <div class="live-class-title">Clasificación · ${myPos+1}º de ${all.length}</div>
+    ${slice.map((r,i)=>{
+      const absPos=start+i;
+      const gap=r.me?'—':r.time<myTime?'−'+fmt(myTime-r.time):'+'+fmt(r.time-myTime);
+      return`<div class="live-row ${r.me?'me':''}">
+        <span class="live-pos" style="color:${absPos===0?'#c07a10':'#bbb'}">${absPos+1}º</span>
+        <span class="live-name">${esc(r.name)}${r.me?' ◀':''}</span>
+        <span class="live-gap">${gap}</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
 // ── RACE SCREENS ──────────────────────────────────────
 function renderCanicrossPreRace(){
   const el=document.getElementById('main');
@@ -1218,9 +1245,6 @@ function renderCanicrossSegment(){
   const segTypeCol={flat:'#888780',climb:'#639922',descent:'#E24B4A'}[seg?.type||'flat'];
   const segTypeBg={flat:'#F1EFE8',climb:'#EAF3DE',descent:'#FCEBEB'}[seg?.type||'flat'];
 
-  const livePos=cnLivePosition(rs);
-  const posCol=livePos.pos===1?'#c07a10':livePos.pos<=3?'#4a8a2a':livePos.pos<=Math.ceil(livePos.total*0.4)?'#555':'#aaa';
-  const posLabel=livePos.pos===1?'🥇 Líder':livePos.pos===2?'🥈 2.º':livePos.pos===3?'🥉 3.º':livePos.pos<=Math.ceil(livePos.total*0.4)?'Top pelotón':'Pelotón';
 
   const lastLogEntry=rs.eventLog?.length>0&&!ev?rs.eventLog[rs.eventLog.length-1]:null;
 
@@ -1239,13 +1263,7 @@ function renderCanicrossSegment(){
       ${[['Vínculo',curBond,'#c07a10'],['Salud '+esc(d?.name||'perro'),rs.dogHealth||100,'#e74c3c'],['Energía corredor',rs.runnerEnergy||100,'#4a8a2a']].map(([l,v,c])=>`<div class="bar-row"><span class="bar-label" style="color:${v<25?'#c0392b':'#666'}">${l}${v<25?' ⚠':''}</span><div class="bar-track" style="flex:1"><div class="bar-fill" style="width:${Math.round(Math.max(0,v))}%;background:${c}"></div></div><span class="bar-pct">${Math.round(Math.max(0,v))}</span></div>`).join('')}
     </div>
 
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 13px;background:#f8f7f3;border-radius:8px;margin-bottom:10px">
-      <div>
-        <span style="font-size:14px;font-weight:700;color:${posCol}">#${livePos.pos}</span>
-        <span style="font-size:12px;color:#888"> de ${livePos.total} equipos</span>
-      </div>
-      <span style="font-size:12px;color:${posCol};font-weight:600">${posLabel}</span>
-    </div>
+    ${cnLiveClassPanel(rs)}
 
     ${(()=>{
       if(!rs.segs?.length)return'';
