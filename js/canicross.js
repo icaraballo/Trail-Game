@@ -758,7 +758,6 @@ function renderCanicrossPreseason(){
         <span class="bar-label">Vínculo</span>
         <div class="bar-track" style="flex:1">
           <div class="bar-fill" style="width:${d.bond}%;background:#c07a10"></div>
-          <div style="position:absolute;left:${bondThreshold}%;top:0;bottom:0;width:2px;background:#c0392b;opacity:0.6"></div>
         </div>
         <span class="bar-pct" style="color:${d.bond>=bondThreshold?'#4a8a2a':'#c0392b'}">${d.bond}</span>
       </div>
