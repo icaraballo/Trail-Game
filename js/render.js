@@ -522,28 +522,37 @@ function renderRunnerTab(){
       ${renderSavingsChart()}
     </div>
 
-    ${(G.unlockedAchievements||[]).length>0?`<div class="card">
-      <div class="sec-title">Logros desbloqueados (${(G.unlockedAchievements||[]).length}/${ACHIEVEMENTS.length})</div>
-      ${ACHIEVEMENTS.filter(a=>G.unlockedAchievements.includes(a.id)).map(ach=>`<div style="padding:8px 0;border-bottom:1px solid #f0ede8;display:flex;align-items:center;gap:8px">
+    ${(()=>{
+      const RARITY={easy:{c:'#4a8a2a',bg:'#eaf4ea',l:'Fácil'},medium:{c:'#4a90d9',bg:'#e8f0fb',l:'Medio'},hard:{c:'#c07a10',bg:'#fdf0e0',l:'Difícil'},legendary:{c:'#8b2252',bg:'#f8e8f2',l:'Legendario'}};
+      const rb=a=>{const r=RARITY[a.rarity]||{c:'#888',bg:'#eee',l:''};return`<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${r.bg};color:${r.c}">${r.l}</span>`;};
+      const unlocked=G.unlockedAchievements||[];
+      const normalAchs=ACHIEVEMENTS.filter(a=>!a.mode);
+      const unlockedNormal=normalAchs.filter(a=>unlocked.includes(a.id));
+      const pendingNormal=normalAchs.filter(a=>!unlocked.includes(a.id));
+      const showAll=G._showAllAchs||false;
+      return`
+    ${unlockedNormal.length>0?`<div class="card">
+      <div class="sec-title">Logros desbloqueados (${unlockedNormal.length}/${normalAchs.length})</div>
+      ${unlockedNormal.map(ach=>`<div style="padding:8px 0;border-bottom:1px solid #f0ede8;display:flex;align-items:center;gap:8px">
         <span style="font-size:16px">🏆</span>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${ach.label}</div>
-          <div style="font-size:12px;color:#888">${ach.desc}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px"><span style="font-size:13px;font-weight:600">${esc(ach.label)}</span>${rb(ach)}</div>
+          <div style="font-size:12px;color:#888">${esc(ach.desc)}</div>
         </div>
       </div>`).join('')}
     </div>`:''}
-
-    ${ACHIEVEMENTS.filter(a=>!G.unlockedAchievements||!G.unlockedAchievements.includes(a.id)).length>0?`<div class="card">
+    ${pendingNormal.length>0?`<div class="card">
       <div class="sec-title">Logros por conseguir</div>
-      ${ACHIEVEMENTS.filter(a=>!(G.unlockedAchievements||[]).includes(a.id)).slice(0,4).map(ach=>`<div style="padding:8px 0;border-bottom:1px solid #f0ede8;opacity:0.6;display:flex;align-items:center;gap:8px">
-        <span style="font-size:16px;opacity:0.5">🔒</span>
+      ${(showAll?pendingNormal:pendingNormal.slice(0,8)).map(ach=>`<div style="padding:8px 0;border-bottom:1px solid #f0ede8;opacity:0.6;display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px;opacity:0.4">🔒</span>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${ach.label}</div>
-          <div style="font-size:12px;color:#aaa">${ach.desc}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px"><span style="font-size:13px;font-weight:600">${esc(ach.label)}</span>${rb(ach)}</div>
+          <div style="font-size:12px;color:#aaa">${esc(ach.desc)}</div>
         </div>
       </div>`).join('')}
-      ${ACHIEVEMENTS.filter(a=>!(G.unlockedAchievements||[]).includes(a.id)).length>4?`<div style="padding:8px 0;font-size:12px;color:#aaa;text-align:center">+${ACHIEVEMENTS.filter(a=>!(G.unlockedAchievements||[]).includes(a.id)).length-4} más...</div>`:''}
-    </div>`:''}
+      ${pendingNormal.length>8?`<div style="padding:8px 0;text-align:center"><button class="secondary" style="font-size:12px" onclick="G._showAllAchs=!G._showAllAchs;render()">${showAll?'Mostrar menos ▲':`Ver los ${pendingNormal.length-8} restantes ▼`}</button></div>`:''}
+    </div>`:''}`;
+    })()}
 
     ${activeSponsorList.length>0?`<div class="card">
       <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Contratos activos</div>

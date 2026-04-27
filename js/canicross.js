@@ -252,6 +252,7 @@ function cnFinishRace(){
   });
 
   rs.finalPos=pos;rs.finalCatPos=catPos;rs.finalCatTotal=catRivals.length+1;rs.finalCat=myCat.label;rs.finalTime=totalTime;rs.finalPrize=prize;rs.done=true;
+  checkAndUnlockAchievements();
   autoSave();
   G.screen='canicrossPostRace';
   render();
@@ -913,6 +914,34 @@ function renderCnCorredorTab(){
     :`<div class="hint">Ve a <strong>📅 Calendario</strong> para seleccionar tus carreras de temporada (oct–mar).</div>`}
 
     ${allRaceDone?`<button class="main" style="margin-top:12px;border-color:#4a8a2a;color:#2d7a2d" onclick="G.screen='canicrossSeasonBalance';render()">Cerrar temporada ${G.cnSeason} →</button>`:''}
+
+    ${(()=>{
+      const RARITY={easy:{c:'#4a8a2a',bg:'#eaf4ea',l:'Fácil'},medium:{c:'#4a90d9',bg:'#e8f0fb',l:'Medio'},hard:{c:'#c07a10',bg:'#fdf0e0',l:'Difícil'},legendary:{c:'#8b2252',bg:'#f8e8f2',l:'Legendario'}};
+      const rb=a=>{const r=RARITY[a.rarity]||{c:'#888',bg:'#eee',l:''};return`<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${r.bg};color:${r.c}">${r.l}</span>`;};
+      const unlocked=G.unlockedAchievements||[];
+      const cnAchs=ACHIEVEMENTS.filter(a=>a.mode==='cn');
+      const unlockedCn=cnAchs.filter(a=>unlocked.includes(a.id));
+      const pendingCn=cnAchs.filter(a=>!unlocked.includes(a.id));
+      return`
+    <div class="card" style="margin-top:12px">
+      <div class="sec-title">🏅 Logros canicross (${unlockedCn.length}/${cnAchs.length})</div>
+      ${unlockedCn.length>0?unlockedCn.map(ach=>`<div style="padding:7px 0;border-bottom:1px solid #f0ede8;display:flex;align-items:center;gap:8px">
+        <span style="font-size:15px">🏆</span>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:1px"><span style="font-size:13px;font-weight:600">${esc(ach.label)}</span>${rb(ach)}</div>
+          <div style="font-size:12px;color:#888">${esc(ach.desc)}</div>
+        </div>
+      </div>`).join(''):''}
+      ${pendingCn.slice(0,5).map(ach=>`<div style="padding:7px 0;border-bottom:1px solid #f0ede8;opacity:0.55;display:flex;align-items:center;gap:8px">
+        <span style="font-size:15px;opacity:0.4">🔒</span>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:1px"><span style="font-size:13px;font-weight:600">${esc(ach.label)}</span>${rb(ach)}</div>
+          <div style="font-size:12px;color:#aaa">${esc(ach.desc)}</div>
+        </div>
+      </div>`).join('')}
+      ${pendingCn.length>5?`<div style="padding:6px 0;font-size:12px;color:#aaa;text-align:center">+${pendingCn.length-5} logros más por conseguir</div>`:''}
+    </div>`;
+    })()}
   `;
 }
 
