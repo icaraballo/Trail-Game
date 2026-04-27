@@ -1195,7 +1195,7 @@ function renderCoachRace(){
 
     ${midEvt&&!isDone?`
     <div class="card" style="border-color:#c07a10;border-width:1.5px;margin-top:10px">
-      <div style="font-size:15px;font-weight:700;margin-bottom:6px">${midEvt.icon||'⚡'} ${midEvt.title}</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px">${midEvt.icon||'⚡'} ${esc(midEvt.title)}</div>
       <div style="font-size:13px;color:#555;margin-bottom:12px;font-style:italic">"${(midEvt.desc||'').replace(/\{\{name\}\}/g,esc(aName)).replace(/\{\{rival\}\}/g,esc(rival))}"</div>
       ${midEvt.choices.map((c,ci)=>`
         <button class="main" style="margin-top:${ci===0?'0':'6px'}" onclick="doCoachMidRaceEvent(${ci})">${c.text}</button>
@@ -1257,7 +1257,7 @@ function renderCoachRace(){
       ${G.coachLastDialogue?`
         <div class="card" style="background:#fafaf8;border-color:#c07a10;margin-bottom:12px">
           <div style="font-size:12px;color:#c07a10;font-weight:600;margin-bottom:4px">${esc(aName)} · post-carrera</div>
-          <div style="font-size:14px;color:#333;font-style:italic">${G.coachLastDialogue}</div>
+          <div style="font-size:14px;color:#333;font-style:italic">${esc(G.coachLastDialogue)}</div>
         </div>`:''}
       <div class="card" style="background:#f0faf0;border-color:#4a8a2a;text-align:center;padding:20px;margin-bottom:0">
         <div style="font-size:32px;margin-bottom:6px">${data.finalPos<=3?'🏆':data.finalPos<=10?'🎯':'🏃'}</div>
@@ -1500,14 +1500,14 @@ function renderCoachPostRace(){
     ${G.coachLastDialogue?`
     <div class="card" style="margin-bottom:12px;border-left:3px solid ${es.color}">
       <div style="font-size:12px;color:#aaa;margin-bottom:4px">${a.name} dice:</div>
-      <div style="font-size:14px;color:#333;font-style:italic">"${G.coachLastDialogue}"</div>
+      <div style="font-size:14px;color:#333;font-style:italic">"${esc(G.coachLastDialogue)}"</div>
       <div style="font-size:11px;color:#aaa;margin-top:6px">${es.emoji} Estado: <strong style="color:${es.color}">${es.label}</strong></div>
     </div>`:''}
 
     ${styleReaction?`
     <div class="hint" style="margin-bottom:12px">
       <div style="font-size:11px;color:#aaa;margin-bottom:2px">Reacción a tu estilo ${TRAINER_STYLES[G.coachTrainerStyle].emoji}:</div>
-      <div style="font-size:13px;color:#555;font-style:italic">${styleReaction}</div>
+      <div style="font-size:13px;color:#555;font-style:italic">${esc(styleReaction)}</div>
     </div>`:''}
 
     <div class="card" style="margin-bottom:12px">

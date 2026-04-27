@@ -433,7 +433,7 @@ function renderPreRace(){
 
 function liveClassPanel(){
   if(!G.rivals||G.rivals.length===0||G.seg===0)return '';
-  const all=[{name:G.runner.name||'Tú',time:G.time,me:true},...G.rivals.map(r=>({name:r.name,time:r.time,me:false}))].sort((a,b)=>a.time-b.time);
+  const all=[{name:esc(G.runner.name||'Tú'),time:G.time,me:true},...G.rivals.map(r=>({name:esc(r.name),time:r.time,me:false,flag:r.flag||'',country:r.country||''}))].sort((a,b)=>a.time-b.time);
   const myPos=all.findIndex(x=>x.me);
   const start=Math.max(0,myPos-2);
   const end=Math.min(all.length,start+5);
@@ -613,9 +613,9 @@ function renderAid(){
   const _doneKm=segs.slice(0,G.seg).reduce((a,s)=>a+s.km,0);
   const _totalKm=segs.reduce((a,s)=>a+s.km,0);
   const _racePct=_totalKm>0?_doneKm/_totalKm:0;
+  const dropItems=(G.dropbagItems||[]).filter(id=>!G.dropbagUsed?.includes(id));
   const isDropbagPoint=race&&race.km>=40&&dropItems.length>0&&!G.dropbagShown&&_racePct>=0.35&&_racePct<=0.72;
   if(isDropbagPoint) G.dropbagShown=true;
-  const dropItems=(G.dropbagItems||[]).filter(id=>!G.dropbagUsed?.includes(id));
   el.innerHTML=`
     ${topBar()}${progBar()}${raceStats()}
     ${liveClassPanel()}
@@ -758,7 +758,7 @@ window.doPace=p=>{
     G.injuryStatus='moderada';
     G.injuryRecoverySeasons=injData.recoverySeasons||1;
     G.injuryRacesLeft=injData.racesBlocked||0;
-    Object.entries(injData.statPenalty).forEach(([k,v])=>{
+    Object.entries(injData.statPenalty||{}).forEach(([k,v])=>{
       G.runner.stats[k]=Math.max(10,(G.runner.stats[k]||50)+v);
     });
     // Record in injury history
@@ -2166,7 +2166,7 @@ function applyPostRaceTracking(race,res){
   if(!existingPB||G.time<existingPB.time){
     const isNew=!existingPB;
     G.personalBests[race.id]={time:G.time,year:G.year,pos};
-    if(isNew) setTimeout(()=>showToast('🏆 ¡Primer registro en '+race.dist+'K! '+fmt(G.time),'#c07a10'),600);
+    if(isNew) setTimeout(()=>showToast('🏆 ¡Primer registro en '+(race.km||'?')+'K! '+fmt(G.time),'#c07a10'),600);
     else setTimeout(()=>showToast('🏆 ¡Nuevo récord personal! '+fmt(G.time),'#c07a10'),600);
   }
   if(G.stormActive)G.stormSurvivedCount=(G.stormSurvivedCount||0)+1;
@@ -2192,7 +2192,7 @@ function applyPostRaceTracking(race,res){
     G.injuryStatus='moderada';G.injuryType=specificInjury;
     G.injuryRecoverySeasons=injData.recoverySeasons||1;
     G.injuryRacesLeft=hasFisio()?Math.max(0,Math.round((injData.racesBlocked||0)*(injData.fisioDiscount||0.5))):injData.racesBlocked||0;
-    Object.entries(injData.statPenalty).forEach(([k,v])=>{G.runner.stats[k]=Math.max(10,(G.runner.stats[k]||50)+v);});
+    Object.entries(injData.statPenalty||{}).forEach(([k,v])=>{G.runner.stats[k]=Math.max(10,(G.runner.stats[k]||50)+v);});
     if(!G.injuryHistory)G.injuryHistory=[];
     G.injuryHistory.push({type:specificInjury,label:injData.label,race:race.name,year:G.year,km:race.km});
   } else {G.injuryStatus=null;G.injuryType=null;}
@@ -2240,7 +2240,7 @@ function finishRace(){
       ${topRows.map((x,i)=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--color-border-tertiary);${x.me?'font-weight:700;background:var(--color-background-secondary);border-radius:6px;padding:8px 6px;margin:2px -6px':''}">
         <div style="display:flex;gap:10px;align-items:center">
           <span style="font-size:13px;color:${i===0?'#c07a10':i<=2?'#4a8a2a':'#bbb'};width:22px">${i+1}º</span>
-          <span>${x.flag?`<span title="${x.country||''}" style="cursor:default">${x.flag}</span> `:''} ${x.name}${x.me?' ◀':''}</span>
+          <span>${x.flag?`<span title="${esc(x.country||'')}" style="cursor:default">${x.flag}</span> `:''} ${esc(x.name)}${x.me?' ◀':''}</span>
         </div>
         <span style="font-size:13px;color:var(--color-text-secondary)">${fmt(x.time)}</span>
       </div>`).join('')}

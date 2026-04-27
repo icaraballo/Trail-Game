@@ -639,7 +639,7 @@ function renderRunnerTab(){
           <span style="font-size:12px;font-weight:600;color:#888">Año ${e.year} · ${e.age} años</span>
           <span style="font-size:12px;color:#c07a10;font-weight:600">${e.highlight}</span>
         </div>
-        <div style="font-size:13px;color:#555;line-height:1.6">${e.text}</div>
+        <div style="font-size:13px;color:#555;line-height:1.6">${esc(e.text||'')}</div>
       </div>`).join('')}
     </div>`:''}`;
 }
@@ -1208,7 +1208,7 @@ window.confirmMode=()=>{
   if(G.gameMode==='canicross'){G.screen='intro';render();return;}
   if(G.gameMode==='club'){
     // Guiño narrativo si el modo está desbloqueado vía arco narrativo
-    const unlocked=JSON.parse(LS.get('unlocked')||'{}');
+    let unlocked={};try{unlocked=JSON.parse(LS.get('unlocked')||'{}');}catch(e){}
     if(unlocked.club&&!G.carreraVida){
       G._clubUnlockedHint=true; // flag para mostrar texto en clubCreate
     }
@@ -1218,7 +1218,7 @@ window.confirmMode=()=>{
   if(G.gameMode==='coach'){
     G.coachReputation=G.coachReputation||0;
     // Guiño narrativo si el modo está desbloqueado vía arco narrativo
-    const unlocked=JSON.parse(LS.get('unlocked')||'{}');
+    let unlocked={};try{unlocked=JSON.parse(LS.get('unlocked')||'{}');}catch(e){}
     if(unlocked.coach&&!G.carreraVida){
       G.coachReputation=Math.max(G.coachReputation,5);
       G._coachUnlockedHint=true; // flag para mostrar el texto en coachSelect
@@ -1511,7 +1511,7 @@ function renderCalendar(){
       <div class="flex-between">
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:2px">
-            <span class="card-title">${r.name}</span>
+            <span class="card-title">${esc(r.name)}</span>
             <span style="font-size:12px;font-weight:600;padding:1px 6px;border-radius:4px;background:${tierColor[r.tier]||'#888'}22;color:${tierColor[r.tier]||'#888'}">${tierLabel[r.tier]||''}</span>
             ${isSpec?`<span style="font-size:12px;font-weight:600;padding:1px 6px;border-radius:4px;background:${myColor}22;color:${myColor}">${myLabel}</span>`:''}
             ${inCirc?`<span style="font-size:12px;font-weight:600;padding:1px 5px;border-radius:4px;background:#c07a1022;color:#c07a10">Liga · ~${circPts}pts</span>`:''}
@@ -1644,7 +1644,7 @@ function renderSponsors(){
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
             <div style="flex:1">
               <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
-                <span style="font-weight:700;color:#4a90d9">${cur.name}</span>
+                <span style="font-weight:700;color:#4a90d9">${esc(cur.name)}</span>
                 <span style="font-size:11px;padding:1px 5px;border-radius:4px;background:${tierColor[cur.tier]||'#888'}22;color:${tierColor[cur.tier]||'#888'}">${tierLabel[cur.tier]||'?'}</span>
                 <span style="color:${objMet?'#4a8a2a':'#c0392b'};font-weight:600;font-size:11px">${objMet?'✓ Objetivo cumplido':'⚠ Pendiente'}</span>
               </div>
@@ -1959,7 +1959,7 @@ function renderMidSeasonCalendar(){
       <div class="flex-between">
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:2px">
-            <span class="card-title">${r.name}</span>
+            <span class="card-title">${esc(r.name)}</span>
             <span style="font-size:12px;font-weight:600;padding:1px 5px;border-radius:3px;background:${tierColor[r.tier]||'#888'}22;color:${tierColor[r.tier]||'#888'}">${tierLabel[r.tier]||''}</span>
           </div>
           <div style="font-size:12px;color:#888">${r.monthName} · ${r.type} · ${r.desnivel}</div>
@@ -2393,7 +2393,7 @@ window.setWorkQ=(q,pct)=>{
   render();
 };
 window.doStart=()=>{
-  if(!G.runner.name.trim())G.runner.name='Corredor';
+  if(!(G.runner.name||'').trim())G.runner.name='Corredor';
   G.runner.stats=applyAgeToStats({...SPEC_STATS[G.runner.specialty]},G.runner.age||25);
   G.money=modeCfg().startMoney;
   G.activeTab='game';
@@ -2962,7 +2962,7 @@ function renderOverlapHub(){
       <div onclick="goToCoachFromOverlap()" style="background:#fff;border:1.5px solid #e0dfd8;border-radius:12px;padding:20px 16px;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f8f7f3'" onmouseleave="this.style.background='#fff'">
         <div style="font-size:28px;margin-bottom:10px">📋</div>
         <div style="font-size:15px;font-weight:600;margin-bottom:4px">Entrenador</div>
-        <div style="font-size:12px;color:#888;line-height:1.5">${athleteName}<br>${a?`${a.age} años · ${a.spec}`:'Pendiente de asignar'}</div>
+        <div style="font-size:12px;color:#888;line-height:1.5">${athleteName}<br>${a?`${a.age} años · ${esc(a.spec)}`:'Pendiente de asignar'}</div>
       </div>
     </div>
 
@@ -3147,7 +3147,7 @@ window.confirmClubOffer=()=>{
   generateClubObjective();
   // Desbloquear modo club en localStorage
   try{
-    const ul=JSON.parse(LS.get('unlocked')||'{}');
+    let ul={};try{ul=JSON.parse(LS.get('unlocked')||'{}');}catch(_e){}
     ul.club=true;
     LS.set('unlocked',JSON.stringify(ul));
   }catch(e){}
@@ -3311,7 +3311,7 @@ window.confirmLifeCoachTransition=()=>{
   G.coachRaceIdx=0;
   // Desbloquear modo entrenador en localStorage
   try{
-    const ul=JSON.parse(LS.get('unlocked')||'{}');
+    let ul={};try{ul=JSON.parse(LS.get('unlocked')||'{}');}catch(_e){}
     ul.coach=true;
     LS.set('unlocked',JSON.stringify(ul));
   }catch(e){}
@@ -3369,7 +3369,7 @@ function renderRetirement(){
           <span style="font-size:12px;font-weight:600;color:#888">Año ${e.year} · ${e.age} años</span>
           <span style="font-size:12px;color:#c07a10;font-weight:600">${e.highlight}</span>
         </div>
-        <div style="font-size:13px;color:#555;line-height:1.6">${e.text}</div>
+        <div style="font-size:13px;color:#555;line-height:1.6">${esc(e.text||'')}</div>
       </div>`).join('')}
     </div>`:''}
     <button class="main" onclick="G=freshState();render()">Nueva partida →</button>`;

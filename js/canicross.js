@@ -261,7 +261,7 @@ function cnFinishRace(){
 window.doStartCanicross=()=>{
   const nm=document.getElementById('rname');if(nm)G.runner.name=nm.value;
   const rn=document.getElementById('runname');if(rn)G.runName=rn.value;
-  if(!G.runner.name.trim())G.runner.name='Corredor';
+  if(!(G.runner.name||'').trim())G.runner.name='Corredor';
   G.runner.stats=applyAgeToStats({...SPEC_STATS[G.runner.specialty]},G.runner.age||25);
   G.canicrossMode=true;
   G.gameMode='canicross';
@@ -961,7 +961,7 @@ function renderCnPerroTab(){
       <button class="main" style="margin-top:0;font-size:13px;padding:10px 8px" onclick="cnCallVet('basic')" ${(d.injuryRaces||0)<=0?'disabled':''}>Revisión básica<br><span style="font-size:11px;color:#888">€50 · reduce baja</span></button>
       <button class="main" style="margin-top:0;font-size:13px;padding:10px 8px" onclick="cnCallVet('complete')" ${!d.injury?'disabled':''}>Tratamiento completo<br><span style="font-size:11px;color:#888">€120 · cura en 1 carrera</span></button>
     </div>
-    ${(G.cnSeason||1)>1?`<button class="main" style="background:#fef9ec;border-color:#e8c97a;color:#c07a10" onclick="if(confirm('¿Retirar a '+${JSON.stringify(esc(d.name))}+'?'))cnRetireDog()">Retirar a ${esc(d.name)} voluntariamente</button>`:''}
+    ${(G.cnSeason||1)>1?`<button class="main" style="background:#fef9ec;border-color:#e8c97a;color:#c07a10" data-dn="${esc(d.name)}" onclick="if(confirm('¿Retirar a '+this.dataset.dn+'?'))cnRetireDog()">Retirar a ${esc(d.name)} voluntariamente</button>`:''}
     `:`<div class="note" style="margin-top:8px">${esc(d.name)} está retirado. <button class="secondary" onclick="cnNewDogAfterRetirement()">Adoptar nuevo perro →</button></div>`}
   `;
 }
