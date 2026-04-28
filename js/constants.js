@@ -136,7 +136,7 @@ const ACHIEVEMENTS=[
   {id:'money_10k',       rarity:'medium', label:'Cuatro cifras',           desc:'Ahorrar €10.000',                                                check:()=>(G.money||0)>=10000},
   {id:'followers_25k',   rarity:'medium', label:'Referente nacional',      desc:'Llegar a 25.000 seguidores',                                     check:()=>(G.followers||0)>=25000},
   {id:'year_6',          rarity:'medium', label:'Veterano',                desc:'Completar 6 temporadas',                                         check:()=>(G.year||0)>=6},
-  {id:'nemesis_defeat',  rarity:'medium', label:'Cuenta saldada',          desc:'Ganar por primera vez a tu rival nemesis',                       check:()=>(G._nemesisDefeatCount||0)>=1},
+  {id:'nemesis_defeat',  rarity:'medium', label:'Cuenta saldada',          desc:'Derrotar a tu rival nemesis en 3 ocasiones distintas',           check:()=>(G._nemesisDefeatCount||0)>=3},
   {id:'pb_three',        rarity:'medium', label:'Máquina de marcas',       desc:'Batir el récord personal en 3 distancias distintas',             check:()=>Object.keys(G.personalBests||{}).length>=3},
   {id:'tapering_win',    rarity:'medium', label:'La descarga perfecta',    desc:'Ganar una carrera tras usar el bloque de tapering la semana previa',check:()=>!!(G._wonWithTaper)},
   {id:'five_dnf',        rarity:'medium', label:'El trail da y el trail quita',desc:'Abandonar 5 carreras a lo largo de la carrera',              check:()=>(G.raceAbandonedCount||0)>=5},
@@ -203,7 +203,6 @@ const ACHIEVEMENTS=[
   {id:'xp_win_season',  rarity:'legendary',mode:'expres',label:'Temporada perfecta express',desc:'Ganar 3 o más carreras en una misma temporada dentro del modo Exprés',check:()=>(G.gameMode==='expres')&&[1,2,3].some(yr=>(G.careerHistory||[]).filter(h=>h.year===yr&&h.pos===1).length>=3)},
   // ══ MODO EXPRÉS — JOKE ══════════════════════════════════
   {id:'joke_xp_slow',        rarity:'joke',mode:'expres',label:'Lento o vago',        desc:'No responder a ningún evento temporizado antes de que expire en una carrera',check:()=>!!(G._xpNoAnswerRace)},
-  {id:'joke_xp_all_default', rarity:'joke',mode:'expres',label:'El piloto automático',desc:'Dejar que todos los eventos de una carrera elijan solos por ti',check:()=>!!(G._xpNoAnswerRace)},
   {id:'joke_xp_dnf_y1',      rarity:'joke',mode:'expres',label:'Ni arrancó',          desc:'Abandonar en la primera temporada del modo Exprés',        check:()=>(G.gameMode==='expres')&&(G.year||0)<=1&&(G.raceAbandonedCount||0)>=1},
   {id:'joke_xp_last',        rarity:'joke',mode:'expres',label:'Express al revés',    desc:'Terminar las 3 temporadas con el ranking #200 o peor',     check:()=>(G.gameMode==='expres')&&(G.year||0)>=3&&(G.ranking||999)>=200},
   {id:'joke_xp_no_sponsor',  rarity:'joke',mode:'expres',label:'Solo ante el peligro',desc:'Completar las 3 temporadas sin firmar ningún sponsor',     check:()=>(G.gameMode==='expres')&&(G.year||0)>=3&&!Object.values(G.sponsors||{}).some(Boolean)},
