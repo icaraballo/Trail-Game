@@ -44,7 +44,7 @@ function renderAchievements(){
   const chip=(label,field,val)=>`<button onclick="G._achF.${field}='${val}';render()" style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid ${f[field]===val?'#c07a10':'#ddd'};background:${f[field]===val?'#fdf0e0':'#fff'};color:${f[field]===val?'#c07a10':'#888'};cursor:pointer;font-weight:${f[field]===val?'700':'400'}">${label}</button>`;
   el.innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-      <button class="secondary" onclick="G.screen=G._achPrev||'modeSelect';render()" style="font-size:13px;padding:6px 12px">← Volver</button>
+      <button class="secondary" onclick="G.screen=G._achPrev||'modeSelect';if(G._achPrevTab)G.activeTab=G._achPrevTab;render()" style="font-size:13px;padding:6px 12px">← Volver</button>
       <div>
         <h2 style="margin:0;font-size:20px">🏅 Logros</h2>
         <div style="font-size:12px;color:#888">${totalUnlocked} de ${ACHIEVEMENTS.length} conseguidos</div>
@@ -512,9 +512,10 @@ function renderRunnerTab(){
       <div>
         <h2 style="margin-bottom:4px">${esc(r.name||'Corredor')}</h2>
         <div style="font-size:13px;color:#888;margin-bottom:6px">${specLabel[r.specialty]} · Año ${G.year}${r.age?' · '+r.age+' años':''}</div>
-        <div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span class="rank-badge rank-global">Global #${G.ranking<900?G.ranking:'—'}</span>
           <span class="rank-badge rank-spec">${specLabel[r.specialty]} #${G.specRanking<900?G.specRanking:'—'}</span>
+          <button onclick="G._achPrev=G.screen;G._achPrevTab=G.activeTab;G.screen='achievements';render()" style="padding:2px 8px;border-radius:20px;border:1px solid #ddd;background:#fff;font-size:12px;cursor:pointer;color:#888;line-height:1.6" title="Ver logros">🏅</button>
         </div>
       </div>
     </div>
