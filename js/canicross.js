@@ -922,24 +922,24 @@ function renderCnCorredorTab(){
       const cnAchs=ACHIEVEMENTS.filter(a=>a.mode==='cn');
       const unlockedCn=cnAchs.filter(a=>unlocked.includes(a.id));
       const pendingCn=cnAchs.filter(a=>!unlocked.includes(a.id));
+      const recent=unlockedCn.slice(-3).reverse();
       return`
     <div class="card" style="margin-top:12px">
-      <div class="sec-title">🏅 Logros canicross (${unlockedCn.length}/${cnAchs.length})</div>
-      ${unlockedCn.length>0?unlockedCn.map(ach=>`<div style="padding:7px 0;border-bottom:1px solid #f0ede8;display:flex;align-items:center;gap:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${recent.length>0?'10px':'0'}">
+        <div class="sec-title" style="margin-bottom:0">Logros canicross (${unlockedCn.length}/${cnAchs.length})</div>
+        <button class="secondary" style="font-size:11px;padding:3px 10px" onclick="G.screen='achievements';render()">Ver todos →</button>
+      </div>
+      ${recent.map(ach=>`<div style="padding:7px 0;border-bottom:1px solid #f0ede8;display:flex;align-items:center;gap:8px">
         <span style="font-size:15px">🏆</span>
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:1px"><span style="font-size:13px;font-weight:600">${esc(ach.label)}</span>${rb(ach)}</div>
           <div style="font-size:12px;color:#888">${esc(ach.desc)}</div>
         </div>
-      </div>`).join(''):''}
-      ${pendingCn.slice(0,5).map(ach=>`<div style="padding:7px 0;border-bottom:1px solid #f0ede8;opacity:0.55;display:flex;align-items:center;gap:8px">
-        <span style="font-size:15px;opacity:0.4">🔒</span>
-        <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:1px"><span style="font-size:13px;font-weight:600">${esc(ach.label)}</span>${rb(ach)}</div>
-          <div style="font-size:12px;color:#aaa">${esc(ach.desc)}</div>
-        </div>
       </div>`).join('')}
-      ${pendingCn.length>5?`<div style="padding:6px 0;font-size:12px;color:#aaa;text-align:center">+${pendingCn.length-5} logros más por conseguir</div>`:''}
+      ${pendingCn.length>0?`<div style="padding:7px 0;opacity:0.5;display:flex;align-items:center;gap:8px">
+        <span style="font-size:15px;opacity:0.4">🔒</span>
+        <div style="font-size:12px;color:#aaa">Siguiente: <strong>${esc(pendingCn[0].label)}</strong> — ${esc(pendingCn[0].desc)}</div>
+      </div>`:''}
     </div>`;
     })()}
   `;

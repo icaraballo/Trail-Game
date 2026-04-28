@@ -117,6 +117,12 @@ const ACHIEVEMENTS=[
   // ══ CANICROSS — LEGENDARIO ═══════════════════════════
   {id:'cn_perfect',    rarity:'legendary',mode:'cn',label:'Perfectos',            desc:'Ganar todas las carreras seleccionadas en una temporada (mín 3)',check:()=>{const ss=[...new Set((G.cnRaceResults||[]).map(r=>r.season))];return ss.some(s=>{const sr=(G.cnRaceResults||[]).filter(r=>r.season===s);return sr.length>=3&&sr.every(r=>!r.dnf&&r.pos===1);});}},
   {id:'cn_wins_15',    rarity:'legendary',mode:'cn',label:'Liga perfecta',        desc:'Ganar 15 carreras de canicross en total',             check:()=>(G.cnRaceResults||[]).filter(r=>!r.dnf&&r.pos===1).length>=15},
+  // ══ DIFÍCIL / HARDCORE — EXCLUSIVOS ══════════════════
+  {id:'hc_first_win',  rarity:'hard',      excl:true, label:'Victoria en lo duro',       desc:'Ganar una carrera en modo Difícil o Hardcore',           check:()=>['dificil','hardcore'].includes(G.gameMode||'')&&(G.careerHistory||[]).some(h=>h.pos===1)},
+  {id:'hc_no_injury',  rarity:'hard',      excl:true, label:'Acero en lo duro',          desc:'Completar una temporada sin lesión en Difícil o Hardcore',check:()=>{if(!['dificil','hardcore'].includes(G.gameMode||''))return false;const inj=(G.injuryHistory||[]).filter(i=>i.year===G.year).length;return(G.raceResults||[]).length>=3&&inj===0;}},
+  {id:'hc_top10',      rarity:'hard',      excl:true, label:'Top 10 de verdad',          desc:'Alcanzar el ranking #10 jugando en Difícil o Hardcore',  check:()=>['dificil','hardcore'].includes(G.gameMode||'')&&(G.ranking||999)<=10},
+  {id:'hc_survive_3',  rarity:'hard',      excl:true, label:'Superviviente nato',        desc:'Completar 3 temporadas en modo Hardcore',                check:()=>(G.gameMode||'')==='hardcore'&&(G.year||0)>=3},
+  {id:'hc_perfect',    rarity:'legendary', excl:true, label:'Perfección en el abismo',   desc:'Ganar 3+ carreras sin lesión en una temporada en Hardcore',check:()=>{if((G.gameMode||'')!=='hardcore')return false;const sw=(G.careerHistory||[]).filter(h=>h.year===G.year&&h.pos===1).length;const si=(G.injuryHistory||[]).filter(i=>i.year===G.year).length;return sw>=3&&si===0;}},
 ];
 
 function trainingEffFromH(h){

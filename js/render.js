@@ -1,18 +1,89 @@
 function checkAndUnlockAchievements(){
   if(!G.unlockedAchievements)G.unlockedAchievements=[];
+  if(!G.achievementMeta)G.achievementMeta={};
   const newUnlocks=[];
+  const diff=G.gameMode==='canicross'?'canicross':(G.gameMode||'medio');
   ACHIEVEMENTS.forEach(ach=>{
     if(!G.unlockedAchievements.includes(ach.id)&&ach.check()){
       G.unlockedAchievements.push(ach.id);
+      G.achievementMeta[ach.id]={difficulty:diff,year:G.year||G.cnSeason||1};
       newUnlocks.push(ach);
     }
   });
   if(newUnlocks.length>0){
+    let globalAchs={};
+    try{globalAchs=JSON.parse(LS.get('globalAchs')||'{}');}catch(e){}
     newUnlocks.forEach(ach=>{
-      showToast(`🏆 Logro: ${ach.label}`, '#c07a10');
+      if(!globalAchs[ach.id])globalAchs[ach.id]={difficulty:diff,year:G.year||G.cnSeason||1};
+      showToast(`🏆 Logro: ${ach.label}`,'#c07a10');
     });
+    LS.set('globalAchs',JSON.stringify(globalAchs));
   }
   return newUnlocks;
+}
+function renderAchievements(){
+  const el=document.getElementById('main');
+  if(!G._achF)G._achF={mode:'all',rarity:'all',status:'all'};
+  const f=G._achF;
+  let globalAchs={};
+  try{globalAchs=JSON.parse(LS.get('globalAchs')||'{}');}catch(e){}
+  const RARITY={easy:{c:'#4a8a2a',bg:'#eaf4ea',l:'Fácil'},medium:{c:'#4a90d9',bg:'#e8f0fb',l:'Medio'},hard:{c:'#c07a10',bg:'#fdf0e0',l:'Difícil'},legendary:{c:'#8b2252',bg:'#f8e8f2',l:'Legendario'}};
+  const DIFF_LABEL={facil:'🟢 Fácil',medio:'🟡 Medio',dificil:'🔴 Difícil',hardcore:'💀 Hardcore',expres:'⚡ Exprés',canicross:'🐕 Canicross'};
+  const rb=a=>{const r=RARITY[a.rarity]||{c:'#888',bg:'#eee',l:''};return`<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${r.bg};color:${r.c}">${r.l}</span>`;};
+  const totalUnlocked=Object.keys(globalAchs).length;
+  let list=ACHIEVEMENTS.filter(a=>{
+    if(f.mode==='normal'&&a.mode)return false;
+    if(f.mode==='cn'&&a.mode!=='cn')return false;
+    if(f.mode==='excl'&&!a.excl)return false;
+    if(f.rarity!=='all'&&a.rarity!==f.rarity)return false;
+    const isUnlocked=!!globalAchs[a.id];
+    if(f.status==='unlocked'&&!isUnlocked)return false;
+    if(f.status==='pending'&&isUnlocked)return false;
+    return true;
+  });
+  const chip=(label,field,val)=>`<button onclick="G._achF.${field}='${val}';render()" style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid ${f[field]===val?'#c07a10':'#ddd'};background:${f[field]===val?'#fdf0e0':'#fff'};color:${f[field]===val?'#c07a10':'#888'};cursor:pointer;font-weight:${f[field]===val?'700':'400'}">${label}</button>`;
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <button class="secondary" onclick="G.screen='modeSelect';render()" style="font-size:13px;padding:6px 12px">← Volver</button>
+      <div>
+        <h2 style="margin:0;font-size:20px">🏅 Logros</h2>
+        <div style="font-size:12px;color:#888">${totalUnlocked} de ${ACHIEVEMENTS.length} conseguidos</div>
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e8e6e0;border-radius:10px;padding:12px 14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Modo</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        ${chip('Todos','mode','all')}${chip('Normal','mode','normal')}${chip('Canicross','mode','cn')}${chip('Difícil+','mode','excl')}
+      </div>
+      <div style="font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Rareza</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        ${chip('Todos','rarity','all')}${chip('Fácil','rarity','easy')}${chip('Medio','rarity','medium')}${chip('Difícil','rarity','hard')}${chip('Legendario','rarity','legendary')}
+      </div>
+      <div style="font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Estado</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${chip('Todos','status','all')}${chip('Conseguidos','status','unlocked')}${chip('Pendientes','status','pending')}
+      </div>
+    </div>
+    <div style="font-size:12px;color:#aaa;margin-bottom:8px">${list.length} logro${list.length!==1?'s':''} encontrado${list.length!==1?'s':''}</div>
+    <div class="card" style="padding:0">
+      ${list.length===0?`<div style="padding:24px;text-align:center;color:#aaa;font-size:13px">Sin logros con estos filtros</div>`:
+      list.map((ach,i)=>{
+        const meta=globalAchs[ach.id];
+        const unlocked=!!meta;
+        return`<div style="padding:10px 14px;${i<list.length-1?'border-bottom:1px solid #f0ede8;':''}display:flex;align-items:flex-start;gap:10px;${!unlocked?'opacity:0.55':''}">
+          <span style="font-size:18px;margin-top:1px">${unlocked?'🏆':'🔒'}</span>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
+              <span style="font-size:13px;font-weight:600;color:#1a1a1a">${esc(ach.label)}</span>
+              ${rb(ach)}
+              ${ach.excl?`<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#f0e8f8;color:#6b3fa0">Exclusivo</span>`:''}
+              ${meta?`<span style="font-size:10px;color:#aaa">· ${DIFF_LABEL[meta.difficulty]||meta.difficulty}</span>`:''}
+            </div>
+            <div style="font-size:12px;color:#888">${esc(ach.desc)}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
 }
 function updateFinBar(){
   const bar=document.getElementById('fin-bar');
@@ -212,6 +283,7 @@ function render(){
     canicrossDogRetirement:renderCnDogRetirement,
     canicrossDogDeath:renderCnDogDeath,
     canicrossDisplasia:renderCnDisplasia,
+    achievements:renderAchievements,
   }[G.screen]||renderIntro)();
   triggerFade(el);
 }
@@ -525,33 +597,31 @@ function renderRunnerTab(){
     ${(()=>{
       const RARITY={easy:{c:'#4a8a2a',bg:'#eaf4ea',l:'Fácil'},medium:{c:'#4a90d9',bg:'#e8f0fb',l:'Medio'},hard:{c:'#c07a10',bg:'#fdf0e0',l:'Difícil'},legendary:{c:'#8b2252',bg:'#f8e8f2',l:'Legendario'}};
       const rb=a=>{const r=RARITY[a.rarity]||{c:'#888',bg:'#eee',l:''};return`<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${r.bg};color:${r.c}">${r.l}</span>`;};
+      const DIFF_LABEL={facil:'🟢',medio:'🟡',dificil:'🔴',hardcore:'💀',expres:'⚡',canicross:'🐕'};
+      const meta=G.achievementMeta||{};
       const unlocked=G.unlockedAchievements||[];
       const normalAchs=ACHIEVEMENTS.filter(a=>!a.mode);
       const unlockedNormal=normalAchs.filter(a=>unlocked.includes(a.id));
       const pendingNormal=normalAchs.filter(a=>!unlocked.includes(a.id));
-      const showAll=G._showAllAchs||false;
+      const recent=unlockedNormal.slice(-3).reverse();
       return`
-    ${unlockedNormal.length>0?`<div class="card">
-      <div class="sec-title">Logros desbloqueados (${unlockedNormal.length}/${normalAchs.length})</div>
-      ${unlockedNormal.map(ach=>`<div style="padding:8px 0;border-bottom:1px solid #f0ede8;display:flex;align-items:center;gap:8px">
-        <span style="font-size:16px">🏆</span>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${recent.length>0?'10px':'0'}">
+        <div class="sec-title" style="margin-bottom:0">Logros (${unlockedNormal.length}/${normalAchs.length})</div>
+        <button class="secondary" style="font-size:11px;padding:3px 10px" onclick="G.screen='achievements';render()">Ver todos →</button>
+      </div>
+      ${recent.map(ach=>`<div style="padding:7px 0;border-bottom:1px solid #f0ede8;display:flex;align-items:center;gap:8px">
+        <span style="font-size:15px">🏆</span>
         <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px"><span style="font-size:13px;font-weight:600">${esc(ach.label)}</span>${rb(ach)}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:1px"><span style="font-size:13px;font-weight:600">${esc(ach.label)}</span>${rb(ach)}${meta[ach.id]?`<span style="font-size:11px;color:#aaa">${DIFF_LABEL[meta[ach.id].difficulty]||''}</span>`:''}</div>
           <div style="font-size:12px;color:#888">${esc(ach.desc)}</div>
         </div>
       </div>`).join('')}
-    </div>`:''}
-    ${pendingNormal.length>0?`<div class="card">
-      <div class="sec-title">Logros por conseguir</div>
-      ${(showAll?pendingNormal:pendingNormal.slice(0,8)).map(ach=>`<div style="padding:8px 0;border-bottom:1px solid #f0ede8;opacity:0.6;display:flex;align-items:center;gap:8px">
-        <span style="font-size:16px;opacity:0.4">🔒</span>
-        <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px"><span style="font-size:13px;font-weight:600">${esc(ach.label)}</span>${rb(ach)}</div>
-          <div style="font-size:12px;color:#aaa">${esc(ach.desc)}</div>
-        </div>
-      </div>`).join('')}
-      ${pendingNormal.length>8?`<div style="padding:8px 0;text-align:center"><button class="secondary" style="font-size:12px" onclick="G._showAllAchs=!G._showAllAchs;render()">${showAll?'Mostrar menos ▲':`Ver los ${pendingNormal.length-8} restantes ▼`}</button></div>`:''}
-    </div>`:''}`;
+      ${pendingNormal.length>0?`<div style="padding:7px 0;opacity:0.5;display:flex;align-items:center;gap:8px">
+        <span style="font-size:15px;opacity:0.4">🔒</span>
+        <div style="font-size:12px;color:#aaa">Siguiente: <strong>${esc(pendingNormal[0].label)}</strong> — ${esc(pendingNormal[0].desc)}</div>
+      </div>`:''}
+    </div>`;
     })()}
 
     ${activeSponsorList.length>0?`<div class="card">
@@ -1167,6 +1237,7 @@ function renderModeSelect(){
       }).join('')}
     </div>
 
+    <button class="secondary" style="margin-top:12px;width:100%;text-align:center" onclick="G.screen='achievements';render()">🏅 Ver todos los logros</button>
     <button class="main" style="margin-top:16px" onclick="confirmMode()">Continuar →</button>
     <button class="main" style="margin-top:6px;opacity:0.6" onclick="G.screen='saveScreen';render()">← Volver a partidas guardadas</button>`;
 }
