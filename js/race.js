@@ -772,6 +772,7 @@ window.doPace=p=>{
       if(!G.careerRaceHistory[race2.id])G.careerRaceHistory[race2.id]={finished:0,abandoned:0};
       G.careerRaceHistory[race2.id].abandoned++;
       G.raceAbandonedCount=(G.raceAbandonedCount||0)+1;
+      if(!G._abandonsByYear)G._abandonsByYear={};G._abandonsByYear[G.year]=(G._abandonsByYear[G.year]||0)+1;
       G.bodyLoad=Math.min(100,G.bodyLoad+5);
       el.innerHTML=`
         <h2>Abandono forzado</h2>
@@ -1530,6 +1531,7 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       G.time=Math.max(0,G.time-300); // ~5 min de ventaja
       G.runner.stats.mental=Math.max(1,(G.runner.stats.mental||50)-3);
       G.followers=Math.max(0,(G.followers||0)-150);
+      G._sabotageCount=(G._sabotageCount||0)+1;
       G.raceEvent='El rival toma el camino equivocado. Ganas posición, pero algo te pesa dentro. −3 Mental, −popularidad.';
     }
   } else if(evId==='lost'){
@@ -1677,7 +1679,7 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
   }
   else if(evId==='lent_pole'){
     if(choiceId==='give_pole'){
-      G.time+=120;r.stats.mental=Math.min(100,(r.stats.mental||50)+3);G.followers=(G.followers||0)+200;G.fairPlayCount=(G.fairPlayCount||0)+1;
+      G.time+=120;r.stats.mental=Math.min(100,(r.stats.mental||50)+3);G.followers=(G.followers||0)+200;G.fairPlayCount=(G.fairPlayCount||0)+1;G._helpingCount=(G._helpingCount||0)+1;
       G.raceEvent='Le llevas el bastón. Dos minutos perdidos, pero el corredor sigue. +3 Mental, +200 seguidores, y fair play anotado.';
     } else if(choiceId==='point_pole'){
       G.raceEvent='Le señalas el bastón y sigues. Él puede volver. Hiciste lo mínimo sin perder el ritmo.';
@@ -1766,7 +1768,7 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
   }
   else if(evId==='rival_pass'){
     if(choiceId==='give_way'){
-      G.time+=20;r.stats.mental=Math.min(100,(r.stats.mental||50)+2);G.fairPlayCount=(G.fairPlayCount||0)+1;
+      G.time+=20;r.stats.mental=Math.min(100,(r.stats.mental||50)+2);G.fairPlayCount=(G.fairPlayCount||0)+1;G._helpingCount=(G._helpingCount||0)+1;
       G.raceEvent='Le cedes el paso. El gesto te da la razón y +2 Mental. Recuperarás esa posición más adelante. +20 seg.';
     } else if(choiceId==='hold_pace'){
       if(Math.random()<0.55){G.raceEvent='Aguantas el ritmo y él no puede pasar. Llegas a un tramo ancho y se separa. Sin coste.'}
@@ -1927,6 +1929,7 @@ window.doAbandonConfirmed=()=>{
   G.runner.legs=Math.min(60,G.runner.legs+15);
   // Track abandonment
   G.raceAbandonedCount=(G.raceAbandonedCount||0)+1;
+  if(!G._abandonsByYear)G._abandonsByYear={};G._abandonsByYear[G.year]=(G._abandonsByYear[G.year]||0)+1;
   if(!G.careerRaceHistory)G.careerRaceHistory={};
   if(!G.careerRaceHistory[race.id])G.careerRaceHistory[race.id]={finished:0,abandoned:0};
   G.careerRaceHistory[race.id].abandoned++;
@@ -2157,6 +2160,23 @@ function applyPostRaceTracking(race,res){
     G.nemesis={name:top.name,flag:nemRival?.flag||'',wins:top.wins,avgGap:Math.round(top.avgGap)};
   }
 
+  // Achievement tracking
+  if(pos>=(all.length||1))G._lastPlaceCount=(G._lastPlaceCount||0)+1;
+  if(G.stormActive&&G.runner.energy<10)G._stormLowEnergyFinishes=(G._stormLowEnergyFinishes||0)+1;
+  if(G.taperBonus&&pos===1)G._wonWithTaper=true;
+  // Nemesis defeat tracking
+  if(G.nemesis){
+    const nemInRace=all.find(x=>x.name===G.nemesis.name);
+    if(nemInRace){
+      const nemIdx=all.findIndex(x=>x.name===G.nemesis.name);
+      if(pos<=nemIdx+1){
+        G._nemesisDefeatCount=(G._nemesisDefeatCount||0)+1;
+        G._rivalLossStreak=0;
+      } else {
+        G._rivalLossStreak=(G._rivalLossStreak||0)+1;
+      }
+    }
+  }
   // Km, PBs, tormenta
   G.totalCareerKm=(G.totalCareerKm||0)+race.km;
   G.seasonKm=(G.seasonKm||0)+race.km;

@@ -218,8 +218,12 @@ function cnFinishRace(){
   const mods=cnGetEquipMods();
 
   const totalBond=rs.bondDelta||0;
+  const prevBond=d.bond||0;
   d.bond=Math.max(0,Math.min(100,d.bond+totalBond));
   d.peakBond=Math.max(d.peakBond||0,d.bond);
+  // Bond recovery tracking
+  if(prevBond<30)G._cnBondMinReached=true;
+  if(G._cnBondMinReached&&d.bond>70)G._cnBondRecovered=true;
 
   let totalTime=Math.round((rs.time||0)+(rs.timePenalty||0));
   const rivals=rs.rivals||[];
@@ -244,11 +248,19 @@ function cnFinishRace(){
     G.followers=(G.followers||0)+Math.round((pos<=3?150:pos<=10?80:30)*(race.tier||1));
   }
 
+  // Last place tracking
+  if(!rs.retired&&pos>=rivals.length+1)G._cnLastPlaceCount=(G._cnLastPlaceCount||0)+1;
+  // Dog DNF tracking
+  if(rs.retired&&rs.injuryPending)G._cnDogDnfCount=(G._cnDogDnfCount||0)+1;
+  // Injury comeback tracking
+  if(!rs.retired&&pos===1&&G._cnHadInjuryLastRace)G._cnInjuryComeback=true;
+  G._cnHadInjuryLastRace=!!(rs.injuryPending);
   if(!G.cnRaceResults)G.cnRaceResults=[];
   G.cnRaceResults.push({
     raceId:race.id,raceName:race.name,season:G.cnSeason||1,
     pos:rs.retired?null:pos,time:totalTime,dnf:rs.retired||false,
-    bondDelta:totalBond,prize,km:race.km||0,
+    bondDelta:totalBond,prize,km:race.km||0,tier:race.tier||1,
+    catPos,
   });
 
   rs.finalPos=pos;rs.finalCatPos=catPos;rs.finalCatTotal=catRivals.length+1;rs.finalCat=myCat.label;rs.finalTime=totalTime;rs.finalPrize=prize;rs.done=true;
@@ -417,6 +429,13 @@ window.cnStartRace=idx=>{
   const race=(G.cnSelectedRaces||[])[idx];
   if(!race){showToast('Carrera no disponible','#c0392b');return;}
   G.cnCurrentRaceIdx=idx;
+  // Achievement tracking
+  if(G.dog&&G.dog.bond<20)G._cnLowBondRaced=(G._cnLowBondRaced||0)+1;
+  if(idx===0){
+    const cmds=G.dog?.commands||{};
+    if(!cmds.left&&!cmds.hold&&!cmds.forward)G._cnRacedWithoutCommands=true;
+    if(!(G.cnPreseasonDone||[]).length)G._cnPreseasonNothing=true;
+  }
   const segs=cnGenerateSegs(race);
   const numSegs=segs.length;
   const basePace={1:360,2:390,3:415,4:440}[race.tier]||390;
@@ -533,6 +552,7 @@ window.cnCallVet=type=>{
   G.cnMoney-=cost;
   if(!G.cnVetHistory)G.cnVetHistory=[];
   G.cnVetHistory.push({type,season:G.cnSeason,cost});
+  G._cnVetThisSeason=true;
   if(type==='basic'&&(d.injuryRaces||0)>0){
     d.injuryRaces=Math.ceil(d.injuryRaces/2);
     showToast('Revisión completada — baja reducida a '+d.injuryRaces+' carrera(s)','#4a8a2a');
@@ -586,6 +606,26 @@ window.cnEndSeason=()=>{
 };
 
 window.cnDoSeasonTransition=function cnDoSeasonTransition(){
+  // ── Achievement tracking: end of cn season ──────────────────
+  const thisSeason=G.cnSeason||1;
+  const seasonResults=(G.cnRaceResults||[]).filter(r=>r.season===thisSeason);
+  // Perfect season check
+  if(seasonResults.length>=3&&seasonResults.every(r=>!r.dnf&&r.pos===1)){
+    G._cnPerfectSeasons=(G._cnPerfectSeasons||0)+1;
+  }
+  // Dog healthy streak
+  const dogInjuredThisSeason=!!(G.dog&&G.dog.injury);
+  if(!dogInjuredThisSeason){
+    G._cnDogHealthyStreak=(G._cnDogHealthyStreak||0)+1;
+  } else {
+    if(G._cnDogHealthyPrev===false)G._cnDogInjury2Consecutive=true;
+    G._cnDogHealthyStreak=0;
+  }
+  G._cnDogHealthyPrev=!dogInjuredThisSeason;
+  // Vet check
+  if(!G._cnVetThisSeason)G._cnIgnoredVetSeason=true;
+  G._cnVetThisSeason=false;
+  // ────────────────────────────────────────────────────────────
   G.cnSeason=(G.cnSeason||1)+1;
   G.cnWeek=0;G.cnSelectedRaces=[];G.cnCurrentRaceIdx=0;
   G.cnTrainingBlock=null;G.cnVacationUsed=0;G.cnVacationPlanned=0;G.cnVacationDays=15;G.cnOpenMonths=[];

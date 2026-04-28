@@ -15,7 +15,11 @@ function checkAndUnlockAchievements(){
     try{globalAchs=JSON.parse(LS.get('globalAchs')||'{}');}catch(e){}
     newUnlocks.forEach(ach=>{
       if(!globalAchs[ach.id])globalAchs[ach.id]={difficulty:diff,year:G.year||G.cnSeason||1};
-      showToast(`🏆 Logro: ${ach.label}`,'#c07a10');
+      if(ach.rarity==='joke'){
+        showToast(`😄 Logro: ${ach.label}`,'#7ab800');
+      } else {
+        showToast(`🏆 Logro: ${ach.label}`,'#c07a10');
+      }
     });
     LS.set('globalAchs',JSON.stringify(globalAchs));
   }
@@ -23,18 +27,20 @@ function checkAndUnlockAchievements(){
 }
 function renderAchievements(){
   const el=document.getElementById('main');
-  if(!G._achF)G._achF={mode:'all',rarity:'all',status:'all'};
+  if(!G._achF)G._achF={mode:'all',rarity:'all',status:'all',tab:'all'};
+  if(!G._achF.tab)G._achF.tab='all';
   const f=G._achF;
   let globalAchs={};
   try{globalAchs=JSON.parse(LS.get('globalAchs')||'{}');}catch(e){}
-  const RARITY={easy:{c:'#4a8a2a',bg:'#eaf4ea',l:'Fácil'},medium:{c:'#4a90d9',bg:'#e8f0fb',l:'Medio'},hard:{c:'#c07a10',bg:'#fdf0e0',l:'Difícil'},legendary:{c:'#8b2252',bg:'#f8e8f2',l:'Legendario'}};
+  const RARITY={easy:{c:'#4a8a2a',bg:'#eaf4ea',l:'Fácil'},medium:{c:'#4a90d9',bg:'#e8f0fb',l:'Medio'},hard:{c:'#c07a10',bg:'#fdf0e0',l:'Difícil'},legendary:{c:'#8b2252',bg:'#f8e8f2',l:'Legendario'},joke:{c:'#b8860b',bg:'#fffbea',l:'😄 Secreto'}};
   const DIFF_LABEL={facil:'🟢 Fácil',medio:'🟡 Medio',dificil:'🔴 Difícil',hardcore:'💀 Hardcore',expres:'⚡ Exprés',canicross:'🐕 Canicross'};
   const rb=a=>{const r=RARITY[a.rarity]||{c:'#888',bg:'#eee',l:''};return`<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${r.bg};color:${r.c}">${r.l}</span>`;};
   const totalUnlocked=Object.keys(globalAchs).length;
+  // Tab filtering
   let list=ACHIEVEMENTS.filter(a=>{
-    if(f.mode==='normal'&&a.mode)return false;
-    if(f.mode==='cn'&&a.mode!=='cn')return false;
-    if(f.mode==='excl'&&!a.excl)return false;
+    if(f.tab==='normal'&&a.mode)return false;
+    if(f.tab==='expres'&&a.mode!=='expres')return false;
+    if(f.tab==='cn'&&a.mode!=='cn')return false;
     if(f.rarity!=='all'&&a.rarity!==f.rarity)return false;
     const isUnlocked=!!globalAchs[a.id];
     if(f.status==='unlocked'&&!isUnlocked)return false;
@@ -42,6 +48,7 @@ function renderAchievements(){
     return true;
   });
   const chip=(label,field,val)=>`<button onclick="G._achF.${field}='${val}';render()" style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid ${f[field]===val?'#c07a10':'#ddd'};background:${f[field]===val?'#fdf0e0':'#fff'};color:${f[field]===val?'#c07a10':'#888'};cursor:pointer;font-weight:${f[field]===val?'700':'400'}">${label}</button>`;
+  const tabBtn=(label,val)=>{const active=f.tab===val;return`<button onclick="G._achF.tab='${val}';render()" style="flex:1;padding:10px 8px;border:none;border-bottom:${active?'2px solid #c07a10':'2px solid transparent'};background:transparent;color:${active?'#c07a10':'#888'};font-size:13px;font-weight:${active?'700':'400'};cursor:pointer">${label}</button>`;};
   el.innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
       <button class="secondary" onclick="G.screen=G._achPrev||'modeSelect';if(G._achPrevTab)G.activeTab=G._achPrevTab;render()" style="font-size:13px;padding:6px 12px">← Volver</button>
@@ -50,14 +57,13 @@ function renderAchievements(){
         <div style="font-size:12px;color:#888">${totalUnlocked} de ${ACHIEVEMENTS.length} conseguidos</div>
       </div>
     </div>
+    <div style="display:flex;gap:0;border-bottom:2px solid #e8e6e0;margin-bottom:12px">
+      ${tabBtn('Todos','all')}${tabBtn('Carrera','normal')}${tabBtn('Exprés','expres')}${tabBtn('Canicross','cn')}
+    </div>
     <div style="background:#fff;border:1px solid #e8e6e0;border-radius:10px;padding:12px 14px;margin-bottom:12px">
-      <div style="font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Modo</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-        ${chip('Todos','mode','all')}${chip('Normal','mode','normal')}${chip('Canicross','mode','cn')}${chip('Difícil+','mode','excl')}
-      </div>
       <div style="font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Rareza</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-        ${chip('Todos','rarity','all')}${chip('Fácil','rarity','easy')}${chip('Medio','rarity','medium')}${chip('Difícil','rarity','hard')}${chip('Legendario','rarity','legendary')}
+        ${chip('Todos','rarity','all')}${chip('Fácil','rarity','easy')}${chip('Medio','rarity','medium')}${chip('Difícil','rarity','hard')}${chip('Legendario','rarity','legendary')}${chip('😄 Secreto','rarity','joke')}
       </div>
       <div style="font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Estado</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -70,16 +76,20 @@ function renderAchievements(){
       list.map((ach,i)=>{
         const meta=globalAchs[ach.id];
         const unlocked=!!meta;
-        return`<div style="padding:10px 14px;${i<list.length-1?'border-bottom:1px solid #f0ede8;':''}display:flex;align-items:flex-start;gap:10px;${!unlocked?'opacity:0.55':''}">
+        const isJoke=ach.rarity==='joke';
+        const isHardDiff=unlocked&&(meta.difficulty==='dificil'||meta.difficulty==='hardcore');
+        const modeIcon=f.tab==='all'?(ach.mode==='cn'?'🐕 ':ach.mode==='expres'?'⚡ ':'🏃 '):'';
+        const borderStyle=isHardDiff?'border:2px solid #c07a10;border-radius:6px;':'';
+        return`<div style="padding:10px 14px;${i<list.length-1?'border-bottom:1px solid #f0ede8;':''}display:flex;align-items:flex-start;gap:10px;${!unlocked?'opacity:0.55':''}${borderStyle}">
           <span style="font-size:18px;margin-top:1px">${unlocked?'🏆':'🔒'}</span>
           <div style="flex:1">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
-              <span style="font-size:13px;font-weight:600;color:#1a1a1a">${esc(ach.label)}</span>
+              <span style="font-size:13px;font-weight:600;color:#1a1a1a">${modeIcon}${unlocked||!isJoke?esc(ach.label):'???'}</span>
               ${rb(ach)}
               ${ach.excl?`<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#f0e8f8;color:#6b3fa0">Exclusivo</span>`:''}
-              ${meta?`<span style="font-size:10px;color:#aaa">· ${DIFF_LABEL[meta.difficulty]||meta.difficulty}</span>`:''}
             </div>
-            <div style="font-size:12px;color:#888">${esc(ach.desc)}</div>
+            <div style="font-size:12px;color:#888">${unlocked||!isJoke?esc(ach.desc):'???'}</div>
+            ${meta?`<div style="font-size:12px;color:#888;margin-top:2px">Conseguido en ${DIFF_LABEL[meta.difficulty]||meta.difficulty} · Año ${meta.year}</div>`:''}
           </div>
         </div>`;
       }).join('')}
@@ -754,12 +764,24 @@ function renderSaveScreen(){
           <button class="save-btn primary" onclick="startNewInSlot(${slot})">Nueva partida</button>
         </div>
       </div>`;
+      let achNormal=0,achCn=0,achExpres=0;
+      try{
+        const ga=JSON.parse(LS.get('globalAchs')||'{}');
+        Object.keys(ga).forEach(id=>{
+          const a=ACHIEVEMENTS.find(x=>x.id===id);
+          if(!a)return;
+          if(a.mode==='cn')achCn++;
+          else if(a.mode==='expres')achExpres++;
+          else achNormal++;
+        });
+      }catch(e){}
       return `<div class="save-slot">
         <div class="flex-between">
           <div class="save-slot-info">
             <div class="save-slot-name">${lbl.runName?`"${esc(lbl.runName)}"`:lbl.name}</div>
             <div class="save-slot-meta">${lbl.runName?esc(lbl.name)+' · ':''}Año ${lbl.year} · Global ${lbl.ranking} · ${lbl.spec} ${lbl.specRanking}</div>
             <div class="save-slot-meta" style="margin-top:2px">${lbl.mode}${lbl.phase?` · <span style="color:#534AB7;font-weight:500">${lbl.phase}</span>`:''}${lbl.totalKm?' · '+lbl.totalKm+'km':''} · ${lbl.date}</div>
+            <div class="save-slot-meta" style="margin-top:2px">🏆 ${achNormal} · 🐕 ${achCn} · ⚡ ${achExpres}</div>
           </div>
         </div>
         <div class="save-btns">
@@ -2655,6 +2677,8 @@ window.selectTraining=id=>{
     // ── Taper flag ─────────────────────────────────────────────────
     if(b.taperBlock) G.taperBonus=true;
     else G.taperBonus=false;
+    // ── Achievement tracking: training done ───────────────────────
+    G._seasonTrainingDone=true;
 
     // ── Evento de entrenamiento (1 de cada ~4 veces) ───────────────
     G.trainingEvent=getTrainingEvent(id);
@@ -2747,6 +2771,8 @@ window.toggleSpend=(id,cost,yearNet)=>{
     const alreadySpent=Object.entries(G.spending).filter(([k,v])=>v&&k!==id).reduce((a,[k])=>a+({'fisio':200,'entrenador':250,'suplementos':100}[k]||0),0);
     if(cost>projMoney-alreadySpent){alert('No tienes suficiente dinero para esto.');return;}
     G.spending[id]=true;G.money-=cost;
+    if(id==='fisio')G._clubFisioUsed=true;
+    if(id==='entrenador')G._clubEntrenadorUsed=true;
   }render();
 };
 
@@ -2822,6 +2848,7 @@ window.doNextYear=yearNet=>{
   Object.keys(G.sponsors).forEach(cat=>{
     const sp=G.sponsors[cat];if(!sp)return;
     const met=checkSponsorObjective(sp);
+    if(met&&!G._firstSponsorObjMet)G._firstSponsorObjMet=true;
     if(!met){const penalty=Math.round(sp.salary*(sp.penaltyPct||0.15));G.sponsorPenalties.push({id:sp.id+'_'+G.year,name:sp.name,amount:penalty,cat});}
     sp.duration=(sp.duration||1)-1;if(sp.duration<=0)G.sponsors[cat]=null;
   });
@@ -2839,6 +2866,17 @@ window.doNextYear=yearNet=>{
   // Ingresos anuales de marca (ya están en yearNet a través de monthlyNet, pero el empleado se paga aparte)
   // El coste del empleado ya está descontado en monthlyBrandIncome() = 600 neto
 
+  // ── Achievement tracking: temporada sin entrenamiento ──
+  if(!G._seasonTrainingDone)G._noTrainSeasonDone=true;
+  G._seasonTrainingDone=false;
+  // ── Achievement tracking: temporada sin penalización de sponsor ──
+  {const thisSeason=(G.sponsorPenalties||[]).filter(p=>p.year===G.year).length;
+  if(thisSeason===0&&Object.values(G.sponsors||{}).some(Boolean)){G._cleanSponsorSeason=true;}}
+  // ── Achievement tracking: club loyalty ──
+  {const curClubId=(G.club?.id)||'none';
+  if(G._clubLoyaltyId&&G._clubLoyaltyId===curClubId){G._clubLoyaltyStreak=(G._clubLoyaltyStreak||0)+1;}
+  else{G._clubLoyaltyStreak=1;G._clubLoyaltyId=curClubId;}
+  if(!G._clubAscent&&curClubId==='elite')G._clubAscent=true;}
   // Envejecer
   // ── Decaimiento de reputación al fin de temporada ──
   const _finishedRaces=(G.raceResults||[]).filter(r=>!r.injured).length;
@@ -3148,8 +3186,10 @@ function getAgeCategory(age){
 
 window.doRetire=()=>{
   if(G.carreraVida&&(G.lifecyclePhase==='runner'||G.lifecyclePhase==='overlap')){
+    G._retireYear=G.year;
     G.screen='lifeRetirement';render();return;
   }
+  G._retireYear=G.year;
   G.screen='retirement';render();
 };
 
