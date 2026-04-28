@@ -44,7 +44,7 @@ function renderAchievements(){
   const chip=(label,field,val)=>`<button onclick="G._achF.${field}='${val}';render()" style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid ${f[field]===val?'#c07a10':'#ddd'};background:${f[field]===val?'#fdf0e0':'#fff'};color:${f[field]===val?'#c07a10':'#888'};cursor:pointer;font-weight:${f[field]===val?'700':'400'}">${label}</button>`;
   el.innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-      <button class="secondary" onclick="G.screen='modeSelect';render()" style="font-size:13px;padding:6px 12px">← Volver</button>
+      <button class="secondary" onclick="G.screen=G._achPrev||'modeSelect';render()" style="font-size:13px;padding:6px 12px">← Volver</button>
       <div>
         <h2 style="margin:0;font-size:20px">🏅 Logros</h2>
         <div style="font-size:12px;color:#888">${totalUnlocked} de ${ACHIEVEMENTS.length} conseguidos</div>
@@ -736,9 +736,10 @@ function renderSaveScreen(){
   const autoData=loadFromSlot('auto');
   el.innerHTML=`
     <h1>Juego Trail</h1>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v56</span></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v${GAME_BUILD}</span></div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
       <p class="sub" style="margin-bottom:0;flex:1">Partidas guardadas</p>
+      <button onclick="G._achPrev='saveScreen';G.screen='achievements';render()" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid #ddd;border-radius:20px;background:#fff;font-size:12px;font-weight:600;color:#888;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background='#fff'">🏅 Logros</button>
       <button onclick="showTutorial()" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid #ddd;border-radius:20px;background:#fff;font-size:12px;font-weight:600;color:#888;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background='#fff'">📖 Tutorial</button>
     </div>
 
