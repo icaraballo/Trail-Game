@@ -20,7 +20,7 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
-const GAME_BUILD=60; // incrementar con cada versión del juego
+const GAME_BUILD=61; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
@@ -63,11 +63,13 @@ function migrateState(saved){
    'seasonDiary','aidSelected','paceLog','rivalChildren','lifePendingAthletes',
    'coachSelectedRaces','coachRaceResults','coachAthleteHistory','coachDecisionLog',
    'coachEventLog','coachRoster','coachSponsors','unlockedAchievements',
-   'utCalendar','utResults','utCrew','utPaceLog','backyardHistory','backyardRivalState','mdsHistorialEtapas',
+   'utCalendar','utResults','utCrewActivo','backyardHistory','mdsHistorialEtapas',
    'clubLegadoAthletes','clubMilestones','ownBrandEvents','cnVetHistory','cnRaceResults','cnSelectedRaces']
     .forEach(k=>{if(!Array.isArray(merged[k]))merged[k]=Array.isArray(base[k])?[...base[k]]:[];});
   merged.utMochila={...(saved.utMochila||{})};
-  merged.backyardMochila={...(saved.backyardMochila||{})};
+  merged.utSponsors={...(saved.utSponsors||{})};
+  merged.utCurrentRaceState=(saved.utCurrentRaceState||null);
+  merged.utCareerLegacy=(saved.utCareerLegacy||null);
   // Deep-merge de objetos anidados adicionales
   if(saved.dog)          merged.dog={...base.dog,...saved.dog};
   if(saved.club)         merged.club={...base.club,...saved.club};

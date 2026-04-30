@@ -204,6 +204,7 @@ function freshState(){
     cnDogFoodPremium:false, cnDogSupplements:false,
     cnVetHistory:[], cnBirthdayToastShown:{}, cnRaceState:null,
     dog:null,
+    legadoData:null,
     // ── Modo Ultratrail ──────────────────────────
     ultratrailMode:false,
     utYear:1,
@@ -213,54 +214,20 @@ function freshState(){
     utBodyLoad:0,
     utMoney:800,
     utRanking:999,
-    utYear1Bonus:true,
-    // Stats nuevos ultratrail
-    combustible:100,
+    utSponsors:{},
     pies:100,
-    horasDescanso:0,
-    // Mochila
+    combustible:100,
     utMochila:{},
-    utMochilaPeso:0,
-    // Crew
-    utCrew:[],
-    utCrewCost:0,
-    utCutoffWarnings:0,
-    // Backyard Ultra
+    utMochilaPesoTotal:0,
+    utCrewActivo:[],
     backyardHistory:[],
     backyardCurrentLoop:0,
-    backyardRivalState:[],
-    backyardMochila:{},
-    backyardNocturna:false,
-    // Intensidad narrativa / selector carrera
-    utNarrativeIntensity:'normal',
-    utRaceIntensity:'normal',      // 'expres'|'normal'|'inmersivo'
-    // Sección nocturna activa
-    utNocturnaActive:false,
-    utNightEntered:false,          // ya se mostró la pantalla de transición nocturna
-    utNightStrategy:null,          // 'conservar'|'mantener'|'gel'
-    // Hub de temporada
-    utActiveTab:'races',           // 'races'|'training'|'finances'
-    utCurrentMonth:1,
-    // Entrenamiento
-    utTrainingBlock:null,
-    utTrainingHours:12,
-    utTrainingApplied:false,
-    // Economía
-    utMonthlyExpenses:150,
-    utSponsor:null,
-    // Carrera — tracking
-    utPaceLog:[],
-    utGels:3,
-    utGelsUsed:0,
-    utKmAtDNF:0,
-    _utCrisesThisRace:0,
-    _utYearStatsSnapshot:null,
-    // Marathon des Sables
     mdsEtapaActual:0,
-    mdsRacionesRestantes:0,
+    mdsRacionesRestantes:5,
     mdsHistorialEtapas:[],
-    // Legado
-    legadoData:null,
+    utFaseHoraria:'dia',
+    utCurrentRaceState:null,
+    utCareerLegacy:null,
   };
 }
 let G=freshState();

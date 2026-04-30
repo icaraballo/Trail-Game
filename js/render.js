@@ -260,27 +260,17 @@ function render(){
     overlapHub:renderOverlapHub,
     lifeRetirement:renderLifeRetirement,
     clubOffer:renderClubOffer,
-    ultratrailWelcome:renderUltratrailWelcome,
-    ultratrailSeasonHub:renderUltratrailSeasonHub,
-    ultratrailSeasonStart:renderUltratrailSeasonStart,
-    ultratrailIntensitySelect:renderUltratrailIntensitySelect,
-    ultratrailMochila:renderUltratrailMochila,
-    ultratrailPreRace:renderUltratrailPreRace,
-    ultratrailSegment:renderUltratrailSegment,
-    ultratrailAid:renderUltratrailAid,
-    ultratrailNight:renderUltratrailNight,
-    ultratrailCutoffDNF:renderUltratrailCutoffDNF,
-    ultratrailPostRace:renderUltratrailPostRace,
-    ultratrailYearEnd:renderUltratrailYearEnd,
-    ultratrailSeasonBalance:renderUltratrailSeasonBalance,
-    ultratrailLegado:renderUltratrailLegado,
-    backyardConfig:renderBackyardConfig,
-    backyardLoop:renderBackyardLoop,
-    backyardResult:renderBackyardResult,
-    mdsPreparation:renderMDSPreparation,
-    mdsDecision:renderMDSDecision,
-    mdsBivouac:renderMDSBivouac,
-    mdsFinal:renderMDSFinal,
+    utHome:renderUtHome,
+    utCalendar:renderUtCalendar,
+    utPreRace:renderUtPreRace,
+    utMochila:renderUtMochila,
+    utCrew:renderUtCrew,
+    utRace:renderUtRace,
+    utPostRace:renderUtPostRace,
+    utBackyard:renderUtBackyard,
+    utMds:renderUtMds,
+    utEndYear:renderUtEndYear,
+    utLegado:renderUtLegado,
     canicrossCreateDog:renderCnCreateDog,
     canicrossPreseason:renderCanicrossPreseason,
     canicrossTrainingSetup:renderCanicrossTrainingSetup,
@@ -1248,7 +1238,7 @@ function renderModeSelect(){
         // Normal (expres / ultratrail)
         const isSel=sel===m.id;
         const clickAct=m.id==='ultratrail'
-          ?`G.gameMode='ultratrail';G.screen='ultratrailWelcome';render()`
+          ?`G.ultratrailMode=true;G.utMoney=800;G.screen='utHome';render();setTimeout(()=>showToast('Llevas años ahorrando para esto. Tienes €800 con los que empezar.','#4a8a2a'),200)`
           :`selectMode('${m.id}')`;
         return `<div class="carrera-group-header" onclick="${clickAct}" style="${isSel?'background:#fef9ec;border-bottom:1px solid #e8e6e0':''}">
           <div style="width:36px;height:36px;border-radius:8px;background:${isSel?'#fef9ec':'var(--color-background-secondary)'};display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${m.icon}</div>
@@ -1308,7 +1298,7 @@ window.selectAndConfirm=(id,path)=>{
   }
 };
 window.confirmMode=()=>{
-  if(G.gameMode==='ultratrail'){G.screen='ultratrailWelcome';render();return;}
+  if(G.gameMode==='ultratrail'){G.ultratrailMode=true;G.utMoney=800;G.screen='utHome';render();return;}
   if(G.gameMode==='canicross'){G.screen='intro';render();return;}
   if(G.gameMode==='club'){
     // Guiño narrativo si el modo está desbloqueado vía arco narrativo
@@ -3688,1222 +3678,712 @@ window.handleEv=(evId,choiceIdx)=>{
   G.pendingEvent=null;goNextRace();
 };
 
+
 // ══════════════════════════════════════════════════════════════════
 //  MODO ULTRATRAIL — AUXILIARES
 // ══════════════════════════════════════════════════════════════════
-function utRaceStats(){
-  const r=G.runner;
-  const stats=[
-    ['⚡ Energía',    r.energy,              '#4a8a2a'],
-    ['💧 Hidratación', r.hydration,           '#4a90d9'],
-    ['🦵 Piernas',    r.legs,                '#c07a10'],
-    ['🔥 Combustible',(G.combustible||0),    '#e87820'],
-    ['🦶 Pies',       (G.pies||0),           '#8B4513'],
-  ];
-  return `<div class="card">${stats.map(([l,v,c])=>`<div class="bar-row"><span class="bar-label" style="color:${v<25?'#c0392b':'#666'}">${l}${v<25?' ⚠':''}</span>${rbar(v,c)}<span class="bar-pct" style="color:${v<25?'#c0392b':'#1a1a1a'}">${Math.round(v)}%</span></div>`).join('')}</div>`;
-}
-function utStatLabel(statKey, value){
-  const v=Math.round(value||0);
-  if(statKey==='mental'){
-    if(v>=65) return {text:'Fuerte',col:'#4a8a2a'};
-    if(v>=35) return {text:'Justo', col:'#c07a10'};
-    return {text:'En riesgo',col:'#c0392b'};
-  }
-  if(statKey==='resistencia'){
-    if(v>=60) return {text:'Fuerte',col:'#4a8a2a'};
-    if(v>=40) return {text:'Justo', col:'#c07a10'};
-    return {text:'En riesgo',col:'#c0392b'};
-  }
-  if(statKey==='nutricion'){
-    if(v>=55) return {text:'Fuerte',col:'#4a8a2a'};
-    if(v>=30) return {text:'Justo', col:'#c07a10'};
-    return {text:'En riesgo',col:'#c0392b'};
-  }
-  if(statKey==='bajada'){
-    if(v>=55) return {text:'Fuerte',col:'#4a8a2a'};
-    if(v>=35) return {text:'Justo', col:'#c07a10'};
-    return {text:'En riesgo',col:'#c0392b'};
-  }
-  if(statKey==='velocidad'){
-    if(v>=55) return {text:'Fuerte',col:'#4a8a2a'};
-    if(v>=35) return {text:'Justo', col:'#c07a10'};
-    return {text:'En riesgo',col:'#c0392b'};
-  }
-  if(v>=60) return {text:'Fuerte',col:'#4a8a2a'};
-  if(v>=35) return {text:'Justo', col:'#c07a10'};
-  return {text:'En riesgo',col:'#c0392b'};
-}
-function shouldPauseForEvent(eventId, stats){
-  const s=stats||{};
-  const mental=(s.mental||50);
-  const always=['ut_intrusive','sock_adjust','lost','friends_cheer'];
-  if(always.includes(eventId)) return true;
-  if(eventId==='cold_3am') return mental<50;
-  if(eventId==='hallucination') return true;
-  return mental<40;
-}
-function utTopBar(){
-  const race=(ULTRATRAIL_RACES[G.utYear||1]||[])[G.utCurrentRaceIdx]||{};
-  const segs=G._utCurrentSegs||race.segs||[];
-  return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-size:12px;color:#999">${esc(race.name||'')} · seg ${(G.seg||0)+1}/${segs.length}</span><span style="font-size:13px;font-weight:600">${fmt(G.time||0)}</span></div>`;
-}
-function utProgBar(){
-  const race=(ULTRATRAIL_RACES[G.utYear||1]||[])[G.utCurrentRaceIdx]||{};
-  const segs=G._utCurrentSegs||race.segs||[];
-  const done=segs.slice(0,G.seg||0).reduce((a,s)=>a+(s.km||0),0);
-  const total=segs.reduce((a,s)=>a+(s.km||0),0)||race.km||1;
-  const pct=Math.round(done/total*100);
-  return `<div class="prog-wrap"><div class="prog-meta"><span>${done}km</span><span>${total-done}km restantes</span></div><div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div></div>`;
-}
-function initUltratrailLongRace(race){
-  const km=race.km||100;
-  const d=parseInt((race.desnivel||'0m+').replace(/\D/g,''))||5000;
-  const n=Math.min(12,Math.max(6,Math.round(km/40)));
-  const types=['flat','climb','descent','flat','climb','descent','flat','climb','flat','descent','climb','flat'];
-  const segs=[];let left=km;
-  for(let i=0;i<n;i++){
-    const last=(i===n-1);const k=last?Math.max(5,left):Math.round(km/n);left-=k;
-    const t=types[i%types.length];
-    const g=t==='climb'?Math.round(d/n*1.4):t==='descent'?-Math.round(d/n*1.4):0;
-    segs.push({name:`Sector ${i+1}`,km:Math.max(5,k),type:t,gain:g,base:2000+((i*137)%900),aid:i>0&&i%3===2});
-  }
-  return segs;
+function utStatBar(label,val,max,color){
+  const pct=Math.round(Math.max(0,Math.min(100,(val/max)*100)));
+  return `<div style="margin:4px 0"><span style="font-size:12px;color:#666">${label} <strong>${val}</strong></span>
+    <div style="background:#eee;border-radius:4px;height:8px;margin-top:2px">
+      <div style="width:${pct}%;background:${color};height:8px;border-radius:4px;transition:width 0.3s"></div>
+    </div></div>`;
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  MODO ULTRATRAIL — NARRATIVAS POR AÑO
-// ══════════════════════════════════════════════════════════════════
-const UT_YEAR_NARRATIVE={
-  1:{title:'El primer año',text:'Aprendes que los cutoffs no son sugerencias. La montaña no negocia.',sub:'Objetivos: terminar una carrera de 80K · no abandonar por causas evitables'},
-  2:{title:'El segundo año',text:'Ya sabes lo que duele. La pregunta es si puedes gestionarlo mejor.',sub:'Objetivos: mejorar tiempo · primer podio local'},
-  3:{title:'Buscas tu índice',text:'Tres puntos ITRA. Eso es lo que necesitas para estar en la parrilla grande.',sub:'Objetivos: conseguir 3+ puntos ITRA · clasificar para una carrera élite'},
-  4:{title:'La consagración',text:'Ya sabes lo que es una noche sola en la montaña. Ahora buscas saber quién eres en ella.',sub:'Objetivos: primera carrera élite completada · ranking top 100'},
-  5:{title:'La madurez',text:'El ultra te ha cambiado. La pregunta ya no es si puedes terminar, sino para qué.',sub:'Objetivos: carrera emblemática completada · top 50 mundial'},
-  6:{title:'La cima o el camino',text:'Hay corredores más jóvenes que empujan detrás. Tú sabes cosas que ellos aún no.',sub:'Objetivos: récord personal · carrera que te quede pendiente'},
-  7:{title:'Uno más',text:'Un año más. Lo sabes. La cuestión es cómo termina esta historia.',sub:'Objetivos: objetivo soñado · dejar huella'},
-  8:{title:'El último año',text:'Cada paso cuenta. No porque sea el último, sino porque has aprendido que siempre lo fue.',sub:'Objetivos: llegar a la meta · escribir el final que mereces'},
-};
+function utFinishProbability(race){
+  const stats=G.runner.stats;
+  const req=race.reqStats||{};
+  let score=1.0;
+  if(req.resistencia)score*=Math.min(1,(stats.resistencia||0)/req.resistencia);
+  if(req.mental)     score*=Math.min(1,(stats.mental||0)/req.mental);
+  if(req.pies)       score*=Math.min(1,(G.pies||100)/req.pies);
+  return Math.round(score*100);
+}
+
+function utCheckReqMet(race){
+  const req=race.reqStats||{};
+  const stats=G.runner.stats;
+  if(req.resistencia&&(stats.resistencia||0)<req.resistencia)return false;
+  if(req.mental&&(stats.mental||0)<req.mental)return false;
+  if(req.pies&&(G.pies||100)<req.pies)return false;
+  return true;
+}
+
+function utReqRow(label,cur,req){
+  const ok=cur>=req;
+  return `<span style="color:${ok?'#2d7a2d':'#c0392b'};font-size:12px">${label}: ${cur}/${req} ${ok?'✓':'✗'}</span>`;
+}
+
+function utFaseStyle(){
+  const fase=(UT_FASES_HORARIAS||[]).find(f=>f.id===(G.utFaseHoraria||'dia'))||{bg:'#f5f4f0',text:'#333'};
+  return `background:${fase.bg};color:${fase.text};`;
+}
+
+function utGenerateCheckpoints(race){
+  const n=Math.max(4,Math.min(8,Math.floor((race.km||50)/25)));
+  const cps=[];
+  for(let i=1;i<=n;i++){
+    const km=Math.round((race.km/n)*i);
+    cps.push({kmMarca:km,nombre:`Avituallamiento ${i} (km ${km})`,tieneCrewArea:i%2===0});
+  }
+  return cps;
+}
 
 // ══════════════════════════════════════════════════════════════════
 //  MODO ULTRATRAIL — PANTALLAS
 // ══════════════════════════════════════════════════════════════════
-function renderUltratrailWelcome(){
+function renderUtHome(){
   const el=document.getElementById('main');
+  const yr=G.utYear||1;
+  const narrativas={
+    1:'Aprendes que los cutoffs no son sugerencias. La montaña no negocia.',
+    2:'Ya sabes lo que duele. La pregunta es si puedes gestionarlo mejor.',
+    3:'Tres puntos ITRA. Eso es lo que necesitas para estar en la parrilla grande.',
+    4:'Ya sabes lo que es una noche sola en la montaña.',
+    5:'El ultra te ha cambiado. La pregunta ya no es si puedes terminar, sino para qué.',
+    6:'Hay corredores más jóvenes que empujan detrás. Tú sabes cosas que ellos aún no.',
+    7:'Un año más. Lo sabes. La cuestión es cómo termina esta historia.',
+    8:'Cada paso cuenta. No porque sea el último, sino porque has aprendido que siempre lo fue.',
+  };
+  const txt=narrativas[yr]||narrativas[8];
+  const prevResults=(G.utResults||[]).filter(r=>r.year===(yr-1));
+  const prevHtml=prevResults.length?`<div class="card" style="margin-bottom:8px">
+    <div class="sec-title-sm" style="margin-bottom:6px">Temporada anterior</div>
+    ${prevResults.map(r=>`<div style="font-size:13px;padding:3px 0;border-bottom:1px solid #eee">
+      ${r.formato==='backyard'?`🔄 ${r.name} — <strong>${r.loops||0} vueltas</strong>`:
+        `${r.finished?'✅':'❌'} ${esc(r.name||'')}${r.km?' · '+r.km+'K':''}`}
+    </div>`).join('')}
+  </div>`:'';
   el.innerHTML=`
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-      <h2 style="margin:0">🏔️ Modo Ultratrail</h2>
-      <span style="font-size:11px;background:#4a8a2a;color:#fff;padding:2px 7px;border-radius:10px;font-weight:700">NUEVO</span>
-    </div>
-    <div class="card" style="background:#111f11;border-color:#2a4a2a;margin-bottom:14px">
-      <p style="color:#7fbf7f;margin:0;font-size:14px;line-height:1.5">Llevas años corriendo trails. El ultratrail es otra cosa.<br>
-      Aquí no se trata de posición — se trata de llegar. Las distancias empiezan en 80K. Las decisiones importan el doble. El cuerpo tiene memoria.</p>
-    </div>
-    <hr style="border:none;border-top:1px solid #e0dfd8;margin:0 0 14px 0">
-    <div style="font-size:15px;font-weight:600;margin-bottom:10px">¿Tienes experiencia en trail?</div>
-    <div class="work-card" style="margin-bottom:10px" onclick="G.utYear1Bonus=false;G.screen='createRunner';render()">
-      <div style="font-size:15px;font-weight:700">Sí, vengo del trail</div>
-      <div style="font-size:13px;color:#888;margin-top:3px">Empezamos con el historial limpio y sin ventaja adicional.</div>
-    </div>
-    <div class="work-card" onclick="G.utYear1Bonus=true;G.screen='createRunner';render()">
-      <div style="font-size:15px;font-weight:700">Empiezo desde cero</div>
-      <div style="font-size:13px;color:#888;margin-top:3px">El primer año es de aprendizaje. Bonus del 15% en el rendimiento del año 1.</div>
-    </div>
-    <button class="secondary" style="margin-top:14px" onclick="G.screen='modeSelect';render()">← Cambiar modo</button>`;
-}
-
-// ── HUB DE TEMPORADA (equivalente a betweenManage del modo normal) ──────────
-function renderUltratrailSeasonHub(){
-  const el=document.getElementById('main');
-  const year=G.utYear||1;
-  const tab=G.utActiveTab||'races';
-  el.innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div>
-        <h2 style="margin-bottom:2px">🏔️ Temporada ${year}</h2>
-        <div style="font-size:12px;color:#999">€${G.utMoney||0} · ${(G.utRanking||999)<900?'#'+(G.utRanking||999):'sin ranking'} · Res. ${G.runner.stats.resistencia||50}</div>
+    <h2 style="margin:0 0 2px">🏔️ Modo Ultratrail</h2>
+    <div style="font-size:13px;color:#666;margin-bottom:12px">Año ${yr} — ${txt}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div class="card" style="text-align:center">
+        <div style="font-size:11px;color:#999">Dinero</div>
+        <div style="font-size:22px;font-weight:700;color:${(G.utMoney||0)>200?'#2d7a2d':'#c0392b'}">€${G.utMoney||0}</div>
       </div>
-      <button class="secondary" style="font-size:12px;padding:6px 10px" onclick="G.screen='ultratrailWelcome';render()">← Año</button>
+      <div class="card" style="text-align:center">
+        <div style="font-size:11px;color:#999">Ranking</div>
+        <div style="font-size:22px;font-weight:700">${(G.utRanking||999)<900?'#'+(G.utRanking||999):'—'}</div>
+      </div>
     </div>
-    <div style="display:flex;gap:0;margin-bottom:14px;border:1px solid #e0dfd8;border-radius:8px;overflow:hidden">
-      ${[['races','📅 Carreras'],['training','💪 Entreno'],['finances','💰 Economía']].map(([id,label])=>`
-        <button onclick="G.utActiveTab='${id}';renderUltratrailSeasonHub();" style="flex:1;padding:9px 4px;font-size:13px;font-weight:${tab===id?'700':'400'};background:${tab===id?'#1a1a1a':'#fff'};color:${tab===id?'#fff':'#555'};border:none;cursor:pointer">${label}</button>
-      `).join('')}
+    <div class="card" style="margin-bottom:8px">
+      <div class="sec-title-sm" style="margin-bottom:6px">Stats</div>
+      ${utStatBar('Resistencia',G.runner.stats.resistencia||50,100,'#4a8a2a')}
+      ${utStatBar('Mental',G.runner.stats.mental||50,100,'#7a4a8a')}
+      ${utStatBar('Velocidad',G.runner.stats.velocidad||50,100,'#4a6a9a')}
+      ${utStatBar('Piernas',G.runner.stats.bajada||50,100,'#8a6a4a')}
+      ${utStatBar('Pies 🦶',G.pies||100,100,'#c07a10')}
     </div>
-    ${tab==='races'?_utTabRaces(year):tab==='training'?_utTabTraining():_utTabFinances()}`;
+    ${prevHtml}
+    <button class="main" onclick="G.screen='utCalendar';render()">📅 Planificar temporada</button>
+    <button class="secondary" style="margin-top:6px" onclick="G._utMochilaPrev='utHome';G.screen='utMochila';render()">🎒 Mochila</button>
+    ${yr>=2?`<button class="secondary" style="margin-top:6px" onclick="G.screen='utCrew';render()">👥 Crew</button>`:''}
+  `;
 }
 
-// ── NUEVA PANTALLA DE INICIO DE TEMPORADA ────────────────────────
-function renderUltratrailSeasonStart(){
+function renderUtCalendar(){
   const el=document.getElementById('main');
-  const year=G.utYear||1;
-  const races=ULTRATRAIL_RACES[year]||[];
-  if(!G._utSeasonSelected)G._utSeasonSelected=[];
-  const sel=G._utSeasonSelected;
-  const yearTitles={1:'Primera Ultra',2:'Confirmando el camino',3:'Las grandes ligas',
-    4:'El desierto',5:'El gigante',6:'Tierras extremas',7:'El límite del mapa',8:'La Gran Travesía'};
-  const objetivoSel=sel.find(i=>{const r=races[i];return r&&r.type==='objetivo'||r&&r.type==='objetivo_especial'||r&&r.type==='endgame';});
-  const backtoback=sel.length>=2&&sel.slice().sort((a,b)=>races[a].month-races[b].month).some((i,j,arr)=>{
-    if(j===0)return false;
-    return Math.abs(races[i].month-races[arr[j-1]].month)<=1;
+  const yr=G.utYear||1;
+  const available=UT_RACES.filter(r=>{
+    if(r.minYear>yr)return false;
+    if(r.oculto){
+      const cond=r.unlockCondition;
+      if(!(G.utResults||[]).some(res=>res.raceId===cond&&res.finished))return false;
+    }
+    return true;
   });
+  const sel=G.utCalendar||[];
   el.innerHTML=`
-    <div style="margin-bottom:14px">
-      <div style="display:flex;gap:4px;margin-bottom:6px">
-        ${[1,2,3,4,5,6,7,8].map(y=>`<div style="flex:1;height:6px;border-radius:3px;background:${y===year?'#1a1a1a':y<year?'#4a8a2a':'#ddd'}"></div>`).join('')}
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:#999"><span>Año ${year}</span><span>${yearTitles[year]||'Temporada'}</span></div>
-    </div>
-    <h2 style="margin-bottom:4px">🏔️ ${esc(yearTitles[year]||'Temporada '+year)}</h2>
-    <p class="sub">Selecciona tu calendario: máx. 1 objetivo + 2 preparatorias</p>
-    ${backtoback?'<div class="warn" style="border-color:#c07a10;background:#fef8ec">⚠️ Back-to-back — el cuerpo lo recordará</div>':''}
-    ${races.map((r,i)=>{
-      const isSel=sel.includes(i);
-      const isObj=r.type==='objetivo'||r.type==='objetivo_especial'||r.type==='endgame';
-      const objAlready=objetivoSel!==undefined&&objetivoSel!==i&&isObj;
-      const prepCount=sel.filter(j=>{const rj=races[j];return rj&&rj.type!=='objetivo'&&rj.type!=='objetivo_especial'&&rj.type!=='endgame';}).length;
-      const prepFull=!isObj&&prepCount>=2&&!isSel;
-      const blocked=objAlready||prepFull;
-      return `<div class="card${isSel?' sel':''}" style="margin-bottom:8px;${blocked&&!isSel?'opacity:0.5;':''}" onclick="${blocked&&!isSel?'':isSel?`G._utSeasonSelected=G._utSeasonSelected.filter(x=>x!==${i});renderUltratrailSeasonStart()`:`G._utSeasonSelected=(G._utSeasonSelected||[]).concat([${i}]);renderUltratrailSeasonStart()`}">
+    <h2 style="margin:0 0 8px">📅 Temporada ${yr}</h2>
+    <div style="font-size:13px;color:#666;margin-bottom:12px">Elige hasta 3 carreras. Puedes inscribirte aunque los stats no lleguen.</div>
+    ${available.map(r=>{
+      const inCal=sel.includes(r.id);
+      const prob=utFinishProbability(r);
+      const met=utCheckReqMet(r);
+      const req=r.reqStats||{};
+      const reqRows=Object.entries(req).map(([k,v])=>{
+        const cur=k==='pies'?(G.pies||100):(G.runner.stats[k]||0);
+        return utReqRow(k.charAt(0).toUpperCase()+k.slice(1),cur,v);
+      }).join(' &nbsp;');
+      return `<div class="card" style="margin-bottom:8px;${inCal?'border:2px solid #4a8a2a;':''}" onclick="utToggleCalendar('${r.id}')">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div style="font-weight:700;font-size:14px">${r.isMDS?'🏜️':r.isEndgame?'🏆':'🏔️'} ${esc(r.name)}</div>
-          <div style="text-align:right;flex-shrink:0;margin-left:8px"><span style="font-size:12px;background:${isObj?'#fef3d0':'#f0faf0'};color:${isObj?'#c07a10':'#2d7a2d'};padding:1px 6px;border-radius:4px;font-weight:600">${isObj?'Objetivo':'Prep'}</span></div>
+          <div>
+            <div style="font-weight:600;font-size:14px">${esc(r.name)}</div>
+            <div style="font-size:12px;color:#666">${r.km?r.km+'K':''} ${r.desnivel?'· '+r.desnivel:''} ${r.formato?'· ['+r.formato+']':''}</div>
+          </div>
+          <div style="font-size:22px">${inCal?'✅':''}</div>
         </div>
-        <div style="font-size:12px;color:#888;margin:3px 0">${r.monthName} · ${r.km}km · ${r.desnivel} · €${r.cost}</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <span style="font-size:11px;color:#666">${r.tier}</span>
-          ${r.nocturna?'<span style="font-size:11px;color:#c07a10">🌙 Nocturna</span>':''}
-          ${r.crew?'<span style="font-size:11px;color:#4a90d9">👥 Crew</span>':''}
-          ${(r.cutoffs||[]).length?'<span style="font-size:11px;color:#888">⏱️ Cutoffs</span>':''}
-          ${isSel?'<span style="font-size:11px;color:#4a8a2a;font-weight:700">✓ Seleccionada</span>':''}
+        ${reqRows?`<div style="margin-top:4px">${reqRows}</div>`:''}
+        <div style="margin-top:4px;font-size:12px;color:${prob>=70?'#2d7a2d':prob>=40?'#c07a10':'#c0392b'}">
+          Est. ${prob}% de completar
         </div>
+        ${!met?`<div style="font-size:12px;color:#c07a10;margin-top:2px">⚠️ Stats insuficientes — puedes intentarlo igual</div>`:''}
       </div>`;
     }).join('')}
-    ${year>=2?`<div class="card work-card" onclick="G.screen='backyardConfig';render()" style="margin-top:4px;border-left:3px solid #c07a10">
-      <div style="font-weight:700">🏕️ Backyard Ultra</div>
-      <div style="font-size:12px;color:#888;margin-top:3px">Loops de ${BACKYARD_CONFIG.loopKm}km · cada hora · hasta que quede uno</div>
-    </div>`:''}
-    <button class="main" style="margin-top:14px" ${objetivoSel===undefined?'disabled':''} onclick="window.utConfirmSeason()">Comenzar temporada →</button>
-    <button class="secondary" style="margin-top:8px" onclick="G.screen='ultratrailWelcome';render()">← Atrás</button>`;
-  window.utConfirmSeason=function(){
-    if(objetivoSel===undefined)return;
-    G.utCalendar=sel.map(i=>races[i]).filter(Boolean);
-    if(!G.utCalendar.find(r=>r.type==='objetivo'||r.type==='objetivo_especial'||r.type==='endgame'))return;
-    G._utSeasonSelected=[];
-    G.utCurrentRaceIdx=0;
-    G.screen='ultratrailMochila';render();
-  };
+    <div style="font-size:13px;color:#666;margin:8px 0">Seleccionadas: ${sel.length}/3</div>
+    <button class="main" onclick="utStartYear()" ${sel.length===0?'disabled':''}>▶ Empezar año</button>
+    <button class="secondary" style="margin-top:6px" onclick="G.screen='utHome';render()">← Atrás</button>
+  `;
 }
 
-function _utTabRaces(year){
-  const races=ULTRATRAIL_RACES[year]||[];
-  if(!races.length)return'<div class="note">No hay carreras configuradas para este año.</div>';
-  return races.map((r,i)=>{
-    const done=(G.utResults||[]).find(res=>res.raceId===r.id&&res.year===year);
-    const noFunds=(G.utMoney||0)<(r.cost||0);
-    const locked=(r.unlockedYear||1)>year;
-    const clickable=!done&&!noFunds&&!locked;
-    const tierBadge=r.tier==='elite'?'<span style="font-size:11px;background:#fef3d0;color:#c07a10;padding:1px 6px;border-radius:4px;font-weight:600">⭐ Élite</span>':r.tier==='nacional'?'<span style="font-size:11px;background:#e8eef8;color:#2d4fa0;padding:1px 6px;border-radius:4px;font-weight:600">🔵 Nacional</span>':'<span style="font-size:11px;background:#f0faf0;color:#2d7a2d;padding:1px 6px;border-radius:4px;font-weight:600">🟢 Accesible</span>';
-    return `<div class="card${clickable?' work-card':''}" style="${noFunds||locked?'opacity:0.55;':''}" ${clickable?`onclick="G.utCurrentRaceIdx=${i};G.screen='ultratrailIntensitySelect';render()"`:''}>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div style="font-weight:700;font-size:14px">${r.isMDS?'🏜️':'🏔️'} ${esc(r.name)}</div>
-        <div style="text-align:right;flex-shrink:0;margin-left:8px"><span style="color:#4a8a2a;font-weight:700">€${r.prize}</span><div style="font-size:11px;color:#999">premio</div></div>
-      </div>
-      <div style="font-size:12px;color:#888;margin-bottom:4px">${r.monthName} · ${r.km}km · ${r.desnivel} · inscripción €${r.cost}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        ${tierBadge}
-        ${r.nocturna&&!done?'<span style="font-size:11px;color:#c07a10">🌙 Nocturna</span>':''}
-        ${r.cutoffs&&r.cutoffs.length?'<span style="font-size:11px;color:#888">⏱️ Cutoffs</span>':''}
-        ${r.crew?'<span style="font-size:11px;color:#4a90d9">👥 Crew</span>':''}
-      </div>
-      ${done?`<div style="margin-top:6px;font-size:12px;color:${done.dnf?'#c0392b':'#2d7a2d'};font-weight:600">${done.dnf?'❌ DNF':'✅ Terminada'}${done.pos&&!done.dnf?' · P'+done.pos:''} · ${done.timeH}h</div>`:noFunds?`<div style="margin-top:6px;font-size:12px;color:#c0392b">Sin fondos (faltan €${(r.cost||0)-(G.utMoney||0)})</div>`:locked?`<div style="margin-top:6px;font-size:12px;color:#888">🔒 Disponible desde año ${r.unlockedYear}</div>`:''}
-    </div>`;
-  }).join('');
-}
-
-const UT_TRAINING_BLOCKS=[
-  {id:'volumen',    name:'Volumen de base',      hours:14,icon:'🏔️', desc:'Tiradas largas y progresivas. La base de todo ultratrail.',
-   effects:{resistencia:8,subida:2,ut_combustible:5}},
-  {id:'especifico', name:'Específico ultra',     hours:12,icon:'🎒', desc:'Recce del terreno, noches, mochila cargada. Preparación real.',
-   effects:{resistencia:4,subida:4,bajada:3,ut_pies:8}},
-  {id:'velocidad',  name:'Trabajo de ritmo',     hours:10,icon:'⚡', desc:'Series y ritmo. Mejora los primeros tramos.',
-   effects:{velocidad:7,resistencia:1}},
-  {id:'tecnico',    name:'Descenso técnico',     hours:10,icon:'🏃', desc:'Terreno difícil y bajadas. Cuida los pies.',
-   effects:{bajada:8,ut_pies:8}},
-  {id:'recuperacion',name:'Recuperación activa', hours:6, icon:'🛌', desc:'Consolida lo aprendido, baja la carga corporal.',
-   effects:{resistencia:3,mental:4,bodyLoad:-15}},
-  {id:'taper',      name:'Descarga / Tapering',  hours:4, icon:'😴', desc:'Nada de volumen. El cuerpo se activa para la carrera objetivo.',
-   effects:{bodyLoad:-20,ut_energy_bonus:10,ut_legs_bonus:8}},
-];
-
-function _utTabTraining(){
-  const current=G.utTrainingBlock;
-  return`
-    <div class="sec-title-sm">Bloque de entrenamiento — Temporada ${G.utYear||1}</div>
-    <div style="font-size:13px;color:#888;margin-bottom:12px">Elige un bloque para toda la temporada. Se aplica entre carreras.</div>
-    ${current?`<div class="warn" style="background:#f0faf0;border-color:#8cc88c;color:#2d7a2d">✅ Bloque actual: <strong>${UT_TRAINING_BLOCKS.find(b=>b.id===current)?.name||current}</strong></div>`:''}
-    ${UT_TRAINING_BLOCKS.map(b=>{
-      const isSel=b.id===current;
-      const efxText=Object.entries(b.effects).map(([k,v])=>{
-        if(k==='bodyLoad')return`carga ${v>0?'+':''}${v}`;
-        if(k.startsWith('ut_'))return``;
-        return`${k} ${v>0?'+':''}${v}`;
-      }).filter(Boolean).join(' · ');
-      return`<div class="train-card${isSel?' sel':''}" onclick="window.utSelectTraining('${b.id}')">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div style="font-size:15px;font-weight:600">${b.icon} ${b.name}</div>
-          <span style="font-size:12px;color:#888">${b.hours}h/sem</span>
-        </div>
-        <div style="font-size:12px;color:#888;margin-top:2px">${b.desc}</div>
-        ${efxText?`<div style="font-size:12px;color:#4a8a2a;margin-top:4px">${efxText}</div>`:''}
-        ${isSel?'<div style="font-size:12px;color:#4a90d9;margin-top:4px;font-weight:600">✓ Seleccionado</div>':''}
-      </div>`;
-    }).join('')}`;
-}
-
-window.utSelectTraining=function(id){
-  const b=UT_TRAINING_BLOCKS.find(x=>x.id===id);
-  if(!b)return;
-  G.utTrainingBlock=id;
-  G.utTrainingApplied=false;
-  const efxParts=[];
-  Object.entries(b.effects).forEach(([k,v])=>{
-    if(k==='bodyLoad'){G.utBodyLoad=Math.max(0,Math.min(100,(G.utBodyLoad||0)+v));efxParts.push(`Carga ${v>0?'+':''}${v}`);}
-    else if(k==='ut_combustible'){G.combustible=Math.min(100,(G.combustible||0)+v);efxParts.push(`+${v} combustible base`);}
-    else if(k==='ut_pies'){G.pies=Math.min(100,(G.pies||0)+v);efxParts.push(`+${v} pies base`);}
-    else if(k==='ut_energy_bonus'){G._utEnergyBonus=(G._utEnergyBonus||0)+v;}
-    else if(k==='ut_legs_bonus'){G._utLegsBonus=(G._utLegsBonus||0)+v;}
-    else if(G.runner.stats[k]!==undefined){G.runner.stats[k]=Math.max(10,Math.min(100,(G.runner.stats[k]||50)+v));efxParts.push(`${k} +${v}`);}
-  });
-  showToast('💪 '+b.name+(efxParts.length?' · '+efxParts.slice(0,2).join(' · '):''),'#4a8a2a');
-  autoSave();
-  renderUltratrailSeasonHub();
+window.utToggleCalendar=id=>{
+  if(!G.utCalendar)G.utCalendar=[];
+  const idx=G.utCalendar.indexOf(id);
+  if(idx>=0){G.utCalendar.splice(idx,1);}
+  else{if(G.utCalendar.length>=3){showToast('Máximo 3 carreras por temporada','#c07a10');return;}G.utCalendar.push(id);}
+  render();
 };
 
-function _utTabFinances(){
-  const results=G.utResults||[];
-  const yearResults=results.filter(r=>r.year===(G.utYear||1));
-  const prizesYear=yearResults.reduce((a,r)=>a+(r.prize||0),0);
-  const costsYear=yearResults.reduce((a,r)=>{
-    const race=(ULTRATRAIL_RACES[r.year]||[]).find(x=>x.id===r.raceId);
-    return a+(race?.cost||0);
-  },0);
-  const fixedCost=G.utMonthlyExpenses||150;
-  const sp=G.utSponsor;
-  return`
-    <div class="card" style="text-align:center;margin-bottom:12px">
-      <div style="font-size:28px;font-weight:700;color:${(G.utMoney||0)>200?'#2d7a2d':'#c0392b'}">€${G.utMoney||0}</div>
-      <div style="font-size:12px;color:#999">Saldo actual</div>
-    </div>
-    <div class="card">
-      <div class="sec-title-sm">Temporada ${G.utYear||1}</div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid #f0ede8"><span style="color:#888">Premios ganados</span><span style="color:#2d7a2d;font-weight:600">+€${prizesYear}</span></div>
-      ${sp?`<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid #f0ede8"><span style="color:#888">Sponsor: ${esc(sp.name)}</span><span style="color:#2d7a2d;font-weight:600">+€${sp.monthly}/mes</span></div>`:'<div style="padding:5px 0;font-size:12px;color:#bbb;border-bottom:1px solid #f0ede8">Sin sponsor activo</div>'}
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid #f0ede8"><span style="color:#888">Inscripciones pagadas</span><span style="color:#c0392b">−€${costsYear}</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0"><span style="color:#888">Material obligatorio</span><span style="color:#c0392b">−€${fixedCost}/año</span></div>
-    </div>
-    ${(G.utMoney||0)<200?'<div class="warn">⚠️ Saldo bajo — considera si puedes afrontar la próxima inscripción</div>':''}
-    <div style="font-size:12px;color:#bbb;margin-top:8px;text-align:center">Los sponsors de ultratrail llegan a partir del año 3 con historial de finishes.</div>`;
+window.utStartYear=()=>{
+  if(!(G.utCalendar||[]).length){showToast('Selecciona al menos una carrera','#c0392b');return;}
+  G.utCurrentRaceIdx=0;
+  const raceId=G.utCalendar[0];
+  const race=UT_RACES.find(r=>r.id===raceId);
+  if(!race)return;
+  if(race.formato==='backyard'){G.backyardCurrentLoop=0;G.screen='utBackyard';render();return;}
+  if(race.formato==='etapas'){G.mdsEtapaActual=0;G.mdsRacionesRestantes=5;G.screen='utMds';render();return;}
+  utPrepareRace(raceId);
+  G.screen='utPreRace';render();
+};
+
+function utPrepareRace(raceId){
+  const race=UT_RACES.find(r=>r.id===raceId);
+  if(!race)return;
+  const cps=utGenerateCheckpoints(race);
+  G.utCurrentRaceState={
+    raceId:race.id,raceName:race.name,km:race.km,
+    totalCheckpoints:cps.length,checkpoints:cps,checkpointIdx:0,
+    energia:100,pies:G.pies||100,piernas:100,
+    mental:G.runner.stats.mental||50,combustible:G.combustible||100,
+    tiempoAcumuladoMin:0,cutoffMin:race.cutoffMin||null,
+    eventoPendiente:null,ritmoElegido:null,
+    fase:'checkpoint',retired:false,log:[],
+    _calcetinesUsados:false,
+  };
+  G.utFaseHoraria='dia';
 }
 
-// ── SELECTOR DE INTENSIDAD (nuevo) ──────────────────────────────
-function renderUltratrailIntensitySelect(){
+function renderUtPreRace(){
   const el=document.getElementById('main');
-  const race=(ULTRATRAIL_RACES[G.utYear||1]||[])[G.utCurrentRaceIdx]||{};
-  const cur=G.utRaceIntensity||'normal';
+  const raceId=(G.utCalendar||[])[G.utCurrentRaceIdx||0];
+  const race=UT_RACES.find(r=>r.id===raceId)||{name:'Carrera',km:50};
+  const prob=utFinishProbability(race);
+  const met=utCheckReqMet(race);
+  const pesoExtra=Math.max(0,(G.utMochilaPesoTotal||0)-UT_PESO_MINIMO_G);
+  const penVel=(Math.floor(pesoExtra/100)*UT_PENALIZACION_POR_100G).toFixed(1);
+  const mochilaItems=UT_MOCHILA_ITEMS.filter(i=>i.obligatorio||G.utMochila[i.id]);
   el.innerHTML=`
-    <h2>¿Cómo quieres vivir esta carrera?</h2>
-    <p class="sub">${esc(race.name||'')} · ${race.km||0}km · ${race.desnivel||''}</p>
-    ${[
-      {id:'expres', icon:'⚡', label:'Exprés', time:'~5 min', desc:'Solo los momentos que importan. El algoritmo gestiona lo neutro. 4–6 decisiones clave.', detail:'Recomendado para carreras de preparación o cuando quieres avanzar rápido.'},
-      {id:'normal', icon:'🏃', label:'Normal', time:'~15 min', desc:'Puntos clave y eventos importantes. Tramos neutros en automático. 8–12 decisiones.', detail:'El modo base. Tienes control sobre lo que importa.'},
-      {id:'inmersivo', icon:'🎒', label:'Inmersivo', time:'~30 min', desc:'Todos los tramos. Toda la narrativa. Control máximo. 20+ momentos.', detail:'Para las carreras que quieres vivir de verdad. Techo de rendimiento ligeramente mayor.'},
-    ].map(m=>`
-      <div class="train-card${cur===m.id?' sel':''}" onclick="G.utRaceIntensity='${m.id}';renderUltratrailIntensitySelect();" style="margin-bottom:8px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="font-size:15px;font-weight:700">${m.icon} ${m.label}</div>
-          <span style="font-size:12px;color:#888;background:#f5f4f0;padding:2px 8px;border-radius:10px">${m.time}</span>
+    <h2 style="margin:0 0 4px">🏔️ ${esc(race.name)}</h2>
+    <div style="font-size:13px;color:#666;margin-bottom:12px">${race.km?race.km+'K':''} ${race.desnivel?'· '+race.desnivel:''} ${race.cutoffMin?'· Cutoff '+Math.round(race.cutoffMin/60)+'h':''}</div>
+    <div class="card" style="margin-bottom:8px">
+      <div class="sec-title-sm" style="margin-bottom:6px">Diagnóstico</div>
+      ${utStatBar('Resistencia',G.runner.stats.resistencia||50,100,'#4a8a2a')}
+      ${utStatBar('Mental',G.runner.stats.mental||50,100,'#7a4a8a')}
+      ${utStatBar('Pies 🦶',G.pies||100,100,'#c07a10')}
+      <div style="margin-top:8px;font-size:14px;font-weight:600;color:${prob>=70?'#2d7a2d':prob>=40?'#c07a10':'#c0392b'}">
+        Probabilidad estimada: ${prob}%
+      </div>
+      ${!met?`<div style="font-size:12px;color:#c07a10;margin-top:4px">⚠️ Tus stats actuales hacen que terminar esta carrera sea muy improbable. Puedes intentarlo igual.</div>`:''}
+    </div>
+    <div class="card" style="margin-bottom:8px" onclick="G._utMochilaPrev='utPreRace';G.screen='utMochila';render()">
+      <div style="display:flex;justify-content:space-between">
+        <div>
+          <div class="sec-title-sm">🎒 Mochila</div>
+          <div style="font-size:12px;color:#666">${mochilaItems.map(i=>i.icon||'').join(' ')} · ${G.utMochilaPesoTotal||UT_PESO_MINIMO_G}g${penVel>0?' · −'+penVel+'% vel':''}
+          </div>
         </div>
-        <div style="font-size:13px;color:#555;margin-top:4px">${m.desc}</div>
-        <div style="font-size:12px;color:#aaa;margin-top:2px">${m.detail}</div>
-        ${cur===m.id?'<div style="font-size:12px;color:#4a90d9;margin-top:4px;font-weight:600">✓ Seleccionado</div>':''}
-      </div>`).join('')}
-    <button class="main" style="margin-top:4px" onclick="G.screen='ultratrailMochila';render()">Preparar mochila →</button>
-    <button class="secondary" style="margin-top:8px" onclick="G.screen='ultratrailSeasonHub';render()">← Volver</button>`;
-}
-
-function renderUltratrailMochila(){
-  const el=document.getElementById('main');
-  const race=(G.utCalendar||[])[G.utCurrentRaceIdx]||(ULTRATRAIL_RACES[G.utYear||1]||[])[G.utCurrentRaceIdx]||{};
-  if(!G.utMochila)G.utMochila={};
-  const BASE_PESO=800;
-  let pesoOpcional=0;
-  BACKYARD_ITEMS.forEach(it=>{pesoOpcional+=(G.utMochila[it.id]||0)*it.pesoG;});
-  const pesoTotal=BASE_PESO+pesoOpcional;
-  G.utMochilaPeso=pesoTotal;
-  const gelItem=BACKYARD_ITEMS.find(it=>it.id==='gel');
-  G.utGels=gelItem?(G.utMochila[gelItem.id]||0):0;
-  const kg=(pesoTotal/1000).toFixed(1);
-  const col=pesoTotal>5000?'#c0392b':pesoTotal>3000?'#d4920a':'#4a8a2a';
-  const velPen=Math.max(0,(pesoTotal-800)/100*0.003);
-  G._utVelocityPenalty=velPen;
-  el.innerHTML=`
-    <h2>🎒 Mochila</h2>
-    <p class="sub">${esc(race.name||'')} · ${race.km||0}km</p>
-    <div class="card" style="background:#f5f4f0">
-      <div style="font-weight:600;margin-bottom:4px">Material obligatorio — 800g</div>
-      <div style="font-size:12px;color:#888;display:flex;gap:10px;flex-wrap:wrap">
-        <span>🧥 Chubasquero</span><span>🔦 Linterna</span><span>🏕️ Manta emergencia</span><span>🩺 Botiquín</span>
-      </div>
-      <div style="font-size:11px;color:#aaa;margin-top:4px">incluido por reglamento</div>
-    </div>
-    <div class="card" style="display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:13px">Peso total</span>
-      <div style="text-align:right">
-        <span style="font-weight:700;color:${col}">${kg}kg</span>
-        <div style="font-size:12px;color:#888">−${(velPen*100).toFixed(1)}% velocidad</div>
+        <span style="color:#c07a10">›</span>
       </div>
     </div>
-    ${pesoTotal>5000?'<div class="warn" style="border-color:#c0392b">⚠️ Mochila muy pesada — penalización severa</div>':pesoTotal>3000?'<div class="warn">🟡 Mochila pesada — penalización de ritmo</div>':''}
-    <div class="section-label">Material opcional</div>
-    ${BACKYARD_ITEMS.filter(it=>!it.unlockedYear||it.unlockedYear<=(G.utYear||1)).map(it=>{
-      const qty=G.utMochila[it.id]||0;
-      return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="flex:1"><span style="font-size:17px">${it.icon}</span> <span style="font-weight:600">${esc(it.label)}</span>${it.esEquipamiento?'<span style="font-size:11px;color:#888"> (equip.)</span>':''}<div style="font-size:12px;color:#999;margin-top:2px">${esc(it.desc)}</div>${it.advertencia?`<div style="font-size:11px;color:#c07a10">${esc(it.advertencia)}</div>`:''}<div style="font-size:11px;color:#666">${it.pesoG}g · max ${it.maxUnidades}</div></div>
-        <div style="display:flex;align-items:center;gap:8px;margin-left:8px">
-          <button class="secondary" style="padding:4px 10px;font-size:15px" onclick="if((G.utMochila['${it.id}']||0)>0){G.utMochila['${it.id}']--;renderUltratrailMochila();}">−</button>
-          <span style="font-size:17px;font-weight:700;min-width:22px;text-align:center">${qty}</span>
-          <button class="secondary" style="padding:4px 10px;font-size:15px" onclick="if((G.utMochila['${it.id}']||0)<${it.maxUnidades}){if(!G.utMochila)G.utMochila={};G.utMochila['${it.id}']=(G.utMochila['${it.id}']||0)+1;renderUltratrailMochila();}">+</button>
+    ${(G.utCrewActivo||[]).length?`<div class="card" style="margin-bottom:8px" onclick="G.screen='utCrew';render()">
+      <div style="display:flex;justify-content:space-between">
+        <div><div class="sec-title-sm">👥 Crew activo</div>
+          <div style="font-size:12px;color:#666">${(G.utCrewActivo||[]).map(id=>{const m=UT_CREW_MEMBERS.find(c=>c.id===id);return m?m.icon+' '+m.name:'';}).join(', ')}</div>
         </div>
-      </div></div>`;
-    }).join('')}
-    <button class="main" style="margin-top:10px" onclick="(function(){G._utVelocityPenalty=Math.max(0,(G.utMochilaPeso-800)/100*0.003);G.screen='ultratrailPreRace';render();})()">Ir a la salida →</button>
-    <button class="secondary" style="margin-top:8px" onclick="G.screen='ultratrailSeasonStart';render()">← Volver</button>`;
-}
-
-function renderUltratrailPreRace(){
-  const el=document.getElementById('main');
-  const race=(G.utCalendar||[])[G.utCurrentRaceIdx]||(ULTRATRAIL_RACES[G.utYear||1]||[])[G.utCurrentRaceIdx]||{};
-  if(race.isMDS){G.screen='mdsPreparation';render();return;}
-  const segs=race.segs&&race.segs.length>0?race.segs:initUltratrailLongRace(race);
-  const kg=((G.utMochilaPeso||0)/1000).toFixed(1);
-  const velPen=((G._utVelocityPenalty||0)*100).toFixed(1);
-  const crew=G.utCrew||[];
-  const crewCost={nacional:80,internacional:200}[race.tier==='elite'?'internacional':'nacional'];
-  const stMental=utStatLabel('mental',G.runner.stats.mental||50);
-  const stRes=utStatLabel('resistencia',G.runner.stats.resistencia||50);
-  const stNut=utStatLabel('nutricion',G.runner.stats.nutricion||50);
-  const utRace={id:race.id||'ut_preview',segs,km:race.km||100};
-  el.innerHTML=`
-    <h2>🏁 ${esc(race.name||'')}</h2>
-    <div class="card" style="background:#0f0f1f;border-color:#2a2a4a">
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#aaa">Distancia</span><span style="font-weight:600">${race.km}km · ${race.desnivel||''}</span></div>
-      ${race.nocturna?`<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#aaa">Tramo nocturno</span><span style="color:#c07a10;font-weight:600">🌙 km${race.nocturnaStart}–${race.nocturnaEnd}</span></div>`:''}
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#aaa">Mochila</span><span style="color:${(G.utMochilaPeso||0)>5000?'#c0392b':(G.utMochilaPeso||0)>3000?'#d4920a':'#4a8a2a'};font-weight:600">${kg}kg · −${velPen}% vel</span></div>
-    </div>
-    ${(race.cutoffs||[]).length?`<div class="section-label">Cutoffs</div><div class="card"><table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="color:#999"><th style="text-align:left;padding:3px 0">CP</th><th style="text-align:right">Tiempo máx</th></tr>${race.cutoffs.map(co=>`<tr><td style="padding:3px 0;border-top:1px solid #f0ede8">${esc(co.cp)}</td><td style="text-align:right;font-weight:600;color:#c07a10">${co.maxH}h</td></tr>`).join('')}</table></div>`:''}
-    <div class="section-label">Modo narrativa</div>
-    ${[{id:'expres',icon:'⚡',label:'Exprés',t:'~5min'},{id:'normal',icon:'🏃',label:'Normal',t:'~15min'},{id:'inmersivo',icon:'🎒',label:'Inmersivo',t:'~30min'}].map(m=>{
-      const sel=(G.utNarrativeIntensity||'normal')===m.id;
-      return`<div class="card${sel?' sel':''}" style="margin-bottom:6px;cursor:pointer" onclick="G.utNarrativeIntensity='${m.id}';renderUltratrailPreRace()"><div style="display:flex;justify-content:space-between"><span style="font-weight:${sel?700:400}">${m.icon} ${m.label}</span><span style="font-size:12px;color:#888">${m.t}</span></div></div>`;
-    }).join('')}
-    <div class="section-label">Estado</div>
-    <div class="card"><div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#888">Mental</span><span style="font-weight:600;color:${stMental.col}">${stMental.text}</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid #f0ede8"><span style="color:#888">Resistencia</span><span style="font-weight:600;color:${stRes.col}">${stRes.text}</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid #f0ede8"><span style="color:#888">Nutrición</span><span style="font-weight:600;color:${stNut.col}">${stNut.text}</span></div></div>
-    ${race.crew&&(G.utYear||1)>=2?`<div class="section-label">Equipo de apoyo (opcional)</div>
-    ${crew.length===0?`<div class="card">
-      <div style="font-size:13px;color:#888;margin-bottom:8px">El crew puede ayudarte en los CPs: ${(race.crewCPs||[]).join(', ')}</div>
-      <div style="display:flex;gap:8px">
-        <button class="secondary" onclick="window.utAddCrew('fisico')">+ Físico (€${crewCost})</button>
-        <button class="secondary" onclick="window.utAddCrew('tecnico')">+ Técnico (€${crewCost})</button>
+        <span style="color:#c07a10">›</span>
       </div>
-    </div>`:crew.map((c,i)=>`<div class="card" style="display:flex;justify-content:space-between;align-items:center"><span>${c.rol==='fisico'?'💪':'🔧'} Crew ${c.rol} · €${crewCost}</span><button class="secondary" style="font-size:12px;padding:4px 10px" onclick="G.utCrew.splice(${i},1);G.utMoney=(G.utMoney||0)+${crewCost};renderUltratrailPreRace()">Quitar</button></div>`).join('')}`:''}
-    <button class="main" style="margin-top:12px" onclick="window.initUltratrailRace()">🏔️ ¡A correr!</button>
-    <button class="secondary" style="margin-top:8px" onclick="G.screen='ultratrailMochila';render()">← Mochila</button>`;
-  window.utAddCrew=function(rol){
-    const cost=crewCost;
-    if((G.utMoney||0)<cost){showToast('Sin fondos para crew','#c0392b');return;}
-    G.utCrew=G.utCrew||[];
-    G.utCrew.push({rol});
-    G.utMoney=Math.max(0,(G.utMoney||0)-cost);
-    renderUltratrailPreRace();
-  };
+    </div>`:''}
+    <button class="main" onclick="utBeginRace()">🏃 Salir a correr</button>
+    <button class="secondary" style="margin-top:6px" onclick="G.screen='utCalendar';render()">← Volver</button>
+  `;
 }
 
-// ── SEGMENTO ULTRATRAIL ───────────────────────────────────────────
-function renderUltratrailSegment(){
+window.utBeginRace=()=>{
+  const raceId=(G.utCalendar||[])[G.utCurrentRaceIdx||0];
+  if(!G.utCurrentRaceState||G.utCurrentRaceState.raceId!==raceId)utPrepareRace(raceId);
+  G.screen='utRace';render();
+};
+
+function renderUtMochila(){
   const el=document.getElementById('main');
-  const race=(G.utCalendar||[])[G.utCurrentRaceIdx]||(ULTRATRAIL_RACES[G.utYear||1]||[])[G.utCurrentRaceIdx]||{};
-  const segs=G._utCurrentSegs||race.segs||[];
-  const segIdx=G.seg||0;
-  const seg=segs[segIdx];
-  if(!seg){_utFinishRace(race,false);return;}
-
-  // Comprobar sección nocturna
-  const kmDoneNow=segs.slice(0,segIdx).reduce((a,s)=>a+(s.km||0),0);
-  if(race.nocturna){
-    const inNoc=kmDoneNow>=(race.nocturnaStart||9999)&&kmDoneNow<=(race.nocturnaEnd||race.km);
-    if(inNoc&&!G.utNocturnaActive){
-      G.utNocturnaActive=true;
-      if(!G.utNightEntered){G.utNightEntered=true;G.screen='ultratrailNight';render();return;}
-    } else if(!inNoc&&G.utNocturnaActive){
-      G.utNocturnaActive=false;
-      document.body.style.background='';document.body.style.color='';
-      G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+10);
-      showToast('🌅 El amanecer. Llevas '+((G.time||0)/3600).toFixed(1)+'h corriendo','#c07a10');
-    }
-  }
-  const isNoc=G.utNocturnaActive||false;
-  if(isNoc){document.body.style.background='#0d1117';document.body.style.color='#e8e4d8';}
-  else{document.body.style.background='';document.body.style.color='';}
-
-  // Aplicar costes del tramo (solo una vez por tramo)
-  if(!G._utSegApplied)G._utSegApplied={};
-  if(!G._utSegApplied[segIdx]){
-    G._utSegApplied[segIdx]=true;
-    const combustCost=3*seg.km;
-    const piesCost=(seg.type==='descent'?2:1)*seg.km;
-    G.combustible=Math.max(0,(G.combustible||100)-combustCost);
-    G.pies=Math.max(0,(G.pies||100)-piesCost);
-    if((G.combustible||0)<20){
-      G.runner.energy=Math.max(0,(G.runner.energy||100)-2*seg.km);
-      G.runner.legs=Math.max(0,(G.runner.legs||100)-seg.km);
-    }
-    if((G.pies||0)<40&&seg.type==='descent'){
-      G.runner.legs=Math.max(0,(G.runner.legs||100)-3);
-    }
-  }
-
-  // Verificar cutoff
-  const horasT=(G.time||0)/3600;
-  if(race.cutoffs&&!G.utFueraConcurso){
-    for(const co of race.cutoffs){
-      const m=co.cp.match(/km(\d+)/i);
-      const coKm=m?parseInt(m[1]):race.km;
-      if(kmDoneNow>=coKm&&horasT>co.maxH){
-        G.utDNFReason='cutoff';G._utDNFSaved=false;
-        G.screen='ultratrailCutoffDNF';render();return;
-      }
-    }
-  }
-
-  // Panel cutoff más cercano
-  let cutoffPanel='';
-  if(race.cutoffs&&race.cutoffs.length){
-    let nextCo=null;
-    for(const co of race.cutoffs){
-      const m=co.cp.match(/km(\d+)/i);
-      const coKm=m?parseInt(m[1]):race.km;
-      if(coKm>kmDoneNow){nextCo={...co,coKm};break;}
-    }
-    if(nextCo){
-      const margenMin=(nextCo.maxH*60)-((G.time||0)/60);
-      const margenH=Math.floor(margenMin/60);const margenM=Math.round(margenMin%60);
-      if(margenMin>45)cutoffPanel=`<div style="background:#f0faf0;border:1px solid #8cc88c;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:#2d7a2d">⏱ Cutoff ${esc(nextCo.cp)}: <strong>${margenH}h ${margenM}m</strong> de margen</div>`;
-      else if(margenMin>20)cutoffPanel=`<div style="background:#fef8ec;border:1px solid #c07a10;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:#c07a10">⚠ Cutoff próximo: <strong>${Math.round(margenMin)}min</strong></div>`;
-      else if(margenMin>0)cutoffPanel=`<div class="danger" style="animation:pulse 1s infinite;margin-bottom:8px;font-size:12px">🚨 Cutoff crítico: <strong>${Math.round(margenMin)}min</strong> — máxima urgencia</div>`;
-      else if(!G.utFueraConcurso){G.screen='ultratrailCutoffDNF';render();return;}
-    }
-  }
-
-  const pesoMul=1+(G._utVelocityPenalty||0);
-  if((G.pies||0)<40)el.style.setProperty('--speed-pen','1.05');
-
-  // Evento nocturno
-  const NIGHT_EVENTS=[
-    {id:'n_stars',text:'🌟 Las estrellas sobre el camino. Solo el sonido de tus pasos.',auto:true,efecto:{mental:5}},
-    {id:'n_cold',text:'🥶 El frío de las 3AM.',auto:false},
-    {id:'n_rock',text:'👁 ¿Se ha movido esa roca?',auto:false,reqLowMental:true},
-    {id:'n_runner',text:'🏃 Otro corredor te adelanta en silencio.',auto:true,efecto:{mental:-3}},
-  ];
-  if(!G._utNightEvDone)G._utNightEvDone={};
-  let nightEventHtml='';
-  if(isNoc&&Math.random()<0.15){
-    const pool=NIGHT_EVENTS.filter(e=>!G._utNightEvDone[e.id]&&(!e.reqLowMental||(G.runner.stats.mental||50)<35));
-    if(pool.length){
-      const ev=pool[Math.floor(Math.random()*pool.length)];
-      G._utNightEvDone[ev.id]=true;
-      if(ev.auto){
-        if(ev.efecto)Object.entries(ev.efecto).forEach(([k,v])=>{if(k==='mental')G.runner.stats.mental=Math.max(0,Math.min(100,(G.runner.stats.mental||50)+v));});
-        nightEventHtml=`<div style="background:#0a0a1f;border:1px solid #2a2a4f;border-radius:8px;padding:8px 12px;color:#9090ff;font-size:13px;margin-bottom:8px;font-style:italic">${esc(ev.text)}</div>`;
-      } else if(ev.id==='n_cold'){
-        if((G.utMochila||{}).ropa_abrigo>0){
-          nightEventHtml=`<div style="background:#0a0a1f;border:1px solid #2a2a4f;border-radius:8px;padding:8px 12px;color:#9090ff;font-size:13px;margin-bottom:8px">${esc(ev.text)} Tu ropa de abrigo te protege.</div>`;
-        } else {
-          G.runner.legs=Math.max(0,(G.runner.legs||100)-8);
-          nightEventHtml=`<div class="warn" style="margin-bottom:8px">${esc(ev.text)} Sin ropa de abrigo. −8 piernas.</div>`;
-        }
-      }
-    }
-  }
-
-  // Auto-resolve exprés
-  const intensity=G.utNarrativeIntensity||'normal';
-  if(intensity==='expres'&&!seg.aid&&(G.runner.energy||0)>20&&(G.combustible||0)>10&&(G.pies||0)>10){
-    if(segIdx<segs.length-1){utDoPace('steady',true);return;}
-  }
-
-  const paceLog=G.utPaceLog||[];
-  const alloutStreak=paceLog.slice(-3).filter(p=>p==='allout').length;
-  const hardCount=paceLog.slice(-4).filter(p=>p==='allout'||p==='push').length;
-  const utRace={id:race.id||'ut_seg',segs,km:race.km||100};
-  const gelDisp=(G.utGels||0)-(G.utGelsUsed||0);
-
+  const obligPeso=UT_MOCHILA_ITEMS.filter(i=>i.obligatorio).reduce((a,i)=>a+i.pesoG,0);
+  const optPeso=UT_MOCHILA_ITEMS.filter(i=>G.utMochila[i.id]).reduce((a,i)=>a+i.pesoG,0);
+  const total=obligPeso+optPeso;
+  const pesoExtra=Math.max(0,total-UT_PESO_MINIMO_G);
+  const penVel=(Math.floor(pesoExtra/100)*UT_PENALIZACION_POR_100G).toFixed(1);
+  const yr=G.utYear||1;
   el.innerHTML=`
-    ${utTopBar()}${utProgBar()}
-    ${cutoffPanel}
-    ${nightEventHtml}
-    ${isNoc?`<div style="background:#0a0a1f;border:1px solid #1e1e3e;border-radius:8px;padding:6px 12px;color:#9090ff;font-size:12px;margin-bottom:8px">🌙 Sección nocturna</div>`:''}
-    ${utRaceStats()}
-    ${(G.combustible||0)<20?'<div class="warn" style="border-color:#c0392b">⚠ Sin combustible — energía y piernas penalizadas</div>':''}
-    ${(G.pies||0)<40?'<div class="warn">🦶 Ampollas — velocidad reducida en bajadas</div>':''}
-    <div class="card" style="${isNoc?'background:#0a0a18;border-color:#1e1e3e;':''}margin-bottom:8px">
-      <div id="prof-wrap-utseg">${profSvg(utRace,segIdx,'race',segIdx)}</div>
-      <div id="prof-info-utseg" data-sel="${segIdx}" style="min-height:20px">${profSegInfo(utRace,segIdx,'race',segIdx)}</div>
-    </div>
-    <div class="section-label">Elige tu ritmo:</div>
-    <div class="pace-grid">
-      ${[['conservar','Conservar','Ahorra fuerzas','-4E/-3C',1.18],['steady','Ritmo fijo','Equilibrado','-9E/-7C',1.00],['push','Apretar','Rápido','-17E/-13C',0.90],['allout','A tope','Máximo','-27E/-20C',0.80]].map(([id,label,desc,cost,mult])=>{
-        const mins=Math.round((seg.base||2000)*pesoMul*(seg.km||5)/60*mult);
-        let warn='';
-        if(id==='allout'&&alloutStreak>=2)warn=`⚠ Racha a tope — fatiga ×${alloutStreak>=3?2.2:1.6}`;
-        else if((id==='allout'||id==='push')&&hardCount>=3)warn=`⚠ ${hardCount} tramos duros acumulados`;
-        else if(id==='allout'&&seg.type==='descent'&&(G.pies||0)<40)warn='⚠ Pies bajos + bajada';
-        return`<div class="pace" onclick="utDoPace('${id}')">
-          <div class="pace-label">${label}</div><div class="pace-desc">${desc}</div>
-          ${warn?`<div style="font-size:11px;color:#c0392b;margin-bottom:2px">${warn}</div>`:''}
-          <div class="pace-meta"><span style="font-size:11px">${cost}</span><span>~${mins}min</span></div>
-        </div>`;
-      }).join('')}
-    </div>
-    ${gelDisp>0?`<div style="margin-top:8px;display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f2faf0;border:1px solid #b8ddb8;border-radius:8px"><span>🍬 ${gelDisp} gel${gelDisp>1?'es':''} disponible${gelDisp>1?'s':''} · +15 combustible</span><button class="secondary" style="padding:4px 12px" onclick="G.utGelsUsed=(G.utGelsUsed||0)+1;G.combustible=Math.min(100,(G.combustible||0)+15);G.time+=8;showToast('🍬 Gel · +15 combustible','#4a8a2a');renderUltratrailSegment()">Usar</button></div>`:''}
-    ${(G.runner.energy||0)<15||(G.combustible||0)<5?`<div style="margin-top:10px;background:#fef0f0;border:1.5px solid #c0392b;border-radius:8px;padding:10px"><div style="font-size:12px;color:#c0392b;font-weight:600;margin-bottom:6px">⚠ Límite físico — el cuerpo no puede más</div><button class="abandon-btn" style="border-color:#c0392b;color:#c0392b;margin-top:0" onclick="if(confirm('¿Confirmas el abandono?')){G.utDNFReason='abandon';G._utDNFSaved=false;G.screen='ultratrailCutoffDNF';render();}">Abandonar</button></div>`:
-    `<button class="abandon-btn" style="border-color:#ddd;color:#bbb;margin-top:8px;font-size:12px" onclick="if(confirm('¿Confirmas el abandono?')){G.utDNFReason='abandon';G._utDNFSaved=false;G.screen='ultratrailCutoffDNF';render();}">Abandonar carrera</button>`}`;
-  attachProfHandlers(utRace,'utseg','race',segIdx);
-}
-
-function _utCutoffRisk(race,segs,segIdx){
-  if(!race.cutoffs||!race.cutoffs.length)return null;
-  const kmDone=segs.slice(0,segIdx+1).reduce((a,s)=>a+(s.km||0),0);
-  const horasT=(G.time||0)/3600;
-  for(const co of race.cutoffs){
-    const m=co.cp.match(/km(\d+)/i);
-    const coKm=m?parseInt(m[1]):race.km;
-    if(kmDone>=coKm*0.7&&kmDone<coKm){
-      const margen=co.maxH-horasT;
-      if(margen<0.5)return`Cutoff ${esc(co.cp)} en ${margen.toFixed(1)}h — muy justo`;
-    }
-  }
-  return null;
-}
-
-// ── AVITUALLAMIENTO ───────────────────────────────────────────────
-function renderUltratrailAid(){
-  const el=document.getElementById('main');
-  const race=(G.utCalendar||[])[G.utCurrentRaceIdx]||(ULTRATRAIL_RACES[G.utYear||1]||[])[G.utCurrentRaceIdx]||{};
-  const segs=G._utCurrentSegs||race.segs||[];
-  const segIdx=G.seg||0;
-  const cpName=(segs[segIdx]||{}).name||'CP';
-  const kmDone=segs.slice(0,segIdx).reduce((a,s)=>a+(s.km||0),0);
-  G.combustible=100; // auto-reset al entrar en avituallamiento
-  const items=BACKYARD_ITEMS.filter(it=>!it.esEquipamiento&&(!it.unlockedYear||it.unlockedYear<=(G.utYear||1))&&(G.utMochila||{})[it.id]>0);
-  const crew=G.utCrew||[];
-  const crewCPs=race.crewCPs||[];
-  const isCrewCP=crewCPs.some(cp=>cp.toLowerCase().includes(cpName.toLowerCase())||cpName.toLowerCase().includes(cp.toLowerCase().split(' ')[0]));
-  const hasCrew=crew.length>0&&isCrewCP;
-  const vendas=(G.utMochila||{}).vendas||0;
-  let vendaUsed=false;
-
-  el.innerHTML=`
-    ${utTopBar()}${utProgBar()}
-    <div class="card" style="background:#0f1f0f;border-color:#1e3e1e;margin-bottom:10px">
-      <div style="font-size:15px;font-weight:700;margin-bottom:2px">🍊 ${esc(cpName)}</div>
-      <div style="color:#999;font-size:12px">km ${kmDone} de ${race.km||0} · Combustible repuesto</div>
-    </div>
-    ${utRaceStats()}
-    <div class="section-label">¿Cuánto tiempo paras?</div>
-    ${[
-      {id:'rapida',  icon:'🚀', label:'Parada rápida',   time:'+2 min', e:0, h:10, c:0, p:5,  desc:'Coges agua y sales.'},
-      {id:'completa',icon:'🍲', label:'Parada completa', time:'+6 min', e:10,h:30, c:0, p:20, desc:'Come, hidrata, descansa.'},
-      {id:'sinparar', icon:'💨',label:'Sin parar',       time:'+0 min', e:0, h:8,  c:0, p:0,  desc:'Solo agua al paso.'},
-    ].map(opt=>`
-      <div class="aid-row" onclick="window.utResolveAid('${opt.id}')">
-        <div style="flex:1">
-          <div style="font-weight:600;font-size:14px">${opt.icon} ${opt.label}</div>
-          <div style="font-size:12px;color:#888;margin-top:2px">${opt.desc}</div>
-          <div style="font-size:12px;color:#4a8a2a;margin-top:2px">${opt.h?`+${opt.h} hidra`:''} ${opt.e?`+${opt.e} energía`:''} ${opt.p?`+${opt.p} pies`:''}</div>
+    <h2 style="margin:0 0 8px">🎒 Mochila</h2>
+    <div style="font-size:12px;color:#666;margin-bottom:12px">El equipamiento obligatorio siempre va. Los opcionales pesan — cada 100g extra resta velocidad.</div>
+    <div style="font-weight:600;margin-bottom:8px">Obligatorio</div>
+    ${UT_MOCHILA_ITEMS.filter(i=>i.obligatorio).map(i=>`
+      <div class="card" style="margin-bottom:6px;opacity:0.7">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:20px">${i.icon||'📦'}</span>
+          <div style="flex:1"><div style="font-size:14px">${esc(i.label)}</div><div style="font-size:11px;color:#999">${i.pesoG}g — obligatorio</div></div>
         </div>
-        <span style="font-size:12px;color:#c07a10;font-weight:600;margin-left:10px">${opt.time}</span>
       </div>`).join('')}
-    <div class="section-label" style="margin-top:8px">Opciones extra</div>
-    <div class="card" onclick="window.utCurePies()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center"><span>🩹 Curar pies (+20 pies, +3 min)</span><span style="font-size:12px;color:#888">Gel</span></div>
-    ${vendas>0?`<div class="card" onclick="window.utCambiarCalcetines()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center"><span>🧦 Cambiar calcetines (+30 pies)</span><span style="font-size:12px;color:#888">Vendas ×${vendas}</span></div>`:''}
-    ${items.length>0?`<div class="section-label" style="margin-top:8px">Mochila disponible</div>${items.map(it=>{const qty=(G.utMochila||{})[it.id]||0;return`<div class="card" style="display:flex;justify-content:space-between;align-items:center"><div><span style="font-size:15px">${it.icon}</span> <span style="font-weight:600">${esc(it.label)}</span> <span style="color:#999;font-size:12px">×${qty}</span></div><button class="secondary" onclick="window.utUseItem('${it.id}')">Usar</button></div>`;}).join('')}`:''}
-    ${hasCrew?`<div style="background:#f0f8f0;border:1px solid #4a8a2a;border-radius:8px;padding:12px;margin-top:12px">
-      <div style="font-weight:700;margin-bottom:8px">👥 Crew — ${esc(cpName)}</div>
-      ${crew.map((c,i)=>`<div style="margin-bottom:8px;border-top:1px solid #c0e0c0;padding-top:8px">
-        <div style="font-size:13px;font-weight:600;margin-bottom:4px">${c.rol==='fisico'?'💪 Rol físico':'🔧 Rol técnico'}</div>
-        ${c.rol==='fisico'?`
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <button class="secondary" onclick="G.pies=Math.min(100,(G.pies||0)+30);showToast('💪 Calcetines del crew','#4a8a2a');renderUltratrailAid()">Calcetines frescos (+30 pies)</button>
-            <button class="secondary" onclick="G.combustible=Math.min(100,(G.combustible||0)+20);G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+8);showToast('🍲 Comida casera','#4a8a2a');renderUltratrailAid()">Comida casera (+20 combust, +8 mental)</button>
-            <button class="secondary" onclick="G.runner.legs=Math.min(100,(G.runner.legs||100)+12);showToast('🧊 Hielo cuádriceps','#4a90d9');renderUltratrailAid()">Hielo cuádriceps (+12 piernas)</button>
-            ${(G.runner.stats.mental||50)<=20?`<button class="main" style="background:#4a8a2a;font-size:13px" onclick="G.utCrewSaved=true;showToast('💪 El crew te convence de seguir','#4a8a2a');window.utResolveAid('completa')">Te convencen de seguir ✓</button>`:''}
-          </div>`:
-          `<div style="display:flex;flex-direction:column;gap:6px">
-            <button class="secondary" onclick="G.runner.legs=Math.min(100,(G.runner.legs||100)+15);showToast('💆 Masaje del crew','#4a8a2a');renderUltratrailAid()">Masaje (+15 piernas)</button>
-            <button class="secondary" onclick="G._utVelocityPenalty=Math.max(0,(G._utVelocityPenalty||0)-0.002);showToast('🎒 Mochila reordenada','#4a8a2a');renderUltratrailAid()">Reordenar mochila (−200g)</button>
-          </div>`}
-      </div>`).join('')}
-    </div>`:''}
-    <button class="secondary" style="margin-top:10px;border-color:#c0392b;color:#c0392b" onclick="if(confirm('¿Abandonar?')){G.utDNFReason='abandon';G._utDNFSaved=false;G.screen='ultratrailCutoffDNF';render();}">🛑 Abandonar</button>`;
-
-  window.utCurePies=function(){G.pies=Math.min(100,(G.pies||0)+20);G.time=(G.time||0)+180;showToast('🩹 Pies curados (+20)','#4a8a2a');renderUltratrailAid();};
-  window.utCambiarCalcetines=function(){
-    if((G.utMochila||{}).vendas<=0)return;
-    G.utMochila.vendas--;G.pies=Math.min(100,(G.pies||0)+30);
-    showToast('🧦 Calcetines cambiados (+30 pies)','#4a8a2a');renderUltratrailAid();
-  };
-  window.utResolveAid=function(choice){
-    const opts={rapida:{timeCost:120,hydration:10,pies:5,energy:0},completa:{timeCost:360,hydration:30,pies:20,energy:10},sinparar:{timeCost:0,hydration:8,pies:0,energy:0}};
-    const o=opts[choice]||opts.rapida;
-    G.time=(G.time||0)+o.timeCost;
-    G.runner.hydration=Math.min(100,(G.runner.hydration||0)+o.hydration);
-    G.pies=Math.min(100,(G.pies||0)+o.pies);
-    G.runner.energy=Math.min(100,(G.runner.energy||0)+o.energy);
-    G.seg=(G.seg||0)+1;
-    G._utSegApplied=G._utSegApplied||{};
-    G.screen='ultratrailSegment';render();
-  };
-  window.utUseItem=function(id){
-    const it=BACKYARD_ITEMS.find(i=>i.id===id);
-    if(!it||(G.utMochila||{})[id]<=0)return;
-    G.utMochila[id]--;
-    Object.entries(it.efecto||{}).forEach(([k,v])=>{
-      if(k==='combustible')G.combustible=Math.min(100,(G.combustible||0)+v);
-      else if(k==='pies')G.pies=Math.min(100,(G.pies||0)+v);
-      else if(k==='energia'||k==='energía')G.runner.energy=Math.min(100,(G.runner.energy||0)+v);
-      else if(k==='piernas')G.runner.legs=Math.min(100,(G.runner.legs||0)+v);
-      else if(k==='hidratacion'||k==='hidratación')G.runner.hydration=Math.min(100,(G.runner.hydration||0)+v);
-    });
-    showToast(it.icon+' '+it.label+' usado','#4a8a2a');
-    renderUltratrailAid();
-  };
-}
-
-// ── TRANSICIÓN NOCTURNA (nueva pantalla) ─────────────────────────
-function renderUltratrailNight(){
-  const el=document.getElementById('main');
-  const horasT=((G.time||0)/3600).toFixed(1);
-  el.innerHTML=`
-    ${utTopBar()}${utProgBar()}
-    <div class="card" style="background:#080818;border-color:#1e1e3e;margin-bottom:10px">
-      <div style="font-size:20px;margin-bottom:8px">🌙</div>
-      <div style="font-size:16px;font-weight:700;color:#9090ff;margin-bottom:6px">Entra la noche</div>
-      <p style="color:#aaaacc;font-size:13px;margin:0">Llevas ${horasT}h en carrera. Las cumbres desaparecen en negro y el frontal recorta el mundo a tres metros. El cuerpo entra en otra lógica.</p>
-    </div>
-    ${utRaceStats()}
-    <div class="section-label">¿Cómo gestionas la noche?</div>
-    ${[
-      {id:'conservar',icon:'🔦',label:'Ritmo nocturno conservador',
-       desc:'Bajas el ritmo un 10% pero reduces el riesgo de desorientación y caída.',
-       detail:'Penalización de tiempo, pero seguridad. Recomendado si los pies están bajos.'},
-      {id:'mantener',icon:'⚡',label:'Mantén el ritmo, confía en el frontal',
-       desc:'Has entrenado para esto. La técnica de noche es tuya si la usas bien.',
-       detail:`Requiere Mental > 60. Tu mental actual: ${G.runner.stats?.mental||50}`},
-      {id:'gel',icon:'🍬',label:'Gel ahora + gestión activa',
-       desc:'Combustible extra para la transición más dura. Activas los reflejos.',
-       detail:`+15 combustible · consume 1 gel · ${(G.utGels||0)-(G.utGelsUsed||0)} geles disponibles`},
-    ].filter(opt=>opt.id!=='gel'||(G.utGels||0)>(G.utGelsUsed||0)).map(opt=>`
-      <div class="train-card" onclick="window.utResolveNight('${opt.id}')" style="margin-bottom:8px">
-        <div style="font-size:14px;font-weight:700">${opt.icon} ${opt.label}</div>
-        <div style="font-size:13px;color:#555;margin-top:3px">${opt.desc}</div>
-        <div style="font-size:12px;color:#aaa;margin-top:2px">${opt.detail}</div>
-      </div>`).join('')}
-    <button class="abandon-btn" style="border-color:#ddd;color:#bbb;margin-top:12px;font-size:12px" onclick="if(confirm('¿Confirmas el abandono?')){G.utDNFReason='abandon';G._utDNFSaved=false;G.screen='ultratrailCutoffDNF';render();}">Abandonar carrera</button>`;
-  window.utResolveNight=function(strategy){
-    G.utNightStrategy=strategy;
-    G.utNocturnaActive=true;
-    if(strategy==='gel'){G.utGelsUsed=(G.utGelsUsed||0)+1;G.combustible=Math.min(100,(G.combustible||0)+15);showToast('🍬 Gel nocturno · +15 combustible','#c07a10');}
-    else if(strategy==='conservar'){showToast('🔦 Ritmo nocturno conservador','#4a90d9');}
-    else{const ok=(G.runner.stats?.mental||50)>=60;if(!ok){G.runner.stats.mental=Math.max(0,(G.runner.stats?.mental||50)-8);showToast('⚡ Mental bajo — ritmo afectado','#c0392b');}else showToast('⚡ Noche bajo control','#4a8a2a');}
-    G.screen='ultratrailSegment';render();
-  };
-}
-function renderUltratrailCutoffDNF(){
-  const el=document.getElementById('main');
-  const race=(G.utCalendar||[])[G.utCurrentRaceIdx]||(ULTRATRAIL_RACES[G.utYear||1]||[])[G.utCurrentRaceIdx]||{};
-  const segs=G._utCurrentSegs||race.segs||[];
-  const kmDone=segs.slice(0,G.seg||0).reduce((a,s)=>a+(s.km||0),0);
-  const reason=G.utDNFReason||'cutoff';
-  if(!G._utDNFSaved){
-    G._utDNFSaved=true;
-    G.utCutoffWarnings=(G.utCutoffWarnings||0)+1;
-  }
-  const isAbandon=reason==='abandon';
-  el.innerHTML=`
-    <h2>${isAbandon?'🛑 Abandono voluntario':'⏱️ Tiempo límite superado'}</h2>
-    <div class="card" style="background:#1e0808;border-color:#4e1818">
-      <p style="color:#ff9a9a;margin:0 0 8px 0">${isAbandon?'"Decidiste parar. Conoces tu cuerpo y sabes cuándo el riesgo no vale la pena."':'"El tiempo límite ha hablado. No es un abandono — es la montaña marcando sus propias reglas."'}</p>
-      <div style="font-size:13px;color:#999;display:flex;justify-content:space-between;padding:3px 0"><span>Motivo</span><span>${isAbandon?'Abandono voluntario':reason==='cutoff'?'Cutoff':'Agotamiento'}</span></div>
-      <div style="font-size:13px;color:#999;display:flex;justify-content:space-between;padding:3px 0"><span>Recorrido</span><span style="color:#ff8a8a">${kmDone}km / ${race.km||0}km</span></div>
-      <div style="font-size:13px;color:#999;display:flex;justify-content:space-between;padding:3px 0"><span>Tiempo empleado</span><span>${fmt(G.time||0)}</span></div>
-    </div>
-    ${utRaceStats()}
-    <div class="section-label">¿Qué haces?</div>
-    ${!isAbandon?`<div class="work-card" style="margin-bottom:8px" onclick="G.utFueraConcurso=true;G.screen='ultratrailSegment';render()">
-      <div style="font-weight:700">Continuar fuera de concurso</div>
-      <div style="font-size:13px;color:#888;margin-top:3px">Sin clasificación oficial, pero de cabo a rabo. Eso no te lo quita nadie.</div>
-    </div>`:''}
-    <div class="work-card" onclick="window.utAfterDNF()">
-      <div style="font-weight:700;color:#c0392b">Retirarme aquí</div>
-      <div style="font-size:13px;color:#888;margin-top:3px">${isAbandon?'Guardas energía para la próxima. Decisión inteligente.':'Cada DNF enseña algo. La próxima carrera empieza aquí.'}</div>
-    </div>`;
-  window.utAfterDNF=function(){
-    G._utDNFSaved=false;
-    if(G.utNocturnaActive){document.body.style.background='';document.body.style.color='';G.utNocturnaActive=false;}
-    G.utResults=G.utResults||[];
-    G.utResults.push({raceId:race.id||'?',raceName:race.name||'?',year:G.utYear||1,dnf:true,dnfReason:reason,kmDone,km:race.km,timeH:Math.round((G.time||0)/360)/10,piesAlFinalizar:G.pies});
-    G.utMoney=Math.max(0,(G.utMoney||0)-(race.cost||0));
-    G.runner.energy=Math.min(100,(G.runner.energy||0)+40);G.combustible=Math.min(100,(G.combustible||0)+50);G.pies=Math.min(100,(G.pies||0)+30);
-    G.utCurrentRaceIdx=(G.utCurrentRaceIdx||0)+1;
-    const cal=G.utCalendar||[];
-    autoSave();
-    if((G.utCurrentRaceIdx||0)>=cal.length){G._seasonBalanceDone=false;G.screen='ultratrailSeasonBalance';}
-    else{G.screen='ultratrailPostRace';}
-    render();
-  };
-}
-function renderUltratrailPostRace(){
-  const el=document.getElementById('main');
-  const race=(G.utCalendar||[])[G.utCurrentRaceIdx]||(ULTRATRAIL_RACES[G.utYear||1]||[])[G.utCurrentRaceIdx]||{};
-  const lastRes=(G.utResults||[]).slice(-1)[0]||{};
-  const cal=G.utCalendar||[];
-  const isLast=(G.utCurrentRaceIdx||0)>=cal.length-1;
-  // limpiar estilos nocturnos
-  document.body.style.background='';document.body.style.color='';
-  const pies=G.pies||0;
-  const tiempoH=((G.time||0)/3600).toFixed(1);
-  const fueraConcurso=lastRes.fueraConcurso||G.utFueraConcurso||false;
-  const dnf=lastRes.dnf&&!fueraConcurso;
-  let narrative='';
-  if(fueraConcurso)narrative='Sin clasificación oficial, pero de cabo a rabo. Eso no te lo quita nadie.';
-  else if(!dnf&&pies>60)narrative='Llegaste entero. El cuerpo aguantó todo lo que la montaña tenía preparado.';
-  else if(!dnf&&pies<30)narrative='Las últimas horas fueron solo voluntad. Los pies dijeron basta mucho antes.';
-  else if(!dnf&&(G.utCutoffWarnings||0)>0)narrative='Llegaste. Con el tiempo justo, pero llegaste. A veces eso es todo lo que importa.';
-  else if(!dnf)narrative=`${tiempoH}h de ${race.km||0}km. Otro punto en tu historial.`;
-  else if(dnf)narrative='No fue tu día. Pero te presentaste. Eso ya es más de lo que hace la mayoría.';
-  // Check PB
-  const dist=race.km||0;
-  const pb=G.personalBests||{};
-  const pbKey='ut_'+dist;
-  const isNewPB=!dnf&&(!pb[pbKey]||(G.time||0)<pb[pbKey]);
-  if(isNewPB&&!dnf){G.personalBests=G.personalBests||{};G.personalBests[pbKey]=G.time||0;setTimeout(()=>showToast('🏅 Nuevo record en '+dist+'K','#c07a10'),600);}
-  el.innerHTML=`
-    <h2>🏁 ${esc(race.name||'')}</h2>
-    <div class="card" style="background:${dnf?'#180808':fueraConcurso?'#0f0f18':'#081808'};border-color:${dnf?'#3e1818':fueraConcurso?'#2a2a4a':'#183e18'};text-align:center;margin-bottom:10px">
-      <div style="font-size:28px;font-weight:700;color:${dnf?'#ff6a6a':fueraConcurso?'#9090ff':'#6afa6a'};margin-bottom:4px">${dnf?'DNF':fueraConcurso?'FFC':'✓'}</div>
-      <div style="color:#999;font-size:13px">${dnf?'No terminada':fueraConcurso?'Fuera de concurso':'Completada · '+tiempoH+'h'}</div>
-    </div>
-    <div class="card" style="background:#0f1f0f;border-color:#2a4a2a;margin-bottom:10px">
-      <p style="color:#7fbf7f;font-size:14px;margin:0;line-height:1.5">"${narrative}"</p>
-    </div>
-    <div class="card" style="display:flex;justify-content:space-around;text-align:center">
-      <div><div style="font-size:18px;font-weight:700">${fmt(G.time||0)}</div><div style="font-size:11px;color:#999">Tiempo</div></div>
-      <div><div style="font-size:18px;font-weight:700;color:#8B4513">${Math.round(pies)}</div><div style="font-size:11px;color:#999">Pies</div></div>
-      <div><div style="font-size:18px;font-weight:700;color:#c07a10">${G.utCutoffWarnings||0}</div><div style="font-size:11px;color:#999">Cutoff warn</div></div>
-    </div>
-    ${utRaceStats()}
-    <button class="main" onclick="window.utAfterRace()">${isLast?'Ver balance de temporada →':'Siguiente carrera →'}</button>`;
-  window.utAfterRace=function(){
-    if(G.utNocturnaActive){document.body.style.background='';document.body.style.color='';G.utNocturnaActive=false;}
-    G.runner.energy=Math.min(100,(G.runner.energy||0)+30);G.runner.legs=Math.min(100,(G.runner.legs||0)+20);
-    G.combustible=Math.min(100,(G.combustible||0)+40);G.pies=Math.min(100,(G.pies||0)+15);
-    G.utFueraConcurso=false;G._utSegApplied={};G._utNightEvDone={};
-    G.utCurrentRaceIdx=(G.utCurrentRaceIdx||0)+1;
-    autoSave();
-    if((G.utCurrentRaceIdx||0)>=(G.utCalendar||[]).length){G._seasonBalanceDone=false;G.screen='ultratrailSeasonBalance';}
-    else{G.screen='ultratrailPreRace';}
-    render();
-  };
-}
-// ── FIN DE AÑO NARRATIVO (nueva pantalla) ────────────────────────
-function renderUltratrailYearEnd(){
-  const el=document.getElementById('main');
-  const year=G.utYear||1;
-  const results=G.utResults||[];
-  const yearResults=results.filter(r=>r.year===year);
-  const fins=yearResults.filter(r=>!r.dnf).length;
-  const dnfs=yearResults.filter(r=>r.dnf).length;
-  const kmYear=Math.round(yearResults.reduce((a,r)=>a+(r.km||0),0));
-  const kmTotal=Math.round(results.reduce((a,r)=>a+(r.km||0),0));
-  // Delta de stats
-  const snap=G._utYearStatsSnapshot||{};
-  const statDelta=Object.entries(G.runner.stats||{}).map(([k,v])=>{
-    const prev=snap[k]||v;
-    const d=v-prev;
-    return d!==0?`${k} ${d>0?'+':''}${d}`:null;
-  }).filter(Boolean);
-  // Logro del año
-  let logro='';
-  if(year===1&&fins>0)logro='Primera carrera completada. El ultratrail ya tiene tu nombre.';
-  else if(fins===0&&dnfs>0)logro='Un año duro. Pero seguiste presentándote.';
-  else if(fins>=2)logro=`${fins} finishes este año. La montaña te conoce.`;
-  else if((G.utRanking||999)<100)logro='Top 100 mundial. Pocos llegan aquí.';
-  else logro=`${kmYear}km de ultratrail este año. Eso no es nada pequeño.`;
-  // Borrar snapshot para el año siguiente
-  G._utYearStatsSnapshot=null;
-  const nar=UT_YEAR_NARRATIVE[year+1]||UT_YEAR_NARRATIVE[8];
-  el.innerHTML=`
-    <h2>Año ${year} — Cerrado</h2>
-    <div class="card" style="background:#111f11;border-color:#2a4a2a;text-align:center">
-      <div style="font-size:14px;color:#7fbf7f;margin-bottom:4px">🏆 Logro del año</div>
-      <div style="font-size:15px;font-weight:600;color:#fff">"${logro}"</div>
-    </div>
-    <div class="card" style="display:flex;justify-content:space-around;text-align:center">
-      <div><div style="font-size:20px;font-weight:700">${fins}</div><div style="font-size:11px;color:#999">Finishes</div></div>
-      <div><div style="font-size:20px;font-weight:700;color:#c0392b">${dnfs}</div><div style="font-size:11px;color:#999">DNFs</div></div>
-      <div><div style="font-size:20px;font-weight:700;color:#4a90d9">${kmYear}km</div><div style="font-size:11px;color:#999">Este año</div></div>
-      <div><div style="font-size:20px;font-weight:700;color:#888">${kmTotal}km</div><div style="font-size:11px;color:#999">Total carrera</div></div>
-    </div>
-    ${statDelta.length?`<div class="card"><div class="sec-title-sm">Evolución de stats</div><div style="font-size:13px;color:#4a8a2a">${statDelta.join(' · ')}</div></div>`:''}
-    ${year<8?`<div class="card" style="background:#0f0f1f;border-color:#2a2a4a"><div style="font-size:13px;color:#aaa;margin-bottom:4px">Año ${year+1}: ${esc(nar.title)}</div><div style="font-size:12px;color:#888">${esc(nar.text)}</div></div>`:''}
-    <button class="main" onclick="window.utGoNextYear()">${year>=8?'Ver tu legado →':'Año '+(year+1)+' →'}</button>
-    ${year>=4?`<button class="secondary" style="margin-top:8px;border-color:#c0392b;color:#c0392b" onclick="G.screen='ultratrailLegado';render()">Retiro anticipado</button>`:''}`;
-  window.utGoNextYear=function(){
-    if(year>=8){G.screen='ultratrailLegado';render();return;}
-    G.utYear=(G.utYear||1)+1;G.utCurrentRaceIdx=0;G._seasonBalanceDone=false;
-    G.utTrainingBlock=null;G.utTrainingApplied=false;G.utActiveTab='races';
-    autoSave();G.screen='ultratrailWelcome';render();
-  };
-}
-function renderUltratrailSeasonBalance(){
-  const el=document.getElementById('main');
-  const year=G.utYear||1;
-  const yr=(G.utResults||[]).filter(r=>r.year===year);
-  const fins=yr.filter(r=>!r.dnf).length;
-  const total=yr.length;
-  const totKm=yr.reduce((a,r)=>a+(r.km||0),0);
-  const totalCareerKm=(G.utResults||[]).reduce((a,r)=>a+(r.km||0),0);
-  const rankPrev=G._utRankingPrev||G.utRanking||500;
-  const rankNow=G.utRanking||500;
-  const prizes=yr.filter(r=>!r.dnf).reduce((a,r)=>a+(r.prize||0),0);
-  const costs=yr.reduce((a,r)=>a+(r.cost||0),0);
-  const byRes=(G.backyardHistory||[]).filter(b=>b.year===year);
-  const by=byRes.length>0?byRes[byRes.length-1]:null;
-  const isLast=year>=8;
-  if(!G._seasonBalanceDone){
-    G._seasonBalanceDone=true;
-    G._utRankingPrev=rankNow;
-    G.runner.stats.resistencia=Math.min(100,(G.runner.stats.resistencia||50)+fins*2+1);
-    G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+fins+1);
-    G.runner.age=(G.runner.age||25)+1;
-  }
-  const balanceColor=prizes-costs>=0?'#4a8a2a':'#c0392b';
-  el.innerHTML=`
-    <h2>📊 Balance Año ${year}</h2>
-    <div class="card" style="display:flex;justify-content:space-around;text-align:center">
-      <div><div style="font-size:22px;font-weight:700;color:${fins>0?'#4a8a2a':'#c0392b'}">${fins}/${total}</div><div style="font-size:11px;color:#999">Finales</div></div>
-      <div><div style="font-size:22px;font-weight:700;color:#4a90d9">${Math.round(totKm)}</div><div style="font-size:11px;color:#999">km temporada</div></div>
-      <div><div style="font-size:22px;font-weight:700;color:#9060c0">${Math.round(totalCareerKm)}</div><div style="font-size:11px;color:#999">km carrera</div></div>
-    </div>
-    <div class="card" style="display:flex;justify-content:space-around;text-align:center">
-      <div><div style="font-size:18px;font-weight:700;color:#c07a10">#${rankNow}</div><div style="font-size:11px;color:#999">Ranking</div></div>
-      <div><div style="font-size:18px;font-weight:700;color:${rankNow<rankPrev?'#4a8a2a':rankNow>rankPrev?'#c0392b':'#aaa'}">${rankNow<rankPrev?'▲ +'+(rankPrev-rankNow):rankNow>rankPrev?'▼ '+(rankNow-rankPrev):'—'}</div><div style="font-size:11px;color:#999">Variación</div></div>
-      <div><div style="font-size:18px;font-weight:700;color:${balanceColor}">€${prizes-costs>=0?'+':''}${prizes-costs}</div><div style="font-size:11px;color:#999">Balance €</div></div>
-    </div>
-    ${yr.length>0?`<div class="section-label">Carreras</div>${yr.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1e1e1e;font-size:13px"><span>${r.dnf?'❌':'✅'} ${esc(r.raceName||'')}</span><span style="color:#999">${r.dnf?'DNF':r.pos?'P'+r.pos:r.loops?r.loops+' loops':r.km+'km'}</span></div>`).join('')}`:''}
-    ${by?`<div class="section-label">Backyard Ultra</div>
-    <div class="card" style="background:#0f1f0f;border-color:#1e3e1e">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:14px">${by.motivo==='victoria'?'🏆 Last One Standing':'🛑 '+by.loops+' loops'}</span>
-        <span style="color:#999;font-size:13px">${Math.round(by.km||0)}km</span>
-      </div>
-      ${(G.backyardHistory||[]).length>1?`<div style="font-size:12px;color:#777;margin-top:4px">Histórico: ${(G.backyardHistory||[]).map(b=>b.loops+' loops').join(' → ')}</div>`:''}
-    </div>`:''}
-    <div class="section-label" style="margin-top:8px">Evolución</div>
-    <div class="card">${srow('Resistencia',G.runner.stats.resistencia)}${srow('Mental',G.runner.stats.mental)}</div>
-    ${isLast
-      ?`<button class="main" onclick="G.screen='ultratrailLegado';render()">🏆 Ver tu Legado →</button>`
-      :`<button class="main" onclick="G._seasonBalanceDone=false;G.utYear=(G.utYear||1)+1;G.utCalendar=[];G.utCurrentRaceIdx=0;G._utSeasonSelected=[];G.utGels=0;G.utGelsUsed=0;G.utCrew=[];G.utCrewSaved=false;G.screen='ultratrailSeasonStart';render()">Año ${year+1} →</button>`
-    }`;
-}
-function renderUltratrailLegado(){
-  const el=document.getElementById('main');
-  if(!G.legadoData)G.legadoData=window.generateLegadoData?window.generateLegadoData():generateLegadoData();
-  const lg=G.legadoData;
-  const byWins=(G.backyardHistory||[]).filter(b=>b.motivo==='victoria').length;
-  const narrativa=lg.eliteFinishes>=2?'Perteneces a ese grupo pequeño y extraño de personas que han terminado lo que la mayoría ni se atreve a empezar. Ocho años en las montañas, en los desiertos, en la noche. Tu cuerpo lo sabe. Tus rodillas lo saben.':lg.finishes>=4?'No todos los finales son victorias, y no todas las victorias son finales. Aprendiste eso de la manera difícil, varias veces. Lo que importa es que volviste siempre.':'Ocho años es mucho tiempo para seguir eligiendo el dolor con convicción. Hay algo en ti que la montaña despertó y ya no se apaga.';
-  el.innerHTML=`
-    <h2>🏆 Tu Legado</h2>
-    <div class="card" style="background:#111008;border-color:#4a4808;text-align:center;padding:18px">
-      <div style="font-size:26px;font-weight:700;color:#f0c040;margin-bottom:6px">${esc(lg.title||'Corredor de Ultratrail')}</div>
-      <div style="color:#ccc;font-size:15px">${esc(G.runner.name||'')}</div>
-      <div style="color:#777;font-size:12px;margin-top:4px">8 años · ${Math.round(lg.totalKm||0)}km de ultratrail</div>
-    </div>
-    <div class="card" style="display:flex;justify-content:space-around;text-align:center">
-      <div><div style="font-size:22px;font-weight:700;color:#4a90d9">${Math.round(lg.totalKm||0)}</div><div style="font-size:11px;color:#999">km totales</div></div>
-      <div><div style="font-size:22px;font-weight:700;color:#4a8a2a">${lg.finishes||0}</div><div style="font-size:11px;color:#999">finales</div></div>
-      <div><div style="font-size:22px;font-weight:700;color:#c07a10">${lg.eliteFinishes||0}</div><div style="font-size:11px;color:#999">élite</div></div>
-      ${byWins>0?`<div><div style="font-size:22px;font-weight:700;color:#f0c040">${byWins}</div><div style="font-size:11px;color:#999">Backyard</div></div>`:''}
-    </div>
-    ${lg.bestPos?`<div class="card" style="text-align:center"><span style="color:#c07a10;font-size:14px">🥇 Mejor posición: <strong>P${lg.bestPos}</strong></span></div>`:''}
-    <div class="section-label">Tu historia</div>
-    ${(G.utResults||[]).map(r=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #111;font-size:13px"><span>${r.dnf?'❌':'✅'} ${esc(r.raceName||'')}</span><span style="color:#999">A${r.year}${r.pos?' · P'+r.pos:r.loops?' · '+r.loops+'L':''}</span></div>`).join('')}
-    <div class="card" style="background:#080e18;border-color:#182840;margin-top:12px">
-      <p style="color:#8090a8;font-style:italic;margin:0 0 8px 0">${esc(narrativa)}</p>
-      <p style="color:#506070;font-style:italic;font-size:13px;margin:0">"La montaña no te recuerda. Pero tú sí la recuerdas a ella. Eso es suficiente."</p>
-    </div>
-    <button class="main" style="margin-top:14px" onclick="G.screen='modeSelect';render()">Volver al menú</button>`;
-}
-function renderBackyardConfig(){
-  const el=document.getElementById('main');
-  const cfg=BACKYARD_CONFIG;
-  if(!G.backyardMochila)G.backyardMochila={};
-  if(!G._backyardConfigInit){
-    G._backyardConfigInit=true;
-    BACKYARD_ITEMS.filter(it=>!it.esEquipamiento).forEach(it=>{if(!G.backyardMochila[it.id])G.backyardMochila[it.id]=it.unidadesBase;});
-  }
-  let peso=0;BACKYARD_ITEMS.forEach(it=>{peso+=(G.backyardMochila[it.id]||0)*it.pesoG;});
-  const numRivals=Math.min(10+(G.utYear||1)*2,20);
-  el.innerHTML=`
-    <h2>🏕️ Backyard Ultra</h2>
-    <p class="sub">${cfg.loopKm}km por loop · Hasta que quede uno</p>
-    <div class="card" style="background:#0f1f0f;border-color:#1e3e1e">
-      <p style="color:#7fbf7f;margin:0">Loops de ${cfg.loopKm}km, uno por hora. El último en completar un loop gana. No hay distancia fija ni tiempo límite. Solo voluntad.</p>
-    </div>
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="color:#aaa">Loop</span><span style="font-weight:600">${cfg.loopKm}km · 60 min</span></div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="color:#aaa">Participantes</span><span style="font-weight:600">${numRivals+1} corredores</span></div>
-      <div style="display:flex;justify-content:space-between"><span style="color:#aaa">Peso mochila</span><span style="font-weight:600;color:${peso>3000?'#c0392b':'#4a8a2a'}">${(peso/1000).toFixed(2)}kg</span></div>
-    </div>
-    <div class="section-label">Provisiones</div>
-    ${BACKYARD_ITEMS.filter(it=>!it.esEquipamiento&&(!it.unlockedYear||it.unlockedYear<=(G.utYear||1))).map(it=>{
-      const qty=G.backyardMochila[it.id]||0;
-      return `<div class="card" style="display:flex;justify-content:space-between;align-items:center"><div style="flex:1"><span style="font-size:17px">${it.icon}</span> <span style="font-weight:600">${esc(it.label)}</span><div style="font-size:12px;color:#999;margin-top:2px">${esc(it.desc)}</div></div><div style="display:flex;align-items:center;gap:8px"><button class="secondary" style="padding:4px 10px" onclick="if((G.backyardMochila['${it.id}']||0)>0){G.backyardMochila['${it.id}']--;renderBackyardConfig();}">−</button><span style="font-weight:700;min-width:20px;text-align:center">${qty}</span><button class="secondary" style="padding:4px 10px" onclick="if((G.backyardMochila['${it.id}']||0)<${it.maxUnidades}){G.backyardMochila['${it.id}']=(G.backyardMochila['${it.id}']||0)+1;renderBackyardConfig();}">+</button></div></div>`;
+    <div style="font-weight:600;margin:12px 0 8px">Opcional</div>
+    ${UT_MOCHILA_ITEMS.filter(i=>!i.obligatorio).map(i=>{
+      const active=!!G.utMochila[i.id];
+      const locked=i.minYear&&yr<i.minYear;
+      return `<div class="card${!locked?' work-card':''}" style="margin-bottom:6px;${active?'border:2px solid #4a8a2a;':''}${locked?'opacity:0.5;':''}" ${!locked?`onclick="utToggleMochila('${i.id}')"`:''}">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:20px">${i.icon||'📦'}</span>
+          <div style="flex:1">
+            <div style="font-size:14px">${esc(i.label)} ${active?'✓':''}</div>
+            <div style="font-size:11px;color:#999">${i.pesoG}g</div>
+            ${i.advertencia?`<div style="font-size:11px;color:#c07a10">⚠️ ${i.advertencia}</div>`:''}
+            ${locked?`<div style="font-size:11px;color:#888">Disponible año ${i.minYear}</div>`:''}
+          </div>
+        </div>
+      </div>`;
     }).join('')}
-    <button class="main" style="margin-top:10px" onclick="initBackyard()">🏁 Comenzar</button>
-    <button class="secondary" style="margin-top:8px" onclick="G.screen='ultratrailSeasonBalance';render()">← Volver</button>`;
+    <div class="card" style="margin-top:12px;background:#f8f8f8">
+      <div style="font-size:13px">Peso total: <strong>${total}g</strong></div>
+      <div style="font-size:12px;color:#666">Mínimo obligatorio: ${UT_PESO_MINIMO_G}g · Extra: ${pesoExtra}g</div>
+      ${penVel>0?`<div style="font-size:13px;color:#c07a10;margin-top:4px">Penalización velocidad: −${penVel}%</div>`:'<div style="font-size:13px;color:#2d7a2d;margin-top:4px">Sin penalización extra ✓</div>'}
+    </div>
+    <button class="secondary" style="margin-top:12px" onclick="G.screen=G._utMochilaPrev||'utPreRace';render()">← Volver</button>
+  `;
 }
-function renderBackyardLoop(){
+
+window.utToggleMochila=itemId=>{
+  const item=UT_MOCHILA_ITEMS.find(i=>i.id===itemId);
+  if(!item||item.obligatorio)return;
+  if(item.minYear&&(G.utYear||1)<item.minYear)return;
+  if(G.utMochila[itemId]){delete G.utMochila[itemId];}
+  else{G.utMochila[itemId]=true;}
+  const obligPeso=UT_MOCHILA_ITEMS.filter(i=>i.obligatorio).reduce((a,i)=>a+i.pesoG,0);
+  const optPeso=UT_MOCHILA_ITEMS.filter(i=>G.utMochila[i.id]).reduce((a,i)=>a+i.pesoG,0);
+  G.utMochilaPesoTotal=obligPeso+optPeso;
+  render();
+};
+
+function renderUtCrew(){
   const el=document.getElementById('main');
-  const cfg=BACKYARD_CONFIG;
-  const loop=G.backyardCurrentLoop||0;
-  const active=(G.backyardRivalState||[]).filter(r=>r.active);
-  const isNoc=loop>=12&&loop%24<12;
-  const km=Math.round(loop*cfg.loopKm*10)/10;
-  const moch=G.backyardMochila||{};
-  const racion=(moch.racion_solida||0);
-  const gel=(moch.gel||0);
-  const vendas=(moch.vendas||0);
+  const yr=G.utYear||1;
+  const available=UT_CREW_MEMBERS.filter(m=>m.unlockYear<=yr);
   el.innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <span style="font-size:12px;color:#999">🏕️ Backyard Ultra</span>
-      <span style="font-size:13px;font-weight:700">${loop} loops · ${km}km · ${loop}h</span>
-    </div>
-    ${isNoc?'<div class="card" style="background:#080818;border-color:#181838"><span style="color:#9090ff">🌙 Tramo nocturno</span></div>':''}
-    <div class="card" style="display:flex;justify-content:space-around;text-align:center">
-      <div><div style="font-size:22px;font-weight:700;color:#4a90d9">${loop}</div><div style="font-size:11px;color:#999">Loops</div></div>
-      <div><div style="font-size:22px;font-weight:700;color:#4a8a2a">${km}km</div><div style="font-size:11px;color:#999">Total</div></div>
-      <div><div style="font-size:22px;font-weight:700;color:#c07a10">${active.length}</div><div style="font-size:11px;color:#999">Rivales</div></div>
-    </div>
-    <div class="card">${[['🔥 Combust.',G.combustible||0,'#e87820'],['🦶 Pies',G.pies||0,'#c07a10'],['⚡ Energía',G.runner.energy||0,'#4a90d9'],['🧠 Mental',G.runner.stats.mental||0,'#9060c0']].map(([l,v,c])=>`<div class="bar-row"><span class="bar-label" style="color:${v<25?'#c0392b':'#666'}">${l}${v<25?' ⚠':''}</span>${rbar(v,c)}<span class="bar-pct" style="color:${v<25?'#c0392b':'#1a1a1a'}">${Math.round(v)}%</span></div>`).join('')}</div>
-    ${active.length<=3?`<div class="card" style="background:#111008;border-color:#3a3808"><div style="font-size:13px;color:#f0c040;font-weight:600">⚡ Quedáis ${active.length+1} en carrera</div>${active.map(r=>`<div style="font-size:12px;color:#999;margin-top:3px">${r.flag} ${esc(r.name)}</div>`).join('')}</div>`:''}
-    ${(G.combustible||0)<25||(G.runner.energy||0)<25?'<div class="warn">⚠️ Reservas críticas</div>':''}
-    <div class="section-label">Antes del loop ${loop+1}</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
-      <button class="secondary" style="flex:1;min-width:80px" ${racion<=0?'disabled':''} onclick="if((G.backyardMochila.racion_solida||0)>0){G.backyardMochila.racion_solida--;G.combustible=Math.min(100,(G.combustible||0)+30);showToast('🍞 Ración comida +30 combust.','#c07a10');renderBackyardLoop();}">🍞 Ración<br><span style="font-size:11px;color:#999">${racion} uds</span></button>
-      <button class="secondary" style="flex:1;min-width:80px" ${gel<=0?'disabled':''} onclick="if((G.backyardMochila.gel||0)>0){G.backyardMochila.gel--;G.combustible=Math.min(100,(G.combustible||0)+15);showToast('🧃 Gel +15 combust.','#c07a10');renderBackyardLoop();}">🧃 Gel<br><span style="font-size:11px;color:#999">${gel} uds</span></button>
-      <button class="secondary" style="flex:1;min-width:80px" onclick="G.runner.legs=Math.min(100,(G.runner.legs||0)+5);showToast('🦵 Estiramientos +5 piernas','#4a8a2a');renderBackyardLoop();">🦵 Estirar<br><span style="font-size:11px;color:#999">+5 pies</span></button>
-      <button class="secondary" style="flex:1;min-width:80px" ${vendas<=0?'disabled':''} onclick="if((G.backyardMochila.vendas||0)>0){G.backyardMochila.vendas--;G.pies=Math.min(100,(G.pies||0)+20);showToast('🩹 Curas +20 pies','#4a8a2a');renderBackyardLoop();}">🩹 Curas<br><span style="font-size:11px;color:#999">${vendas} uds</span></button>
-    </div>
-    <button class="main" onclick="window.resolveBackyardLoop?window.resolveBackyardLoop():resolveBackyardLoop()">▶ Loop ${loop+1}</button>
-    <button class="secondary" style="margin-top:8px" onclick="window.resolverBackyard?window.resolverBackyard('voluntario'):resolverBackyard('voluntario')">🛑 Retirarse</button>`;
+    <h2 style="margin:0 0 8px">👥 Crew</h2>
+    <div style="font-size:13px;color:#666;margin-bottom:12px">Tu crew te apoya en los avituallamientos. Desbloquean con los años.</div>
+    ${available.map(m=>{
+      const active=(G.utCrewActivo||[]).includes(m.id);
+      const frase=m.frases[Math.floor(Math.random()*m.frases.length)];
+      return `<div class="card work-card" style="margin-bottom:8px;${active?'border:2px solid #4a8a2a;':''}" onclick="utToggleCrew('${m.id}')">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:28px">${m.icon}</span>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:600">${m.name} <span style="font-size:12px;color:#888;font-weight:400">· ${m.rol}</span></div>
+            <div style="font-size:12px;color:#666">${m.efecto}</div>
+            <div style="font-size:12px;color:#888;font-style:italic;margin-top:2px">"${frase}"</div>
+          </div>
+          <div style="font-size:18px">${active?'✅':''}</div>
+        </div>
+      </div>`;
+    }).join('')}
+    ${UT_CREW_MEMBERS.filter(m=>m.unlockYear>yr).map(m=>`
+      <div class="card" style="opacity:0.45;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:28px">${m.icon}</span>
+          <div><div style="font-size:14px;font-weight:600">${m.name}</div>
+          <div style="font-size:12px;color:#888">Disponible año ${m.unlockYear}</div></div>
+        </div>
+      </div>`).join('')}
+    <button class="secondary" style="margin-top:8px" onclick="G.screen='utPreRace';render()">← Volver</button>
+  `;
 }
-function renderBackyardResult(){
+
+window.utToggleCrew=memberId=>{
+  if(!G.utCrewActivo)G.utCrewActivo=[];
+  const idx=G.utCrewActivo.indexOf(memberId);
+  if(idx>=0)G.utCrewActivo.splice(idx,1);
+  else G.utCrewActivo.push(memberId);
+  render();
+};
+
+function renderUtRace(){
   const el=document.getElementById('main');
-  const hist=G.backyardHistory||[];
-  const r=hist.length>0?hist[hist.length-1]:null;
-  if(!r){G.screen='ultratrailSeasonBalance';render();return;}
-  const motivoTexts={
-    victoria:'Fuiste el último en pie. El campo entero cedió antes que tú. No hay palabras para eso — solo el silencio después del último loop.',
-    voluntario:'Decidiste parar cuando aún podías seguir. Esa es la decisión más difícil de todas. Conoces tus límites mejor que nadie.',
-    mental:'La cabeza dijo basta antes que el cuerpo. El Backyard no es solo físico — el que resiste aquí tiene algo diferente dentro.',
-    colapso:'El cuerpo simplemente se apagó. Llevaste las reservas hasta el límite y más allá. Nadie puede pedirte más que eso.',
-    tiempo:'El tiempo límite habló. Completar loops es más difícil de lo que parece cuando el reloj no perdona.'
-  };
-  const motivo=r.motivo||'colapso';
-  const isVictoria=motivo==='victoria';
-  el.innerHTML=`
-    <h2>${isVictoria?'🏆 ¡Last One Standing!':'🏕️ Backyard terminado'}</h2>
-    <div class="card" style="background:${isVictoria?'#111008':'#111'};border-color:${isVictoria?'#4a4808':'#222'};text-align:center">
-      <div style="font-size:28px;font-weight:700;color:${isVictoria?'#f0c040':'#aaa'};margin-bottom:6px">${r.loops} loops</div>
-      <div style="color:#999;font-size:14px">${Math.round(r.km||0)}km · ${r.loops} hora${r.loops!==1?'s':''}</div>
-    </div>
-    <div class="card" style="display:flex;justify-content:space-around;text-align:center">
-      <div><div style="font-size:20px;font-weight:700">${r.loops}</div><div style="font-size:11px;color:#999">Loops</div></div>
-      <div><div style="font-size:20px;font-weight:700">${Math.round(r.km||0)}km</div><div style="font-size:11px;color:#999">Dist.</div></div>
-      <div><div style="font-size:20px;font-weight:700">${r.activeAtEnd||0}</div><div style="font-size:11px;color:#999">Activos al final</div></div>
-    </div>
-    ${hist.length>1?`<div class="section-label">Historial Backyard</div>${hist.slice(-5).map(h=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #111;font-size:13px"><span>${h.motivo==='victoria'?'🏆':'🛑'} ${h.loops} loops · ${Math.round(h.km||0)}km</span><span style="color:#999">A${h.year||'—'}</span></div>`).join('')}`:''}
-    <div class="card" style="margin-top:10px"><p style="color:#aaa;font-size:14px;margin:0">${esc(motivoTexts[motivo]||motivoTexts.colapso)}</p></div>
-    <button class="main" onclick="G._seasonBalanceDone=false;G.screen='ultratrailSeasonBalance';render()">Continuar →</button>`;
-}
-function renderMDSPreparation(){
-  const el=document.getElementById('main');
-  const year=G.utYear||1;
-  const mds=(ULTRATRAIL_RACES[year]||[]).find(r=>r.isMDS)||{};
-  if(!G._mdsInit){
-    G._mdsInit=true;
-    G.mdsEtapaActual=0;G._mdsResultSaved=false;G._mdsMode=true;
-    G._mdsRaciones=6;
-  }
-  const raciones=G._mdsRaciones||6;
-  const pesoRaciones=raciones*500;
-  const pesoTotal=6000+pesoRaciones;
-  function confirmMDS(){
-    G.mdsRacionesRestantes=raciones*6;
-    G.mdsEtapaActual=0;G._mdsResultSaved=false;G._mdsMode=true;G._mdsInit=false;
-    G.combustible=100;G.pies=100;
-    G.screen='mdsDecision';render();
-  }
-  window._confirmMDS=confirmMDS;
-  el.innerHTML=`
-    <h2>🏜️ Marathon des Sables</h2>
-    <p class="sub">250km · Sahara marroquí · 6 etapas</p>
-    <div class="card" style="background:#1e0e00;border-color:#4e2e00">
-      <p style="color:#f0a040;margin:0 0 6px 0">La carrera más dura del mundo. Carry your own gear. La organización solo da agua. Tu mochila: entre 6 y 15kg durante 250km de desierto.</p>
-      <p style="color:#b07030;font-size:13px;margin:0">Inscripción €${mds.cost||3500} · Premio top-3: €${mds.prize||5000}</p>
-    </div>
-    <div class="section-label">Raciones de comida</div>
-    <div class="card">
-      <p style="color:#ccc;font-size:13px;margin:0 0 10px 0">Cada ración pesa 500g. Necesitas mínimo 4 para completar (te quedas sin comida antes del final si llevas menos). Más raciones = más peso = más lento.</p>
-      <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:8px">
-        <button class="secondary" style="padding:6px 14px;font-size:16px" onclick="if(G._mdsRaciones>4){G._mdsRaciones--;renderMDSPreparation();}">−</button>
-        <span style="font-size:22px;font-weight:700;color:#f0a040">${raciones}</span>
-        <button class="secondary" style="padding:6px 14px;font-size:16px" onclick="if(G._mdsRaciones<8){G._mdsRaciones++;renderMDSPreparation();}">+</button>
-        <span style="color:#999;font-size:13px">raciones</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:13px">
-        <span style="color:#999">Peso raciones:</span><span style="color:#ccc">${(pesoRaciones/1000).toFixed(1)}kg</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px">
-        <span style="color:#999">Peso total mochila:</span><span style="color:${pesoTotal>10000?'#c0392b':pesoTotal>8000?'#e87820':'#4a8a2a'};font-weight:600">${(pesoTotal/1000).toFixed(1)}kg</span>
-      </div>
-      ${raciones<5?'<div style="color:#c0392b;font-size:12px;margin-top:5px">⚠️ Con menos de 5 raciones corres el riesgo de quedarte sin comida antes del final</div>':''}
-    </div>
-    <div class="section-label">Las 6 etapas</div>
-    ${(mds.etapas||[]).map((e,i)=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1e0e00;font-size:13px"><span style="color:${e.jugable?'#4a90d9':e.cinematica?'#f0c040':'#aaa'}">${i+1}. ${esc(e.name)}</span><span style="color:#c07a10">${e.km}km ${e.jugable?'🎮':e.cinematica?'🎬':'📋'}</span></div>`).join('')}
-    <div class="note">🎮 Etapas jugables · 📋 Decisiones rápidas · 🎬 Cinemática</div>
-    <button class="main" onclick="window._confirmMDS()">Empezar Etapa 1 →</button>
-    <button class="secondary" style="margin-top:8px" onclick="G._mdsInit=false;G.screen='ultratrailSeasonStart';render()">← Volver</button>`;
-}
-function renderMDSDecision(){
-  const el=document.getElementById('main');
-  const year=G.utYear||1;
-  const mds=(ULTRATRAIL_RACES[year]||[]).find(r=>r.isMDS)||{};
-  const etapas=mds.etapas||[];
-  const idx=G.mdsEtapaActual||0;
-  const etapa=etapas[idx];
-  if(!etapa){G.screen='mdsFinal';render();return;}
-  if(etapa.cinematica){
+  const rs=G.utCurrentRaceState;
+  if(!rs){G.screen='utHome';render();return;}
+  const fase=UT_FASES_HORARIAS.find(f=>f.id===(G.utFaseHoraria||'dia'))||UT_FASES_HORARIAS[0];
+  const pct=Math.round((rs.checkpointIdx/rs.totalCheckpoints)*100);
+
+  if(rs.fase==='evento'&&rs.eventoPendiente){
+    const ev=rs.eventoPendiente;
     el.innerHTML=`
-      <h2>🏜️ ${esc(etapa.name)}</h2>
-      <div class="card" style="background:#0e080e;border-color:#3e183e"><p style="color:#f0c040;font-style:italic;font-size:15px;margin:0">${esc(etapa.texto||'')}</p></div>
-      <button class="main" onclick="window.mdsCinema()">Cruzar la meta →</button>`;
-    window.mdsCinema=function(){
-      G.mdsHistorialEtapas=G.mdsHistorialEtapas||[];
-      G.mdsHistorialEtapas.push({etapaId:etapa.id,cinematica:true});
-      G.mdsEtapaActual=(G.mdsEtapaActual||0)+1;
-      G.screen='mdsFinal';render();
-    };
+      <div style="${utFaseStyle()}border-radius:12px;padding:16px;margin-bottom:8px;transition:background 3s">
+        <div style="font-size:12px;color:${fase.text};opacity:0.7;margin-bottom:4px">${fase.label}</div>
+        <h2 style="margin:0 0 8px;color:${fase.text}">⚡ ${esc(ev.label)}</h2>
+        <p style="color:${fase.text};opacity:0.9;margin:0 0 16px">${ev.texto}</p>
+        <div style="font-size:12px;color:${fase.text};opacity:0.7">
+          ${Object.entries(ev.efecto).map(([k,v])=>`${k}: ${v>0?'+':''}${v}`).join(' · ')}
+        </div>
+      </div>
+      <button class="main" onclick="utResolveEvent()">Continuar →</button>
+    `;
     return;
   }
-  if(etapa.jugable&&etapa.segs){
-    G._utCurrentSegs=etapa.segs;G.seg=0;G.time=0;G.utNocturnaActive=false;
-    G._afterRaceScreen='mdsBivouac';G._mdsMode=true;
-    G.screen='ultratrailSegment';render();return;
+
+  if(rs.fase==='finished'||rs.fase==='dnf'||rs.fase==='cutoff'){
+    const ok=rs.fase==='finished';
+    el.innerHTML=`
+      <div class="card" style="text-align:center;margin-bottom:12px">
+        <div style="font-size:36px;margin-bottom:8px">${ok?'🏁':'💔'}</div>
+        <div style="font-size:18px;font-weight:700">${ok?'¡Completada!':rs.fase==='cutoff'?'Descalificado por cutoff':'Abandono'}</div>
+        <div style="font-size:13px;color:#666;margin-top:4px">${esc(rs.raceName||'')} · Tiempo: ${Math.round((rs.tiempoAcumuladoMin||0)/60)}h${(rs.tiempoAcumuladoMin||0)%60}min</div>
+      </div>
+      ${rs.log.slice(-3).map(l=>`<div style="font-size:13px;color:#666;font-style:italic;margin-bottom:4px">${l}</div>`).join('')}
+      <button class="main" onclick="finishUtRace()">Ver resultados →</button>
+    `;
+    return;
   }
+
+  const cp=rs.checkpoints[rs.checkpointIdx]||{nombre:'Meta',kmMarca:rs.km};
   el.innerHTML=`
-    <h2>🏜️ ${esc(etapa.name)}</h2>
-    <p class="sub">${etapa.km}km · Etapa ${idx+1} de ${etapas.length}</p>
-    <div class="card" style="background:#100c00;border-color:#302800">
-      <div style="font-size:12px;color:#c08040;margin-bottom:6px">📋 Etapa no jugable — elige tu estrategia</div>
-      ${srow('🔥 Combustible',G.combustible||50)}${srow('🦶 Pies',G.pies||50)}
+    <div style="${utFaseStyle()}border-radius:12px;padding:12px;margin-bottom:8px;transition:background 3s">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:${fase.text};opacity:0.8">
+        <span>${fase.label}</span><span>${Math.round((rs.tiempoAcumuladoMin||0)/60)}h${(rs.tiempoAcumuladoMin||0)%60}min</span>
+      </div>
+      <div style="font-size:14px;font-weight:600;color:${fase.text};margin-top:4px">${esc(rs.raceName||'')} · ${esc(cp.nombre)}</div>
     </div>
-    <div class="section-label">Tu estrategia</div>
-    ${(etapa.decisiones||[]).map((d,i)=>`<div class="work-card" style="margin-bottom:8px;cursor:pointer" onclick="window.mdsDecision(${i})">
-      <div style="font-weight:600">${esc(d.texto)}</div>
-      <div style="font-size:12px;color:#999;margin-top:4px">${Object.entries(d.efecto||{}).map(([k,v])=>`${k}: ${v>0?'+':''}${v}`).join(' · ')}</div>
-    </div>`).join('')}`;
-  window.mdsDecision=function(i){
-    const etapa=(mds.etapas||[])[G.mdsEtapaActual||0];
-    if(!etapa||!etapa.decisiones||!etapa.decisiones[i])return;
-    const d=etapa.decisiones[i];
-    Object.entries(d.efecto||{}).forEach(([k,v])=>{
-      if(k==='combustible')G.combustible=Math.max(0,Math.min(100,(G.combustible||50)+v));
-      else if(k==='pies')G.pies=Math.max(0,Math.min(100,(G.pies||50)+v));
-      else if(k==='piernas')G.runner.legs=Math.max(0,Math.min(100,(G.runner.legs||50)+v));
-      else if(k==='hidratacion')G.runner.hydration=Math.max(0,Math.min(100,(G.runner.hydration||50)+v));
-    });
-    G.mdsRacionesRestantes=Math.max(0,(G.mdsRacionesRestantes||0)-1);
-    G.mdsHistorialEtapas=G.mdsHistorialEtapas||[];
-    G.mdsHistorialEtapas.push({etapaId:etapa.id,decisionIdx:i,efecto:d.efecto});
-    G.mdsEtapaActual=(G.mdsEtapaActual||0)+1;
-    G.screen='mdsBivouac';render();
-  };
-}
-function renderMDSBivouac(){
-  const el=document.getElementById('main');
-  const year=G.utYear||1;
-  const mds=(ULTRATRAIL_RACES[year]||[]).find(r=>r.isMDS)||{};
-  const etapas=mds.etapas||[];
-  const etapaActual=G.mdsEtapaActual||0;
-  G.runner.energy=Math.min(100,(G.runner.energy||0)+25);
-  G.runner.hydration=Math.min(100,(G.runner.hydration||0)+30);
-  G.pies=Math.max(0,(G.pies||0)-3);
-  const tips=['La jaima se convierte en tu hogar. 7 desconocidos que se vuelven familia.',
-    'El silencio del desierto de noche es algo que no olvidarás nunca.',
-    'Cuida tus pies. Las ampollas son el enemigo número uno del MdS.',
-    'La etapa larga (86km) decide quién termina y quién abandona.',
-    'Gestiona las raciones. Quedarse sin comida tiene penalización de 1 hora por ración.'];
-  const rRestantes=G.mdsRacionesRestantes||0;
-  el.innerHTML=`
-    <h2>🌙 Noche en la jaima</h2>
-    <p class="sub">Tras etapa ${etapaActual} · ${Math.max(0,etapas.length-etapaActual-1)} etapa${etapas.length-etapaActual-1!==1?'s':''} restante${etapas.length-etapaActual-1!==1?'s':''}</p>
-    <div class="card" style="background:#fdf4e7;border-color:#d4a96a"><p style="color:#7a4010;font-style:italic;margin:0">"${esc(tips[etapaActual%tips.length])}"</p></div>
-    <div class="section-label">Tu estado</div>
-    <div class="card">${srow('🔥 Combustible',G.combustible||0)}${srow('🦶 Pies',G.pies||0)}${srow('⚡ Energía',G.runner.energy||0)}</div>
-    <div style="font-size:13px;color:#999;margin:8px 0">Raciones restantes: <strong style="color:${rRestantes<=1?'#c0392b':'#c07a10'}">${rRestantes}</strong></div>
-    ${rRestantes<=0?'<div class="warn">⚠️ Sin raciones — penalización 1h por ración faltante en el final</div>':rRestantes===1?'<div class="warn">⚠️ Última ración — gestiona bien lo que queda</div>':''}
-    ${etapaActual>=etapas.length
-      ?`<button class="main" onclick="G.screen='mdsFinal';render()">Final →</button>`
-      :`<button class="main" onclick="G.screen='mdsDecision';render()">Etapa ${etapaActual+1} →</button>`}`;
-}
-function renderMDSFinal(){
-  const el=document.getElementById('main');
-  const year=G.utYear||1;
-  const mds=(ULTRATRAIL_RACES[year]||[]).find(r=>r.isMDS)||{};
-  if(!G._mdsResultSaved){
-    G._mdsResultSaved=true;
-    const etapas=mds.etapas||[];
-    const done=(G.mdsHistorialEtapas||[]).length;
-    const dnf=done<(etapas.length-1)||(G.combustible||0)<=0;
-    const pos=dnf?null:Math.max(10,Math.round(150-(G.runner.stats.resistencia||50)/1.5-(G.runner.stats.mental||50)/3+Math.random()*60));
-    G.utResults=G.utResults||[];
-    G.utResults.push({raceId:'ut_mds',raceName:'Marathon des Sables',year,dnf,pos,km:250,isMDS:true,etapasCompletadas:done});
-    if(!dnf){G.utMoney=(G.utMoney||0)+(pos&&pos<=3?mds.prize||5000:Math.round((mds.prize||5000)*0.05));G.utRanking=Math.max(1,(G.utRanking||999)-30);}
-    G.utMoney=Math.max(0,(G.utMoney||0)-(mds.cost||3500));
-    G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+5);
-    G.runner.stats.resistencia=Math.min(100,(G.runner.stats.resistencia||50)+3);
-    G.utCurrentRaceIdx=(G.utCurrentRaceIdx||0)+1;
-  }
-  const res=(G.utResults||[]).filter(r=>r.raceId==='ut_mds'&&r.year===year).slice(-1)[0]||{};
-  el.innerHTML=`
-    <h2>🏜️ Marathon des Sables — Final</h2>
-    <div class="card" style="background:${res.dnf?'#180808':'#081008'};border-color:${res.dnf?'#380808':'#185a18'};text-align:center">
-      <div style="font-size:26px;font-weight:700;color:${res.dnf?'#ff6a6a':'#f0c040'};margin-bottom:6px">${res.dnf?'No terminado':'¡Finisher!'}</div>
-      ${!res.dnf?`<div style="color:#aaa;font-size:14px">Posición ${res.pos} de cientos · 250km de desierto completados</div>`:`<div style="color:#aaa;font-size:13px">El desierto gana hoy.</div>`}
+    <div style="background:#eee;border-radius:4px;height:6px;margin-bottom:12px">
+      <div style="width:${pct}%;background:#4a8a2a;height:6px;border-radius:4px;transition:width 0.4s"></div>
     </div>
-    <div class="card"><p style="color:#aaa;font-size:14px;margin:0">${res.dnf?'Solo los que lo intentan conocen sus límites de verdad. Vuelve más fuerte.':'250 kilómetros de desierto. Sin crew. Carry your own gear. Eso ya nadie te lo quita.'}</p></div>
-    <button class="main" onclick="G._seasonBalanceDone=false;G.screen='ultratrailSeasonBalance';render()">Ver balance →</button>`;
+    <div class="card" style="margin-bottom:8px">
+      ${utStatBar('Energía',rs.energia,100,'#4a8a2a')}
+      ${utStatBar('Piernas',rs.piernas,100,'#4a6a9a')}
+      ${utStatBar('Pies',rs.pies,100,'#c07a10')}
+      ${utStatBar('Mental',rs.mental,100,'#7a4a8a')}
+    </div>
+    ${rs.log.slice(-2).map(l=>`<div style="font-size:12px;color:#888;font-style:italic;margin-bottom:4px">${l}</div>`).join('')}
+    <div class="sec-title-sm" style="margin-bottom:6px">Ritmo para el siguiente tramo</div>
+    ${['suave','medio','fuerte'].map(r=>`
+      <div class="card work-card" style="margin-bottom:6px" onclick="utAdvanceCheckpoint('${r}')">
+        <div style="font-size:14px;font-weight:600">${r==='suave'?'🐢 Suave':r==='medio'?'🏃 Medio':'🔥 Fuerte'}</div>
+        <div style="font-size:12px;color:#666">${
+          r==='suave'?'−8 energía · −5 piernas · −3 pies · +15% tiempo':
+          r==='medio'?'−15 energía · −10 piernas · −6 pies · ritmo base':
+          '−25 energía · −18 piernas · −12 pies · −15% tiempo'}</div>
+      </div>`).join('')}
+    <button class="secondary" style="margin-top:8px;width:100%" onclick="if(confirm('¿Seguro que quieres abandonar?'))utAbandonRace()">🏳 Abandonar</button>
+  `;
 }
 
+window.utAdvanceCheckpoint=ritmo=>{
+  const rs=G.utCurrentRaceState;
+  if(!rs)return;
+  rs.ritmoElegido=ritmo||'medio';
+  const ef={suave:{energia:-8,piernas:-5,pies:-3,tiempoMod:1.15},medio:{energia:-15,piernas:-10,pies:-6,tiempoMod:1.0},fuerte:{energia:-25,piernas:-18,pies:-12,tiempoMod:0.85}}[rs.ritmoElegido];
+  rs.energia=Math.max(0,rs.energia+ef.energia);
+  rs.piernas=Math.max(0,rs.piernas+ef.piernas);
+  rs.pies=Math.max(0,rs.pies+ef.pies);
+  // Penalización mochila
+  const pesoExtra=Math.max(0,(G.utMochilaPesoTotal||0)-UT_PESO_MINIMO_G);
+  const penVel=(Math.floor(pesoExtra/100)*UT_PENALIZACION_POR_100G)/100;
+  // Calcetines mid-race
+  if(G.utMochila['calcetines']&&rs.pies<40&&!rs._calcetinesUsados){
+    rs.pies=Math.min(100,rs.pies+30);rs._calcetinesUsados=true;
+    rs.log.push('Aprovechas para cambiar los calcetines. Los pies agradecen el gesto.');
+  }
+  // Crew
+  const cp=rs.checkpoints[rs.checkpointIdx];
+  if(cp&&cp.tieneCrewArea){
+    if((G.utCrewActivo||[]).includes('txema')){rs.pies=Math.min(100,rs.pies+15);rs.log.push('Txema te revisa los pies. Mucho mejor.');}
+    if((G.utCrewActivo||[]).includes('marta')){rs.energia=Math.min(100,rs.energia+10);rs.log.push('Marta tiene el avituallamiento perfecto.');}
+  }
+  if((G.utCrewActivo||[]).includes('iratxe')&&rs.energia<30){rs.mental=Math.min(100,rs.mental+10);rs.log.push('Iratxe: "Tú puedes con esto."');}
+  // Tiempo
+  const prevKm=rs.checkpointIdx>0?(rs.checkpoints[rs.checkpointIdx-1]?.kmMarca||0):0;
+  const kmTramo=(cp?.kmMarca||rs.km)-prevKm;
+  const minPorKm=8*ef.tiempoMod*(1+penVel);
+  rs.tiempoAcumuladoMin+=Math.round(kmTramo*minPorKm);
+  // Cutoff
+  if(rs.cutoffMin&&rs.tiempoAcumuladoMin>rs.cutoffMin){rs.fase='cutoff';rs.log.push('Has superado el tiempo máximo de corte.');render();return;}
+  // Fase horaria
+  const pctKm=(cp?.kmMarca||rs.km)/(rs.km||100);
+  if(pctKm<0.3)G.utFaseHoraria='dia';
+  else if(pctKm<0.5)G.utFaseHoraria='atardecer';
+  else if(pctKm<0.65)G.utFaseHoraria='noche';
+  else if(pctKm<0.8)G.utFaseHoraria='madrugada';
+  else G.utFaseHoraria='alba';
+  // Cambio de fase: toast
+  if(pctKm>=0.5&&pctKm<0.65){const f=UT_FASES_HORARIAS.find(x=>x.id==='atardecer');if(f?.frase&&!rs._toastAtardecer){showToast(f.frase,'#3d2010');rs._toastAtardecer=true;}}
+  if(pctKm>=0.65&&pctKm<0.8){const f=UT_FASES_HORARIAS.find(x=>x.id==='noche');if(f?.frase&&!rs._toastNoche){showToast(f.frase,'#1a2035');rs._toastNoche=true;}}
+  rs.checkpointIdx++;
+  // Evento aleatorio
+  if(Math.random()<0.4){
+    const ev=UT_AVITUALLAMIENTO_EVENTS[Math.floor(Math.random()*UT_AVITUALLAMIENTO_EVENTS.length)];
+    rs.eventoPendiente=ev;rs.fase='evento';
+  } else if(rs.checkpointIdx>=rs.totalCheckpoints){rs.fase='finished';}
+  else{rs.fase='checkpoint';}
+  // Stats a cero
+  if(rs.energia<=0||rs.piernas<=0){rs.fase='dnf';rs.log.push('El cuerpo ya no da más. Tienes que parar.');}
+  render();
+};
+
+window.utResolveEvent=()=>{
+  const rs=G.utCurrentRaceState;if(!rs||!rs.eventoPendiente)return;
+  const ev=rs.eventoPendiente;
+  if(ev.efecto.energia)  rs.energia  =Math.max(0,Math.min(100,rs.energia  +(ev.efecto.energia||0)));
+  if(ev.efecto.pies)     rs.pies     =Math.max(0,Math.min(100,rs.pies     +(ev.efecto.pies||0)));
+  if(ev.efecto.piernas)  rs.piernas  =Math.max(0,Math.min(100,rs.piernas  +(ev.efecto.piernas||0)));
+  if(ev.efecto.mental)   rs.mental   =Math.max(0,Math.min(100,rs.mental   +(ev.efecto.mental||0)));
+  if(ev.efecto.combustible)rs.combustible=Math.max(0,(rs.combustible||100)+(ev.efecto.combustible||0));
+  rs.eventoPendiente=null;
+  if(rs.checkpointIdx>=rs.totalCheckpoints)rs.fase='finished';
+  else rs.fase='checkpoint';
+  render();
+};
+
+window.utAbandonRace=()=>{
+  const rs=G.utCurrentRaceState;if(!rs)return;
+  rs.fase='dnf';rs.retired=true;render();
+};
+
+window.finishUtRace=()=>{
+  const rs=G.utCurrentRaceState;if(!rs)return;
+  const race=UT_RACES.find(r=>r.id===rs.raceId);
+  const finished=rs.fase==='finished';
+  G.utResults.push({
+    raceId:rs.raceId,name:rs.raceName,km:rs.km,
+    finished,dnf:rs.fase==='dnf',cutoff:rs.fase==='cutoff',
+    tiempo:rs.tiempoAcumuladoMin,year:G.utYear,
+    pos:finished?Math.floor(Math.random()*50)+1:null,
+  });
+  if(finished&&race){const premio=Math.round((race.km||50)*2);G.utMoney+=premio;}
+  G.pies=finished?Math.max(20,rs.pies):Math.max(10,(rs.pies||50)-10);
+  if(finished){const imp=Math.max(1,Math.floor((race?.km||50)/20));G.utRanking=Math.max(1,G.utRanking-imp);}
+  G.utCurrentRaceState=null;
+  G.screen='utPostRace';render();
+};
+
+function renderUtPostRace(){
+  const el=document.getElementById('main');
+  const yr=G.utYear||1;
+  const lastResult=(G.utResults||[]).filter(r=>r.year===yr).slice(-1)[0]||{};
+  const finished=lastResult.finished;
+  const hasMore=(G.utCurrentRaceIdx||0)<(G.utCalendar||[]).length-1;
+  el.innerHTML=`
+    <div class="card" style="text-align:center;margin-bottom:12px">
+      <div style="font-size:36px;margin-bottom:8px">${finished?'🏁':'💔'}</div>
+      <div style="font-size:18px;font-weight:700">${finished?'¡Completada!':lastResult.cutoff?'Descalificado por cutoff':'Abandono'}</div>
+      <div style="font-size:14px;color:#666;margin-top:4px">${esc(lastResult.name||'')}</div>
+      ${lastResult.km?`<div style="font-size:13px;color:#888">${lastResult.km}K · ${Math.round((lastResult.tiempo||0)/60)}h${(lastResult.tiempo||0)%60}min</div>`:''}
+      ${finished&&lastResult.pos?`<div style="font-size:13px;color:#4a8a2a;margin-top:4px">Posición: #${lastResult.pos}</div>`:''}
+    </div>
+    ${finished?`<div class="card" style="margin-bottom:8px;background:#f0faf0">
+      <div style="font-size:13px">💰 Premio: +€${Math.round((lastResult.km||50)*2)}</div>
+      <div style="font-size:13px;margin-top:2px">🏔️ Ranking: #${G.utRanking}</div>
+    </div>`:''}
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">🦶 Pies</div>
+      ${utStatBar('Estado',G.pies||100,100,'#c07a10')}
+    </div>
+    ${hasMore
+      ?`<button class="main" onclick="utNextRace()">▶ Siguiente carrera</button>`
+      :`<button class="main" onclick="G.screen='utEndYear';render()">📅 Fin de temporada</button>`}
+  `;
+}
+
+window.utNextRace=()=>{
+  G.utCurrentRaceIdx=(G.utCurrentRaceIdx||0)+1;
+  if(G.utCurrentRaceIdx<(G.utCalendar||[]).length){
+    const raceId=G.utCalendar[G.utCurrentRaceIdx];
+    const race=UT_RACES.find(r=>r.id===raceId);
+    if(!race){G.screen='utEndYear';render();return;}
+    if(race.formato==='backyard'){G.backyardCurrentLoop=0;G.screen='utBackyard';render();return;}
+    if(race.formato==='etapas'){G.mdsEtapaActual=0;G.mdsRacionesRestantes=5;G.screen='utMds';render();return;}
+    utPrepareRace(raceId);G.screen='utPreRace';
+  } else {G.screen='utEndYear';}
+  render();
+};
+
+function renderUtBackyard(){
+  const el=document.getElementById('main');
+  const loops=G.backyardCurrentLoop||0;
+  const km=(loops*6.706).toFixed(1);
+  const energiaSim=Math.max(0,100-(loops*12));
+  const piesSim=Math.max(0,(G.pies||100)-(loops*8));
+  el.innerHTML=`
+    <h2 style="margin:0 0 4px">🔄 Backyard Ultra</h2>
+    <div style="font-size:13px;color:#666;margin-bottom:12px">6.706 km por vuelta. Hasta que alguien se rinda.</div>
+    <div class="card" style="text-align:center;margin-bottom:12px">
+      <div style="font-size:36px;font-weight:700">${loops}</div>
+      <div style="font-size:13px;color:#666">vueltas · ${km} km acumulados</div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      ${utStatBar('Energía (est.)',energiaSim,100,'#4a8a2a')}
+      ${utStatBar('Pies (est.)',piesSim,100,'#c07a10')}
+    </div>
+    ${loops>0?`<div style="font-size:13px;color:#888;font-style:italic;margin-bottom:12px">${
+      loops<5?'El cuerpo responde. Sigues adelante.':
+      loops<10?'La fatiga acumula. La mente empieza a preguntar.':
+      loops<15?'La madrugada. El momento en que muchos se rinden.':
+      'Esto ya es historia.'
+    }</div>`:''}
+    <button class="main" onclick="utBackyardNextLoop()" ${energiaSim<=0||piesSim<=0?'disabled':''}>▶ Siguiente vuelta</button>
+    <button class="secondary" style="margin-top:6px" onclick="utBackyardFinish()">🏳 Parar aquí${loops>0?' ('+loops+' vueltas)':''}</button>
+  `;
+}
+
+window.utBackyardNextLoop=()=>{
+  G.backyardCurrentLoop=(G.backyardCurrentLoop||0)+1;
+  G.pies=Math.max(0,(G.pies||100)-8);
+  G.runner.stats.mental=Math.max(0,(G.runner.stats.mental||50)-3);
+  G.combustible=Math.max(0,(G.combustible||100)-10);
+  if(G.pies<=0||G.runner.stats.mental<=5||G.combustible<=0){utBackyardFinish();return;}
+  render();
+};
+
+window.utBackyardFinish=()=>{
+  const loops=G.backyardCurrentLoop||0;
+  G.backyardHistory.push({year:G.utYear,loops,km:parseFloat((loops*6.706).toFixed(1)),abandoned:false});
+  G.utResults.push({raceId:'backyard',name:'Backyard Ultra',loops,km:parseFloat((loops*6.706).toFixed(1)),finished:loops>0,year:G.utYear,formato:'backyard'});
+  G.backyardCurrentLoop=0;
+  G.screen='utPostRace';render();
+};
+
+function renderUtMds(){
+  const el=document.getElementById('main');
+  const raceId=(G.utCalendar||[])[G.utCurrentRaceIdx||0]||'mds250';
+  const race=UT_RACES.find(r=>r.id===raceId)||UT_RACES.find(r=>r.id==='mds250');
+  const etapa=(G.mdsEtapaActual||0);
+  const numEtapas=race?.numEtapas||6;
+  const raciones=G.mdsRacionesRestantes||5;
+  const esResumen=race?.id==='mds250'&&etapa%2!==0;
+  el.innerHTML=`
+    <h2 style="margin:0 0 4px">🏜️ ${esc(race?.name||'')}</h2>
+    <div style="font-size:13px;color:#666;margin-bottom:8px">Etapa ${etapa+1} de ${numEtapas} · Raciones: ${raciones}</div>
+    <div style="background:#eee;border-radius:4px;height:6px;margin-bottom:12px">
+      <div style="width:${Math.round(((etapa)/numEtapas)*100)}%;background:#c07a10;height:6px;border-radius:4px"></div>
+    </div>
+    ${esResumen?`
+      <div class="card" style="margin-bottom:8px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:8px">Decisiones de etapa</div>
+        <div class="work-card card" style="margin-bottom:6px" onclick="G.mdsRacionesRestantes=Math.max(0,G.mdsRacionesRestantes-1);G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+3);utMdsNextEtapa()">
+          <div style="font-size:13px">Conservar raciones — come menos, guarda para después</div>
+          <div style="font-size:12px;color:#666">−1 ración · +3 mental</div>
+        </div>
+        <div class="work-card card" style="margin-bottom:6px" onclick="G.mdsRacionesRestantes=Math.max(0,G.mdsRacionesRestantes-2);G.runner.stats.resistencia=Math.min(100,(G.runner.stats.resistencia||50)+5);utMdsNextEtapa()">
+          <div style="font-size:13px">Comer bien — recuperación completa</div>
+          <div style="font-size:12px;color:#666">−2 raciones · +5 resistencia</div>
+        </div>
+      </div>
+    `:`
+      <div class="card" style="margin-bottom:8px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:6px">Etapa ${etapa+1}</div>
+        ${utStatBar('Resistencia',G.runner.stats.resistencia||50,100,'#4a8a2a')}
+        ${utStatBar('Mental',G.runner.stats.mental||50,100,'#7a4a8a')}
+        ${utStatBar('Pies',G.pies||100,100,'#c07a10')}
+      </div>
+      <div style="font-size:13px;color:#666;font-style:italic;margin-bottom:12px">${
+        etapa===0?'El desierto aparece ante ti. El calor ya se siente desde la mañana.':
+        etapa===2?'Las dunas. Cada paso cuesta el doble de lo que esperabas.':
+        etapa===4?'La etapa larga. 80 kilómetros que nadie olvida.':
+        'El cuerpo exige. La mente decide.'
+      }</div>
+      <button class="main" onclick="G.runner.stats.resistencia=Math.max(0,(G.runner.stats.resistencia||50)-5);G.runner.stats.mental=Math.max(0,(G.runner.stats.mental||50)-3);G.pies=Math.max(0,(G.pies||100)-8);utMdsNextEtapa()">▶ Completar etapa</button>
+    `}
+    ${raciones<=0?`<div class="warn" style="margin-top:8px">⚠️ Sin raciones — tu rendimiento se resiente</div>`:''}
+  `;
+}
+
+window.utMdsNextEtapa=()=>{
+  G.mdsEtapaActual=(G.mdsEtapaActual||0)+1;
+  const raceId=(G.utCalendar||[])[G.utCurrentRaceIdx||0]||'mds250';
+  const race=UT_RACES.find(r=>r.id===raceId);
+  const numEtapas=race?.numEtapas||6;
+  if(G.mdsEtapaActual>=numEtapas){
+    G.utResults.push({raceId:race?.id||'mds250',name:race?.name||'MdS',finished:true,year:G.utYear,km:race?.km||250});
+    G.utMoney+=500;
+    G.utCurrentRaceState=null;
+    G.screen='utPostRace';
+  }
+  render();
+};
+
+function renderUtEndYear(){
+  const el=document.getElementById('main');
+  const yr=G.utYear||1;
+  const yearResults=(G.utResults||[]).filter(r=>r.year===yr);
+  const finished=yearResults.filter(r=>r.finished).length;
+  const total=yearResults.length;
+  // Stats gain
+  G.runner.stats.resistencia=Math.min(100,(G.runner.stats.resistencia||50)+(finished>=1?2:0));
+  G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+(finished>=1?1:0));
+  el.innerHTML=`
+    <h2 style="margin:0 0 8px">📊 Fin de temporada ${yr}</h2>
+    <div class="card" style="margin-bottom:8px">
+      <div class="sec-title-sm" style="margin-bottom:6px">Resultados</div>
+      ${yearResults.length?yearResults.map(r=>`
+        <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #eee;font-size:13px">
+          <span>${r.formato==='backyard'?`🔄 ${esc(r.name)} — ${r.loops||0} vueltas`:esc(r.name||'')}</span>
+          <span style="color:${r.finished?'#2d7a2d':'#c0392b'};font-weight:600">${r.finished?'✅':'❌'}</span>
+        </div>`).join('')
+        :'<div style="font-size:13px;color:#999">Sin carreras este año</div>'}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div class="card" style="text-align:center">
+        <div style="font-size:11px;color:#999">Dinero</div>
+        <div style="font-size:22px;font-weight:700;color:#2d7a2d">€${G.utMoney||0}</div>
+      </div>
+      <div class="card" style="text-align:center">
+        <div style="font-size:11px;color:#999">Ranking</div>
+        <div style="font-size:22px;font-weight:700">${(G.utRanking||999)<900?'#'+(G.utRanking||999):'—'}</div>
+      </div>
+    </div>
+    ${finished>0?`<div style="font-size:13px;color:#4a8a2a;margin-bottom:8px">+2 Resistencia · +1 Mental por carreras completadas</div>`:''}
+    ${yr>=15
+      ?`<button class="main" onclick="G.screen='utLegado';render()">🏁 Ver legado</button>`
+      :`<button class="main" onclick="utStartNextYear()">▶ Año ${yr+1}</button>`}
+  `;
+}
+
+window.utStartNextYear=()=>{
+  G.utYear=(G.utYear||1)+1;
+  G.utCalendar=[];G.utCurrentRaceIdx=0;G.utCurrentRaceState=null;
+  G.pies=Math.min(100,(G.pies||100)+15);
+  G.combustible=100;
+  if(G.utYear>15){G.screen='utLegado';render();return;}
+  G.screen='utHome';render();
+};
+
+function renderUtLegado(){
+  const el=document.getElementById('main');
+  const results=G.utResults||[];
+  const totalFinished=results.filter(r=>r.finished).length;
+  const totalRaces=results.length;
+  const bestBackyard=Math.max(0,...(G.backyardHistory||[]).map(b=>b.loops),0);
+  const check=id=>results.some(r=>r.raceId===id&&r.finished);
+  const lines=[];
+  lines.push(`${(G.utYear||1)-1} temporadas. ${totalFinished} de ${totalRaces} carreras completadas.`);
+  if(bestBackyard>0)lines.push(`Mejor Backyard: ${bestBackyard} vueltas (${(bestBackyard*6.706).toFixed(1)} km).`);
+  if(check('mds250'))lines.push('Cruzaste el desierto del Sahara. El Marathon des Sables completado.');
+  if(check('tdg330'))lines.push('El Tor des Géants. 330 km y 24.000 metros de desnivel. Pocos pueden decir lo mismo.');
+  if(check('spine431'))lines.push('La Spine Race en invierno. El techo de lo que puede aguantar un cuerpo humano.');
+  if(check('barkley'))lines.push('Las Barkley Marathons. Uno de los pocos en la historia que puede decirlo.');
+  if(check('gran_travesia'))lines.push('La Gran Travesía. 500 km. El fin de todo.');
+  if(totalFinished===0)lines.push('No conseguiste terminar ninguna prueba larga. Pero lo intentaste.');
+  G.utCareerLegacy={lines,year:G.utYear};
+  el.innerHTML=`
+    <h2 style="margin:0 0 16px;text-align:center">🏔️ Legado Ultratrail</h2>
+    ${lines.map(l=>`<div class="card" style="margin-bottom:8px;font-size:14px;line-height:1.5;font-style:italic">"${l}"</div>`).join('')}
+    <div class="card" style="margin-top:12px;text-align:center">
+      <div style="font-size:28px;margin-bottom:6px">🏁</div>
+      <div style="font-size:14px;color:#666">${G.runner.name||'Corredor'} · ${totalFinished} carreras completadas</div>
+    </div>
+    <button class="secondary" style="margin-top:16px" onclick="G.screen='home';render()">← Menú principal</button>
+  `;
+}
