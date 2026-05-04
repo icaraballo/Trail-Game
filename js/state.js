@@ -222,12 +222,21 @@ function freshState(){
     utCrewActivo:[],
     backyardHistory:[],
     backyardCurrentLoop:0,
+    backyardStats:null,
+    backyardPhase:null,
+    backyardBetweenActions:null,
     mdsEtapaActual:0,
     mdsRacionesRestantes:5,
     mdsHistorialEtapas:[],
     utFaseHoraria:'dia',
     utCurrentRaceState:null,
     utCareerLegacy:null,
+    utJobChoice:'reducida',
+    utTrainingBlock:null,
+    utFollowers:0,
+    utTaperBonus:false,
+    utPreRaceNutrition:'normal',
+    utWarmedUp:false,
   };
 }
 let G=freshState();

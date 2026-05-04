@@ -137,6 +137,7 @@ function updateTabNav(){
   const isExpres=G.gameMode==='expres';
   const isCoach=G.gameMode==='coach';
   const isCanicross=G.gameMode==='canicross';
+  const isUltratrail=G.gameMode==='ultratrail';
   if(isExpres&&G.activeTab==='fame')G.activeTab='game';
   ['game','calendar','finances','runner','fame'].forEach(t=>{
     const btn=document.getElementById('tab-'+t);
@@ -145,7 +146,14 @@ function updateTabNav(){
     if(t==='fame')btn.style.display=isExpres?'none':'';
     const iconEl=btn.querySelector('.tab-icon');
     const labelEl=btn.querySelector('.tab-label');
-    if(isCanicross){
+    if(isUltratrail){
+      btn.style.display='';
+      if(t==='game'){if(iconEl)iconEl.textContent='🏔️';if(labelEl)labelEl.textContent='Temporada';}
+      if(t==='calendar'){if(iconEl)iconEl.textContent='📅';if(labelEl)labelEl.textContent='Calendario';}
+      if(t==='finances'){if(iconEl)iconEl.textContent='💰';if(labelEl)labelEl.textContent='Finanzas';}
+      if(t==='runner'){if(iconEl)iconEl.textContent='👤';if(labelEl)labelEl.textContent='Corredor';}
+      if(t==='fame'){if(iconEl)iconEl.textContent='⭐';if(labelEl)labelEl.textContent='Reputación';}
+    } else if(isCanicross){
       btn.style.display='';
       if(t==='game'){if(iconEl)iconEl.textContent='🏃';if(labelEl)labelEl.textContent='Corredor';}
       if(t==='runner'){if(iconEl)iconEl.textContent='🐕';if(labelEl)labelEl.textContent='Perro';}
@@ -207,6 +215,14 @@ function render(){
   if(G.screen!=='midRaceEvent')clearExpressTimer();
   const el=document.getElementById('main');
   if(!el)return;
+  // Ultratrail — tab routing propio
+  if(G.gameMode==='ultratrail'&&SCREENS_WITH_TABS.includes(G.screen)){
+    if(G.activeTab==='calendar'){renderUtCalendarTabView();triggerFade(el);return;}
+    if(G.activeTab==='finances'){renderUtFinanzasTab_ut();triggerFade(el);return;}
+    if(G.activeTab==='runner'){renderUtCorredorTab_ut();triggerFade(el);return;}
+    if(G.activeTab==='fame'){renderUtRepTab_ut();triggerFade(el);return;}
+    // activeTab==='game': fall through al screen map
+  }
   // Canicross — tab routing propio
   if(G.gameMode==='canicross'&&SCREENS_WITH_TABS.includes(G.screen)){
     if(G.activeTab==='game'){renderCnCorredorTab();triggerFade(el);return;}
@@ -271,6 +287,10 @@ function render(){
     utMds:renderUtMds,
     utEndYear:renderUtEndYear,
     utLegado:renderUtLegado,
+    utJobSelect:renderUtJobSelect,
+    utTraining:renderUtTraining,
+    utBetweenRace:renderUtBetweenRace_ut,
+    utSponsors:renderUtSponsors,
     canicrossCreateDog:renderCnCreateDog,
     canicrossPreseason:renderCanicrossPreseason,
     canicrossTrainingSetup:renderCanicrossTrainingSetup,
@@ -1238,7 +1258,7 @@ function renderModeSelect(){
         // Normal (expres / ultratrail)
         const isSel=sel===m.id;
         const clickAct=m.id==='ultratrail'
-          ?`G.ultratrailMode=true;G.utMoney=800;G.screen='utHome';render();setTimeout(()=>showToast('Llevas años ahorrando para esto. Tienes €800 con los que empezar.','#4a8a2a'),200)`
+          ?`G.ultratrailMode=true;G.utMoney=800;G.screen='utJobSelect';G.activeTab='game';render();setTimeout(()=>showToast('Llevas años ahorrando para esto. Tienes €800 con los que empezar.','#4a8a2a'),200)`
           :`selectMode('${m.id}')`;
         return `<div class="carrera-group-header" onclick="${clickAct}" style="${isSel?'background:#fef9ec;border-bottom:1px solid #e8e6e0':''}">
           <div style="width:36px;height:36px;border-radius:8px;background:${isSel?'#fef9ec':'var(--color-background-secondary)'};display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${m.icon}</div>
@@ -1298,7 +1318,7 @@ window.selectAndConfirm=(id,path)=>{
   }
 };
 window.confirmMode=()=>{
-  if(G.gameMode==='ultratrail'){G.ultratrailMode=true;G.utMoney=800;G.screen='utHome';render();return;}
+  if(G.gameMode==='ultratrail'){G.ultratrailMode=true;G.utMoney=800;G.screen='utJobSelect';G.activeTab='game';render();return;}
   if(G.gameMode==='canicross'){G.screen='intro';render();return;}
   if(G.gameMode==='club'){
     // Guiño narrativo si el modo está desbloqueado vía arco narrativo
@@ -3746,39 +3766,76 @@ function renderUtHome(){
     8:'Cada paso cuenta. No porque sea el último, sino porque has aprendido que siempre lo fue.',
   };
   const txt=narrativas[yr]||narrativas[8];
+  const calLen=(G.utCalendar||[]).length;
+  const doneCount=G.utCurrentRaceIdx||0;
+  const jobOpt=UT_JOB_OPTIONS.find(o=>o.id===(G.utJobChoice||'reducida'))||UT_JOB_OPTIONS[1];
+  const sponsorMes=Math.round(Object.values(G.utSponsors||{}).filter(Boolean).reduce((a,s)=>a+(s.salary||0),0)/12);
+  const netMes=jobOpt.income-95+sponsorMes;
+  const load=G.utBodyLoad||0;
   const prevResults=(G.utResults||[]).filter(r=>r.year===(yr-1));
-  const prevHtml=prevResults.length?`<div class="card" style="margin-bottom:8px">
-    <div class="sec-title-sm" style="margin-bottom:6px">Temporada anterior</div>
-    ${prevResults.map(r=>`<div style="font-size:13px;padding:3px 0;border-bottom:1px solid #eee">
-      ${r.formato==='backyard'?`🔄 ${r.name} — <strong>${r.loops||0} vueltas</strong>`:
-        `${r.finished?'✅':'❌'} ${esc(r.name||'')}${r.km?' · '+r.km+'K':''}`}
-    </div>`).join('')}
-  </div>`:'';
+
   el.innerHTML=`
-    <h2 style="margin:0 0 2px">🏔️ Modo Ultratrail</h2>
-    <div style="font-size:13px;color:#666;margin-bottom:12px">Año ${yr} — ${txt}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-      <div class="card" style="text-align:center">
-        <div style="font-size:11px;color:#999">Dinero</div>
-        <div style="font-size:22px;font-weight:700;color:${(G.utMoney||0)>200?'#2d7a2d':'#c0392b'}">€${G.utMoney||0}</div>
+    <h2 style="margin:0 0 2px">🏔️ Temporada ${yr}</h2>
+    <div style="font-size:12px;color:#888;margin-bottom:12px;font-style:italic">${txt}</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px">
+      <div class="card" style="text-align:center;padding:8px">
+        <div style="font-size:10px;color:#999">Dinero</div>
+        <div style="font-size:18px;font-weight:700;color:${(G.utMoney||0)>=200?'#2d7a2d':'#c0392b'}">€${G.utMoney||0}</div>
       </div>
-      <div class="card" style="text-align:center">
-        <div style="font-size:11px;color:#999">Ranking</div>
-        <div style="font-size:22px;font-weight:700">${(G.utRanking||999)<900?'#'+(G.utRanking||999):'—'}</div>
+      <div class="card" style="text-align:center;padding:8px">
+        <div style="font-size:10px;color:#999">Neto/mes</div>
+        <div style="font-size:18px;font-weight:700;color:${netMes>=0?'#2d7a2d':'#c0392b'}">${netMes>=0?'+':''}€${netMes}</div>
+      </div>
+      <div class="card" style="text-align:center;padding:8px">
+        <div style="font-size:10px;color:#999">Ranking</div>
+        <div style="font-size:18px;font-weight:700">${(G.utRanking||999)<900?'#'+(G.utRanking||999):'—'}</div>
       </div>
     </div>
-    <div class="card" style="margin-bottom:8px">
-      <div class="sec-title-sm" style="margin-bottom:6px">Stats</div>
-      ${utStatBar('Resistencia',G.runner.stats.resistencia||50,100,'#4a8a2a')}
-      ${utStatBar('Mental',G.runner.stats.mental||50,100,'#7a4a8a')}
-      ${utStatBar('Velocidad',G.runner.stats.velocidad||50,100,'#4a6a9a')}
-      ${utStatBar('Piernas',G.runner.stats.bajada||50,100,'#8a6a4a')}
-      ${utStatBar('Pies 🦶',G.pies||100,100,'#c07a10')}
+
+    ${load>0?`<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:3px">
+        <span>Carga corporal</span><span style="color:${load>=70?'#c0392b':load>=50?'#c07a10':'#888'}">${load}%</span>
+      </div>
+      <div class="load-bar-track"><div class="bar-fill" style="width:${load}%;background:${load>=70?'#c0392b':load>=50?'#c07a10':'#4a90d9'}"></div></div>
+    </div>`:''}
+
+    ${calLen>0?`<div class="card" style="margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Calendario</div>
+      ${(G.utCalendar||[]).map((id,i)=>{
+        const r=UT_RACES.find(x=>x.id===id);
+        const done=i<doneCount;const cur=i===doneCount;
+        return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid #f5f4f0">
+          <span style="font-size:13px">${done?'✅':cur?'▶':'○'}</span>
+          <span style="font-size:13px;color:${done?'#bbb':cur?'#1a1a1a':'#555'};${done?'text-decoration:line-through;':''}">${esc(r?.name||id)}</span>
+          ${cur?`<span style="font-size:10px;background:#4a8a2a22;color:#4a8a2a;border-radius:4px;padding:1px 5px;flex-shrink:0">Próxima</span>`:''}
+        </div>`;
+      }).join('')}
+    </div>`:`<div class="card" style="margin-bottom:10px;background:#fefef8;border:1px dashed #e0dfc0">
+      <div style="font-size:13px;color:#888">Sin carreras planificadas — ve a la pestaña Calendario para elegir tus carreras.</div>
+    </div>`}
+
+    ${prevResults.length?`<div class="card" style="margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Temporada anterior</div>
+      ${prevResults.map(r=>`<div style="font-size:13px;padding:2px 0">
+        ${r.formato==='backyard'?`🔄 ${esc(r.name||'')} — ${r.loops||0} vueltas`:
+          `${r.finished?'✅':'❌'} ${esc(r.name||'')}${r.km?' · '+r.km+'K':''}`}
+      </div>`).join('')}
+    </div>`:''}
+
+    <div class="section-label">Acciones</div>
+    <div style="display:grid;gap:6px;margin-bottom:14px">
+      <button class="secondary" onclick="G.screen='utTraining';render()">🏃 Entrenamiento</button>
+      <button class="secondary" onclick="G._utMochilaPrev='utHome';G.screen='utMochila';render()">🎒 Preparar mochila</button>
+      ${yr>=2?`<button class="secondary" onclick="G.screen='utCrew';render()">👥 Crew</button>`:''}
+      <button class="secondary" onclick="G.screen='utSponsors';render()">🤝 Patrocinios →</button>
     </div>
-    ${prevHtml}
-    <button class="main" onclick="G.screen='utCalendar';render()">📅 Planificar temporada</button>
-    <button class="secondary" style="margin-top:6px" onclick="G._utMochilaPrev='utHome';G.screen='utMochila';render()">🎒 Mochila</button>
-    ${yr>=2?`<button class="secondary" style="margin-top:6px" onclick="G.screen='utCrew';render()">👥 Crew</button>`:''}
+
+    ${calLen>0&&doneCount<calLen
+      ?`<button class="main" onclick="utGoToNextRace()">▶ ${doneCount>0?'Continuar':'Empezar'} carreras</button>`
+      :calLen===0
+        ?`<button class="main" onclick="G.activeTab='calendar';render()">📅 Planificar calendario →</button>`
+        :`<button class="main" onclick="G.screen='utEndYear';render()">📊 Balance de temporada →</button>`}
   `;
 }
 
@@ -3867,51 +3924,98 @@ function utPrepareRace(raceId){
 function renderUtPreRace(){
   const el=document.getElementById('main');
   const raceId=(G.utCalendar||[])[G.utCurrentRaceIdx||0];
-  const race=UT_RACES.find(r=>r.id===raceId)||{name:'Carrera',km:50};
+  const race=UT_RACES.find(r=>r.id===raceId)||{name:'Carrera',km:50,segs:[]};
   const prob=utFinishProbability(race);
   const met=utCheckReqMet(race);
   const pesoExtra=Math.max(0,(G.utMochilaPesoTotal||0)-UT_PESO_MINIMO_G);
   const penVel=(Math.floor(pesoExtra/100)*UT_PENALIZACION_POR_100G).toFixed(1);
   const mochilaItems=UT_MOCHILA_ITEMS.filter(i=>i.obligatorio||G.utMochila[i.id]);
+  const hasTaper=!!G.utTaperBonus;
+  const nutrSel=G.utPreRaceNutrition||'normal';
+  const nutrOpts=[
+    {id:'normal',  label:'Normal',           desc:'La dieta habitual.',                energyBonus:0,  cost:0},
+    {id:'pasta',   label:'Carga de carbos',  desc:'Pasta y arroz la noche antes.',     energyBonus:8,  cost:10},
+    {id:'pro',     label:'Protocolo pro',    desc:'Nutrición optimizada. Máxima energía inicial.', energyBonus:15, cost:25},
+  ];
+  const nutr=nutrOpts.find(n=>n.id===nutrSel)||nutrOpts[0];
   el.innerHTML=`
-    <h2 style="margin:0 0 4px">🏔️ ${esc(race.name)}</h2>
-    <div style="font-size:13px;color:#666;margin-bottom:12px">${race.km?race.km+'K':''} ${race.desnivel?'· '+race.desnivel:''} ${race.cutoffMin?'· Cutoff '+Math.round(race.cutoffMin/60)+'h':''}</div>
-    <div class="card" style="margin-bottom:8px">
-      <div class="sec-title-sm" style="margin-bottom:6px">Diagnóstico</div>
-      ${utStatBar('Resistencia',G.runner.stats.resistencia||50,100,'#4a8a2a')}
-      ${utStatBar('Mental',G.runner.stats.mental||50,100,'#7a4a8a')}
-      ${utStatBar('Pies 🦶',G.pies||100,100,'#c07a10')}
-      <div style="margin-top:8px;font-size:14px;font-weight:600;color:${prob>=70?'#2d7a2d':prob>=40?'#c07a10':'#c0392b'}">
-        Probabilidad estimada: ${prob}%
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px">
+      <h2 style="margin:0">🏔️ ${esc(race.name)}</h2>
+      <span style="font-size:12px;color:#999;padding-top:5px">Carrera ${(G.utCurrentRaceIdx||0)+1}/${(G.utCalendar||[]).length}</span>
+    </div>
+    <p class="sub">${race.km?race.km+'km':''} ${race.desnivel?'· '+race.desnivel:''} ${race.cutoffMin?'· Cutoff '+Math.round(race.cutoffMin/60)+'h':''}</p>
+    ${hasTaper?`<div class="note">💤 <strong>Has hecho tapering</strong> — llegas con más energía y las piernas más frescas (+6 energía, +8 mental).</div>`:''}
+    ${!met?`<div class="warn">⚠️ Tus stats hacen que terminar sea muy improbable. Probabilidad estimada: ${prob}%. Puedes intentarlo igual.</div>`
+           :`<div class="note">Probabilidad estimada de completar: <strong>${prob}%</strong></div>`}
+    ${race.segs&&race.segs.length?`${racePreviewCard(race,'preview',0)}`:''}
+    <div style="margin-bottom:10px">
+      <div class="section-label">Nutrición pre-carrera</div>
+      <div style="display:grid;gap:6px">
+        ${nutrOpts.map(n=>{
+          const isSel=nutrSel===n.id;
+          return `<div class="card${isSel?' sel':''}" style="padding:8px 12px;cursor:pointer;${isSel?'border-color:#4a8a2a;background:#f0faf0;':''}" onclick="G.utPreRaceNutrition='${n.id}';render()">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <div style="font-size:13px;font-weight:600">${n.label}</div>
+                <div style="font-size:12px;color:#888">${n.desc}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0;margin-left:8px">
+                ${n.energyBonus>0?`<div style="font-size:12px;color:#4a8a2a">+${n.energyBonus} energía</div>`:''}
+                <div style="font-size:12px;color:${n.cost>0?'#c0392b':'#aaa'}">${n.cost>0?`-€${n.cost}`:'Gratis'}</div>
+              </div>
+              ${isSel?`<span style="color:#4a8a2a;font-size:14px;margin-left:6px">✓</span>`:''}
+            </div>
+          </div>`;
+        }).join('')}
       </div>
-      ${!met?`<div style="font-size:12px;color:#c07a10;margin-top:4px">⚠️ Tus stats actuales hacen que terminar esta carrera sea muy improbable. Puedes intentarlo igual.</div>`:''}
+    </div>
+    <div class="card" style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:13px;font-weight:600">🏃 Calentamiento</div>
+          <div style="font-size:12px;color:#888">${G.utWarmedUp?'Calentamiento hecho · −5 energía · +4 subida':'15 min de rodaje suave antes de salir'}</div>
+        </div>
+        <button class="${G.utWarmedUp?'main':'secondary'}" style="padding:5px 12px;margin:0;font-size:12px" onclick="G.utWarmedUp=!G.utWarmedUp;render()">${G.utWarmedUp?'✓ Hecho':'Calentar'}</button>
+      </div>
     </div>
     <div class="card" style="margin-bottom:8px" onclick="G._utMochilaPrev='utPreRace';G.screen='utMochila';render()">
-      <div style="display:flex;justify-content:space-between">
+      <div style="display:flex;justify-content:space-between;align-items:center">
         <div>
-          <div class="sec-title-sm">🎒 Mochila</div>
-          <div style="font-size:12px;color:#666">${mochilaItems.map(i=>i.icon||'').join(' ')} · ${G.utMochilaPesoTotal||UT_PESO_MINIMO_G}g${penVel>0?' · −'+penVel+'% vel':''}
-          </div>
+          <div style="font-size:13px;font-weight:600">🎒 Mochila</div>
+          <div style="font-size:12px;color:#666">${mochilaItems.map(i=>i.icon||'').join(' ')} · ${G.utMochilaPesoTotal||UT_PESO_MINIMO_G}g${Number(penVel)>0?' · −'+penVel+'% vel':''}</div>
         </div>
-        <span style="color:#c07a10">›</span>
+        <span style="color:#c07a10;font-size:18px">›</span>
       </div>
     </div>
     ${(G.utCrewActivo||[]).length?`<div class="card" style="margin-bottom:8px" onclick="G.screen='utCrew';render()">
-      <div style="display:flex;justify-content:space-between">
-        <div><div class="sec-title-sm">👥 Crew activo</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-size:13px;font-weight:600">👥 Crew activo</div>
           <div style="font-size:12px;color:#666">${(G.utCrewActivo||[]).map(id=>{const m=UT_CREW_MEMBERS.find(c=>c.id===id);return m?m.icon+' '+m.name:'';}).join(', ')}</div>
         </div>
-        <span style="color:#c07a10">›</span>
+        <span style="color:#c07a10;font-size:18px">›</span>
       </div>
     </div>`:''}
-    <button class="main" onclick="utBeginRace()">🏃 Salir a correr</button>
-    <button class="secondary" style="margin-top:6px" onclick="G.screen='utCalendar';render()">← Volver</button>
+    <button class="main" style="margin-top:8px" onclick="utBeginRace()">🏃 ¡Salir a correr!</button>
+    <button class="secondary" style="margin-top:6px" onclick="G.screen='utHome';render()">← Preparación</button>
   `;
+  if(race.segs&&race.segs.length){
+    setTimeout(()=>attachProfHandlers(race,race.id+'preview','preview',0),0);
+  }
 }
 
 window.utBeginRace=()=>{
   const raceId=(G.utCalendar||[])[G.utCurrentRaceIdx||0];
   if(!G.utCurrentRaceState||G.utCurrentRaceState.raceId!==raceId)utPrepareRace(raceId);
+  // Apply pre-race nutrition
+  const nutrSel=G.utPreRaceNutrition||'normal';
+  const nutrOpts=[{id:'normal',energyBonus:0,cost:0},{id:'pasta',energyBonus:8,cost:10},{id:'pro',energyBonus:15,cost:25}];
+  const nutr=nutrOpts.find(n=>n.id===nutrSel)||nutrOpts[0];
+  if(nutr.cost>0){G.utMoney=Math.max(0,(G.utMoney||0)-nutr.cost);}
+  if(G.utCurrentRaceState){
+    G.utCurrentRaceState.energia=Math.min(100+nutr.energyBonus,100+nutr.energyBonus);
+    if(G.utTaperBonus){G.utCurrentRaceState.energia=Math.min(110,G.utCurrentRaceState.energia+6);G.utCurrentRaceState.mental=Math.min(100,G.utCurrentRaceState.mental+8);}
+    if(G.utWarmedUp){G.utCurrentRaceState.energia=Math.max(10,G.utCurrentRaceState.energia-5);G.utCurrentRaceState.piernas=Math.min(100,(G.utCurrentRaceState.piernas||100)+4);}
+  }
   G.screen='utRace';render();
 };
 
@@ -4051,6 +4155,9 @@ function renderUtRace(){
   }
 
   const cp=rs.checkpoints[rs.checkpointIdx]||{nombre:'Meta',kmMarca:rs.km};
+  const isLastSeg=rs.checkpointIdx>=rs.totalCheckpoints-1;
+  const crewHere=cp.tieneCrewArea&&(G.utCrewActivo||[]).length>0;
+  const aidUsed=!!rs._aidUsed;
   el.innerHTML=`
     <div style="${utFaseStyle()}border-radius:12px;padding:12px;margin-bottom:8px;transition:background 3s">
       <div style="display:flex;justify-content:space-between;font-size:12px;color:${fase.text};opacity:0.8">
@@ -4068,6 +4175,25 @@ function renderUtRace(){
       ${utStatBar('Mental',rs.mental,100,'#7a4a8a')}
     </div>
     ${rs.log.slice(-2).map(l=>`<div style="font-size:12px;color:#888;font-style:italic;margin-bottom:4px">${l}</div>`).join('')}
+    <div class="card" style="margin-bottom:10px;background:#fdf9f0">
+      <div class="sec-title-sm" style="margin-bottom:6px">🍽️ Avituallamiento${crewHere?' · Zona de crew':''}</div>
+      ${aidUsed?`<div style="font-size:12px;color:#888">Sigues adelante. Has repuesto lo que necesitabas.</div>`:`
+      <div style="display:grid;gap:5px">
+        <div class="card work-card" style="padding:7px 10px" onclick="utUseAid('gel')">
+          <div style="font-size:13px;font-weight:600">🧃 Gel energético <span style="float:right;color:#4a8a2a;font-size:12px">+12 energía</span></div>
+        </div>
+        <div class="card work-card" style="padding:7px 10px" onclick="utUseAid('comida')">
+          <div style="font-size:13px;font-weight:600">🍌 Comer sólido <span style="float:right;font-size:11px;color:#666">+20 E · +5 M · +8min</span></div>
+        </div>
+        <div class="card work-card" style="padding:7px 10px" onclick="utUseAid('descanso')">
+          <div style="font-size:13px;font-weight:600">😴 Descansar 3min <span style="float:right;font-size:11px;color:#666">+8 E · +5 P · +3min</span></div>
+        </div>
+        ${crewHere?`<div class="card work-card" style="padding:7px 10px" onclick="utUseAid('masaje')">
+          <div style="font-size:13px;font-weight:600">💆 Masaje (crew) <span style="float:right;font-size:11px;color:#666">+15 piernas · +8 pies · +10min</span></div>
+        </div>`:''}
+        <button class="secondary" style="font-size:12px;padding:5px 10px" onclick="utUseAid('skip')">Sin parar →</button>
+      </div>`}
+    </div>
     <div class="sec-title-sm" style="margin-bottom:6px">Ritmo para el siguiente tramo</div>
     ${['suave','medio','fuerte'].map(r=>`
       <div class="card work-card" style="margin-bottom:6px" onclick="utAdvanceCheckpoint('${r}')">
@@ -4080,6 +4206,16 @@ function renderUtRace(){
     <button class="secondary" style="margin-top:8px;width:100%" onclick="if(confirm('¿Seguro que quieres abandonar?'))utAbandonRace()">🏳 Abandonar</button>
   `;
 }
+
+window.utUseAid=tipo=>{
+  const rs=G.utCurrentRaceState;if(!rs||rs._aidUsed)return;
+  if(tipo==='gel'){rs.energia=Math.min(100,rs.energia+12);rs.log.push('Tomas un gel. Rápido y efectivo.');}
+  else if(tipo==='comida'){rs.energia=Math.min(100,rs.energia+20);rs.mental=Math.min(100,rs.mental+5);rs.tiempoAcumuladoMin+=8;rs.log.push('Comes algo sólido en el avituallamiento. El cuerpo lo agradece.');}
+  else if(tipo==='descanso'){rs.energia=Math.min(100,rs.energia+8);rs.piernas=Math.min(100,rs.piernas+5);rs.tiempoAcumuladoMin+=3;rs.log.push('Tres minutos sentado. Vale más de lo que parece.');}
+  else if(tipo==='masaje'){rs.piernas=Math.min(100,rs.piernas+15);rs.pies=Math.min(100,rs.pies+8);rs.tiempoAcumuladoMin+=10;rs.log.push('Tu crew te masajea piernas y pies. Notas la diferencia.');}
+  rs._aidUsed=true;
+  render();
+};
 
 window.utAdvanceCheckpoint=ritmo=>{
   const rs=G.utCurrentRaceState;
@@ -4122,6 +4258,7 @@ window.utAdvanceCheckpoint=ritmo=>{
   if(pctKm>=0.5&&pctKm<0.65){const f=UT_FASES_HORARIAS.find(x=>x.id==='atardecer');if(f?.frase&&!rs._toastAtardecer){showToast(f.frase,'#3d2010');rs._toastAtardecer=true;}}
   if(pctKm>=0.65&&pctKm<0.8){const f=UT_FASES_HORARIAS.find(x=>x.id==='noche');if(f?.frase&&!rs._toastNoche){showToast(f.frase,'#1a2035');rs._toastNoche=true;}}
   rs.checkpointIdx++;
+  rs._aidUsed=false;
   // Evento aleatorio
   if(Math.random()<0.4){
     const ev=UT_AVITUALLAMIENTO_EVENTS[Math.floor(Math.random()*UT_AVITUALLAMIENTO_EVENTS.length)];
@@ -4214,44 +4351,148 @@ function renderUtBackyard(){
   const el=document.getElementById('main');
   const loops=G.backyardCurrentLoop||0;
   const km=(loops*6.706).toFixed(1);
-  const energiaSim=Math.max(0,100-(loops*12));
-  const piesSim=Math.max(0,(G.pies||100)-(loops*8));
+
+  // Init stats on first entry
+  if(!G.backyardStats){
+    G.backyardStats={
+      energia:Math.min(100,50+(G.runner.stats.resistencia||50)/2),
+      piernas:80,
+      pies:G.pies||80,
+      mental:G.runner.stats.mental||60,
+    };
+  }
+  const st=G.backyardStats;
+  const canContinue=st.energia>5&&st.pies>5&&st.mental>5;
+
+  // BETWEEN LOOPS — decision screen
+  if(G.backyardPhase==='between'){
+    const acts=G.backyardBetweenActions||{};
+    const hasCrew=(G.utCrewActivo||[]).length>0;
+    const loopMsg=loops<5?'El cuerpo responde. Todavía hay margen.':
+      loops<10?'La fatiga se acumula. El margen se estrecha.':
+      loops<15?'Madrugada. El momento en que la mayoría abandona.':
+      loops<20?'Esto ya es historia. Sigues en pie.':
+      'Eres una leyenda. Y sigues aquí.';
+    el.innerHTML=`
+      <div style="background:#1a2035;border-radius:12px;padding:12px;margin-bottom:8px;color:#b0c8f0">
+        <div style="font-size:11px;opacity:0.7;margin-bottom:2px">🌙 ENTRE VUELTAS</div>
+        <div style="font-size:16px;font-weight:700">Vuelta ${loops} completada</div>
+        <div style="font-size:13px;opacity:0.8;margin-top:2px">${km} km acumulados · ${loopMsg}</div>
+      </div>
+      <div class="card" style="margin-bottom:10px">
+        ${utStatBar('Energía',st.energia,100,'#4a8a2a')}
+        ${utStatBar('Piernas',st.piernas,100,'#4a6a9a')}
+        ${utStatBar('Pies',st.pies,100,'#c07a10')}
+        ${utStatBar('Mental',st.mental,100,'#7a4a8a')}
+      </div>
+      <div class="sec-title-sm" style="margin-bottom:6px">¿Qué haces antes de la siguiente vuelta?</div>
+      <div style="display:grid;gap:6px;margin-bottom:12px">
+        ${!acts.gel?`<div class="card work-card" style="padding:8px 12px" onclick="utBackyardAction('gel')">
+          <div style="font-size:13px;font-weight:600">🧃 Tomar un gel <span style="float:right;color:#4a8a2a">+15 energía</span></div>
+        </div>`:`<div class="card" style="padding:8px 12px;opacity:0.5;background:#f5f5f5"><div style="font-size:12px;color:#999">🧃 Gel tomado</div></div>`}
+        ${!acts.comida?`<div class="card work-card" style="padding:8px 12px" onclick="utBackyardAction('comida')">
+          <div style="font-size:13px;font-weight:600">🍕 Comer algo sólido</div>
+          <div style="font-size:12px;color:#666">+25 energía · +8 mental · −5 piernas</div>
+        </div>`:`<div class="card" style="padding:8px 12px;opacity:0.5;background:#f5f5f5"><div style="font-size:12px;color:#999">🍕 Ya has comido</div></div>`}
+        ${hasCrew&&!acts.masaje?`<div class="card work-card" style="padding:8px 12px" onclick="utBackyardAction('masaje')">
+          <div style="font-size:13px;font-weight:600">💆 Masaje de crew</div>
+          <div style="font-size:12px;color:#666">+20 piernas · +15 pies</div>
+        </div>`:''}
+        ${hasCrew&&acts.masaje?`<div class="card" style="padding:8px 12px;opacity:0.5;background:#f5f5f5"><div style="font-size:12px;color:#999">💆 Masaje hecho</div></div>`:''}
+        ${!acts.pies?`<div class="card work-card" style="padding:8px 12px" onclick="utBackyardAction('pies')">
+          <div style="font-size:13px;font-weight:600">🩹 Revisar pies <span style="float:right;color:#c07a10">+20 pies</span></div>
+        </div>`:`<div class="card" style="padding:8px 12px;opacity:0.5;background:#f5f5f5"><div style="font-size:12px;color:#999">🩹 Pies revisados</div></div>`}
+        ${!acts.descanso?`<div class="card work-card" style="padding:8px 12px" onclick="utBackyardAction('descanso')">
+          <div style="font-size:13px;font-weight:600">😴 Descansar unos minutos</div>
+          <div style="font-size:12px;color:#666">+12 energía · +8 piernas · −3 mental (riesgo de dormirse)</div>
+        </div>`:`<div class="card" style="padding:8px 12px;opacity:0.5;background:#f5f5f5"><div style="font-size:12px;color:#999">😴 Descansado</div></div>`}
+      </div>
+      ${canContinue
+        ?`<button class="main" onclick="utBackyardContinue()">▶ Salir a la vuelta ${loops+1}</button>`
+        :`<div class="warn" style="margin-bottom:8px">El cuerpo no puede más. Hay que parar.</div>`}
+      <button class="secondary" style="margin-top:6px" onclick="utBackyardFinish()">🏳 Me rindo (${loops} vueltas)</button>
+    `;
+    return;
+  }
+
+  // MAIN SCREEN — ready to run
+  const loopLabel=loops===0?'Empezar la primera vuelta':`Salir a la vuelta ${loops+1}`;
   el.innerHTML=`
     <h2 style="margin:0 0 4px">🔄 Backyard Ultra</h2>
-    <div style="font-size:13px;color:#666;margin-bottom:12px">6.706 km por vuelta. Hasta que alguien se rinda.</div>
-    <div class="card" style="text-align:center;margin-bottom:12px">
-      <div style="font-size:36px;font-weight:700">${loops}</div>
-      <div style="font-size:13px;color:#666">vueltas · ${km} km acumulados</div>
+    <div style="font-size:13px;color:#666;margin-bottom:12px">6.706 km por vuelta. Dura hasta que solo queda uno.</div>
+    <div class="card" style="text-align:center;margin-bottom:12px;padding:16px">
+      <div style="font-size:42px;font-weight:800;color:#1a2035">${loops}</div>
+      <div style="font-size:13px;color:#666">vueltas completadas · <strong>${km} km</strong></div>
     </div>
     <div class="card" style="margin-bottom:12px">
-      ${utStatBar('Energía (est.)',energiaSim,100,'#4a8a2a')}
-      ${utStatBar('Pies (est.)',piesSim,100,'#c07a10')}
+      ${utStatBar('Energía',st.energia,100,'#4a8a2a')}
+      ${utStatBar('Piernas',st.piernas,100,'#4a6a9a')}
+      ${utStatBar('Pies',st.pies,100,'#c07a10')}
+      ${utStatBar('Mental',st.mental,100,'#7a4a8a')}
     </div>
     ${loops>0?`<div style="font-size:13px;color:#888;font-style:italic;margin-bottom:12px">${
-      loops<5?'El cuerpo responde. Sigues adelante.':
-      loops<10?'La fatiga acumula. La mente empieza a preguntar.':
-      loops<15?'La madrugada. El momento en que muchos se rinden.':
-      'Esto ya es historia.'
+      loops<5?'Ritmo constante. La mente aún no protesta.':
+      loops<10?'La fatiga habla. Tú decides si escucharla.':
+      loops<15?'La madrugada. El momento de la verdad.':
+      loops<20?'Ya superaste a la mayoría. Sigue.':
+      'Esto es leyenda.'
     }</div>`:''}
-    <button class="main" onclick="utBackyardNextLoop()" ${energiaSim<=0||piesSim<=0?'disabled':''}>▶ Siguiente vuelta</button>
-    <button class="secondary" style="margin-top:6px" onclick="utBackyardFinish()">🏳 Parar aquí${loops>0?' ('+loops+' vueltas)':''}</button>
+    ${canContinue
+      ?`<button class="main" onclick="utBackyardNextLoop()">${loopLabel}</button>`
+      :`<div class="warn" style="margin-bottom:8px">Ya no puedes continuar. El cuerpo ha llegado al límite.</div>`}
+    ${loops>0?`<button class="secondary" style="margin-top:6px" onclick="utBackyardFinish()">🏳 Parar aquí (${loops} vueltas)</button>`:''}
   `;
 }
 
+window.utBackyardAction=tipo=>{
+  if(!G.backyardStats||!G.backyardBetweenActions)return;
+  const st=G.backyardStats;
+  const acts=G.backyardBetweenActions;
+  if(tipo==='gel'&&!acts.gel){st.energia=Math.min(100,st.energia+15);acts.gel=true;}
+  else if(tipo==='comida'&&!acts.comida){st.energia=Math.min(100,st.energia+25);st.mental=Math.min(100,st.mental+8);st.piernas=Math.max(0,st.piernas-5);acts.comida=true;}
+  else if(tipo==='masaje'&&!acts.masaje){st.piernas=Math.min(100,st.piernas+20);st.pies=Math.min(100,st.pies+15);acts.masaje=true;}
+  else if(tipo==='pies'&&!acts.pies){st.pies=Math.min(100,st.pies+20);acts.pies=true;}
+  else if(tipo==='descanso'&&!acts.descanso){
+    st.energia=Math.min(100,st.energia+12);st.piernas=Math.min(100,st.piernas+8);
+    if(Math.random()<0.25){st.mental=Math.max(0,st.mental-5);} // risk: se adormece
+    acts.descanso=true;
+  }
+  render();
+};
+
+window.utBackyardContinue=()=>{
+  G.backyardPhase=null;
+  G.backyardBetweenActions=null;
+  render();
+};
+
 window.utBackyardNextLoop=()=>{
+  // Simulate the loop: stat damage
+  if(!G.backyardStats){
+    G.backyardStats={energia:Math.min(100,50+(G.runner.stats.resistencia||50)/2),piernas:80,pies:G.pies||80,mental:G.runner.stats.mental||60};
+  }
+  const st=G.backyardStats;
+  const resistBonus=Math.round((G.runner.stats.resistencia||50)/25);
+  st.energia=Math.max(0,st.energia-18+resistBonus);
+  st.piernas=Math.max(0,st.piernas-12);
+  st.pies=Math.max(0,st.pies-8);
+  st.mental=Math.max(0,st.mental-6);
   G.backyardCurrentLoop=(G.backyardCurrentLoop||0)+1;
-  G.pies=Math.max(0,(G.pies||100)-8);
-  G.runner.stats.mental=Math.max(0,(G.runner.stats.mental||50)-3);
-  G.combustible=Math.max(0,(G.combustible||100)-10);
-  if(G.pies<=0||G.runner.stats.mental<=5||G.combustible<=0){utBackyardFinish();return;}
+  if(st.energia<=0||st.pies<=0||st.mental<=0){G.backyardPhase=null;utBackyardFinish();return;}
+  G.backyardPhase='between';
+  G.backyardBetweenActions={};
   render();
 };
 
 window.utBackyardFinish=()=>{
   const loops=G.backyardCurrentLoop||0;
+  if(G.backyardStats){G.pies=Math.max(10,G.backyardStats.pies);}
   G.backyardHistory.push({year:G.utYear,loops,km:parseFloat((loops*6.706).toFixed(1)),abandoned:false});
   G.utResults.push({raceId:'backyard',name:'Backyard Ultra',loops,km:parseFloat((loops*6.706).toFixed(1)),finished:loops>0,year:G.utYear,formato:'backyard'});
   G.backyardCurrentLoop=0;
+  G.backyardStats=null;
+  G.backyardPhase=null;
+  G.backyardBetweenActions=null;
   G.screen='utPostRace';render();
 };
 
@@ -4351,13 +4592,438 @@ function renderUtEndYear(){
   `;
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  ULTRATRAIL — TABS
+// ══════════════════════════════════════════════════════════════════
+function renderUtCalendarTabView(){
+  const el=document.getElementById('main');
+  const yr=G.utYear||1;
+  const available=UT_RACES.filter(r=>{
+    if(r.minYear>yr)return false;
+    if(r.oculto){const cond=r.unlockCondition;if(!(G.utResults||[]).some(res=>res.raceId===cond&&res.finished))return false;}
+    return true;
+  });
+  const sel=G.utCalendar||[];
+  el.innerHTML=`
+    <h2 style="margin:0 0 4px">📅 Calendario — Año ${yr}</h2>
+    <p class="sub">Elige hasta 3 carreras. Avanza de año en año.</p>
+    <div style="display:grid;gap:8px;margin-bottom:16px">
+      ${available.map(r=>{
+        const inCal=sel.includes(r.id);
+        const isBackyard=r.formato==='backyard';
+        const isEtapas=r.formato==='etapas';
+        const prob=utFinishProbability(r);
+        const meetsReq=utCheckReqMet(r);
+        return `<div class="card ${inCal?'sel':''}" style="${inCal?'border-color:#4a8a2a;background:#f0faf0;':''}" onclick="utToggleCalendar('${r.id}')">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div style="flex:1">
+              <div style="font-size:14px;font-weight:600">${esc(r.name)}${isBackyard?' 🔄':isEtapas?' 🏜️':''}</div>
+              <div style="font-size:12px;color:#888;margin:1px 0">${r.km?r.km+'K':''} ${r.desnivel?'· '+r.desnivel:''} ${r.cutoffMin?'· cutoff '+Math.floor(r.cutoffMin/60)+'h':''}</div>
+              ${meetsReq?`<div style="font-size:11px;color:#4a8a2a">Probabilidad de terminar: ${prob}%</div>`:
+                `<div style="font-size:11px;color:#c07a10">⚠ Stats insuficientes — riesgo alto</div>`}
+              ${r.cost?`<div style="font-size:11px;color:#888">Inscripción: €${r.cost}</div>`:''}
+            </div>
+            <span style="font-size:18px;color:${inCal?'#4a8a2a':'#ddd'};flex-shrink:0;margin-left:8px">${inCal?'✓':'+'}</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="font-size:13px;color:#888;margin-bottom:12px">${sel.length}/3 carreras seleccionadas</div>
+    ${sel.length>0?`<button class="main" onclick="G.activeTab='game';render()">✓ Calendario confirmado</button>`
+      :`<button class="main" disabled>Selecciona al menos una carrera</button>`}
+  `;
+}
+window.utToggleCalendar=id=>{
+  if(!G.utCalendar)G.utCalendar=[];
+  const idx=G.utCalendar.indexOf(id);
+  if(idx>=0){G.utCalendar.splice(idx,1);}
+  else{if(G.utCalendar.length>=3){showToast('Máximo 3 carreras por temporada','#c07a10');return;}G.utCalendar.push(id);}
+  render();
+};
+
+function renderUtFinanzasTab_ut(){
+  const el=document.getElementById('main');
+  const jobOpt=UT_JOB_OPTIONS.find(o=>o.id===(G.utJobChoice||'reducida'))||UT_JOB_OPTIONS[1];
+  const sponsorMes=Math.round(Object.values(G.utSponsors||{}).filter(Boolean).reduce((a,s)=>a+(s.salary||0),0)/12);
+  const netMes=jobOpt.income-95+sponsorMes;
+  const raceCosts=(G.utCalendar||[]).reduce((a,id)=>{const r=UT_RACES.find(x=>x.id===id);return a+(r?.cost||0);},0);
+  const prizes=(G.utResults||[]).filter(r=>r.year===G.utYear&&r.finished).reduce((a,r)=>{const race=UT_RACES.find(x=>x.id===r.raceId);return a+Math.round((race?.km||50)*2);},0);
+  el.innerHTML=`
+    <h2>Finanzas</h2>
+    <p class="sub">Año ${G.utYear||1} · ${esc(G.runner.name||'Corredor')}</p>
+    <div class="fin-section">
+      <div class="fin-title">Mensual</div>
+      <div class="fin-row"><span>Trabajo (${jobOpt.label})</span><span class="plus">+€${jobOpt.income}</span></div>
+      ${sponsorMes>0?`<div class="fin-row"><span>Patrocinios</span><span class="plus">+€${sponsorMes}</span></div>`:''}
+      <div class="fin-row"><span>Gastos fijos de vida</span><span class="minus">-€95</span></div>
+      <div class="fin-row tot"><span>Neto mensual</span><span class="${netMes>=0?'plus':'minus'}">${netMes>=0?'+':''}€${netMes}</span></div>
+    </div>
+    <div class="fin-section">
+      <div class="fin-title">Temporada</div>
+      ${prizes>0?`<div class="fin-row"><span>Premios ganados</span><span class="plus">+€${prizes}</span></div>`:''}
+      ${raceCosts>0?`<div class="fin-row"><span>Inscripciones (${(G.utCalendar||[]).length} carreras)</span><span class="minus">-€${raceCosts}</span></div>`:''}
+      <div class="fin-row"><span>Ahorro actual</span><span style="font-weight:600">€${G.utMoney||0}</span></div>
+    </div>
+    ${netMes<0?`<div class="warn">Pierdes €${Math.abs(netMes)} al mes. Considera más horas de trabajo o buscar patrocinadores.</div>`:''}
+    <button class="secondary" style="margin-top:12px" onclick="G.screen='utSponsors';render()">🤝 Ver patrocinios →</button>
+    <button class="secondary" style="margin-top:6px" onclick="G.screen='utJobSelect';render()">💼 Cambiar jornada laboral</button>
+  `;
+}
+
+function renderUtCorredorTab_ut(){
+  const el=document.getElementById('main');
+  const stats=G.runner.stats;
+  const load=G.utBodyLoad||0;
+  const jobOpt=UT_JOB_OPTIONS.find(o=>o.id===(G.utJobChoice||'reducida'))||UT_JOB_OPTIONS[1];
+  el.innerHTML=`
+    <h2>Corredor</h2>
+    <p class="sub">${esc(G.runner.name||'Corredor')} · Año ${G.utYear||1} · ${G.runner.age||30} años</p>
+    <div class="card" style="margin-bottom:8px">
+      <div class="sec-title-sm" style="margin-bottom:6px">Stats</div>
+      ${[['Resistencia',stats.resistencia||50,'#4a8a2a'],['Mental',stats.mental||50,'#7a4a8a'],['Subida',stats.subida||50,'#c07a10'],['Bajada',stats.bajada||50,'#4a90d9'],['Nutrición',stats.nutricion||50,'#4a8a2a'],['Velocidad',stats.velocidad||50,'#4a6a9a']].map(([l,v,c])=>utStatBar(l,v,100,c)).join('')}
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #eee">
+        ${utStatBar('Pies 🦶',G.pies||100,100,'#c07a10')}
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:8px">
+      <div class="sec-title-sm">Carga corporal</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:${load>=70?'#c0392b':load>=50?'#c07a10':'#888'};margin:4px 0">${load>=70?'Alta — riesgo de lesión':load>=50?'Moderada — descansa pronto':'Baja — puedes entrenar fuerte'}<span>${load}%</span></div>
+      <div class="load-bar-track"><div class="bar-fill" style="width:${load}%;background:${load>=70?'#c0392b':load>=50?'#c07a10':'#4a90d9'}"></div></div>
+    </div>
+    <div class="card" style="margin-bottom:8px">
+      <div class="sec-title-sm">Trabajo · ${jobOpt.label}</div>
+      <div style="font-size:13px;color:#555;margin-top:4px">${jobOpt.trainingH}h/sem disponibles · €${jobOpt.income}/mes</div>
+    </div>
+    <div class="card" style="margin-bottom:8px">
+      <div class="sec-title-sm">Mochila</div>
+      ${(()=>{const items=UT_MOCHILA_ITEMS.filter(i=>i.obligatorio||G.utMochila[i.id]);const peso=G.utMochilaPesoTotal||UT_PESO_MINIMO_G;const extra=Math.max(0,peso-UT_PESO_MINIMO_G);const pen=(Math.floor(extra/100)*UT_PENALIZACION_POR_100G).toFixed(1);return `<div style="font-size:13px;color:#555;margin-top:4px">${items.map(i=>i.icon||'').join(' ')} · ${peso}g${Number(pen)>0?' · −'+pen+'% vel':''}</div>`;})()}
+    </div>
+    ${(G.utCrewActivo||[]).length?`<div class="card" style="margin-bottom:8px">
+      <div class="sec-title-sm">Crew activo</div>
+      <div style="font-size:13px;color:#555;margin-top:4px">${(G.utCrewActivo||[]).map(id=>{const m=UT_CREW_MEMBERS.find(c=>c.id===id);return m?m.icon+' '+m.name:'';}).join(', ')}</div>
+    </div>`:''}
+    <button class="secondary" style="margin-top:4px" onclick="G.screen='utTraining';render()">🏃 Ir a entrenamiento</button>
+  `;
+}
+
+function renderUtRepTab_ut(){
+  const el=document.getElementById('main');
+  const results=G.utResults||[];
+  const totalFinished=results.filter(r=>r.finished).length;
+  const thisYear=results.filter(r=>r.year===(G.utYear||1));
+  const bestBackyard=Math.max(0,...(G.backyardHistory||[]).map(b=>b.loops),0);
+  const followers=G.utFollowers||0;
+  el.innerHTML=`
+    <h2>Reputación</h2>
+    <p class="sub">${(G.utRanking||999)<900?'Ranking mundial #'+(G.utRanking||999):'Sin ranking mundial aún'}</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div class="card" style="text-align:center">
+        <div style="font-size:11px;color:#999">Carreras finalizadas</div>
+        <div style="font-size:22px;font-weight:700;color:#4a8a2a">${totalFinished}</div>
+      </div>
+      <div class="card" style="text-align:center">
+        <div style="font-size:11px;color:#999">Seguidores</div>
+        <div style="font-size:22px;font-weight:700;color:#4a90d9">${followers>=1000?Math.round(followers/100)/10+'K':followers}</div>
+      </div>
+    </div>
+    ${bestBackyard>0?`<div class="card" style="margin-bottom:8px">
+      <div class="sec-title-sm">Mejor Backyard</div>
+      <div style="font-size:22px;font-weight:700;color:#4a8a2a;margin-top:4px">${bestBackyard} vueltas <span style="font-size:14px;font-weight:400;color:#888">· ${(bestBackyard*6.706).toFixed(1)} km</span></div>
+    </div>`:''}
+    ${results.length>0?`<div class="section-label">Historial de carreras</div>
+    <div style="margin-bottom:14px">
+      ${results.slice().reverse().slice(0,10).map(r=>`<div style="padding:6px 0;border-bottom:1px solid #f0f0f0">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <span style="font-size:13px;font-weight:600;color:${r.finished?'#2d7a2d':'#c0392b'};margin-right:6px">${r.finished?'✅':'❌'}</span>
+            <span style="font-size:13px">${esc(r.name||'')}</span>
+          </div>
+          <span style="font-size:11px;color:#aaa">Año ${r.year||1}${r.pos?` · #${r.pos}`:''}</span>
+        </div>
+        ${r.formato==='backyard'?`<div style="font-size:12px;color:#888;margin-top:2px">${r.loops||0} vueltas · ${r.km||0} km</div>`:
+          r.tiempo?`<div style="font-size:12px;color:#888;margin-top:2px">${r.km?r.km+'km · ':''}${Math.floor((r.tiempo||0)/60)}h${(r.tiempo||0)%60}min</div>`:''}
+      </div>`).join('')}
+    </div>`:'<div style="font-size:13px;color:#aaa;margin-bottom:14px">Sin historial todavía. ¡A correr!</div>'}
+  `;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  ULTRATRAIL — NUEVAS PANTALLAS
+// ══════════════════════════════════════════════════════════════════
+function renderUtJobSelect(){
+  const el=document.getElementById('main');
+  const yr=G.utYear||1;
+  const sel=G.utJobChoice||'reducida';
+  el.innerHTML=`
+    <h2 style="margin:0 0 4px">💼 Jornada laboral</h2>
+    <p class="sub">Año ${yr} · Ultratrail · ${esc(G.runner.name||'Corredor')}</p>
+    <div class="card" style="margin-bottom:12px">
+      <div class="fin-row"><span style="font-size:13px">Gastos fijos mensuales</span><span style="color:#c0392b;font-weight:600">-€95/mes</span></div>
+    </div>
+    <div style="font-size:13px;color:#888;margin-bottom:10px">¿Cuánto trabajas este año?</div>
+    <div style="display:grid;gap:8px;margin-bottom:16px">
+      ${UT_JOB_OPTIONS.map(opt=>{
+        const netMes=opt.income-95;
+        const isSel=sel===opt.id;
+        const effPct=Math.round(opt.trainingH/22*90+10);
+        return `<div class="work-card${isSel?' sel':''}" onclick="G.utJobChoice='${opt.id}';render()" style="${isSel?'border-color:#4a90d9;background:#4a90d911;':''}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div style="flex:1">
+              <div style="font-size:15px;font-weight:${isSel?'700':'600'}">${opt.label}</div>
+              <div style="font-size:12px;color:#888;margin:2px 0 6px">${opt.desc}</div>
+              <div style="display:flex;gap:14px;flex-wrap:wrap">
+                <span style="font-size:12px;color:#4a8a2a">+€${opt.income}/mes trabajo</span>
+                <span style="font-size:12px;color:${netMes>=0?'#2d7a2d':'#c0392b'};font-weight:600">${netMes>=0?'+':''}€${netMes}/mes neto</span>
+                <span style="font-size:12px;color:#4a90d9">${opt.trainingH}h/sem entreno</span>
+              </div>
+            </div>
+            ${isSel?`<span style="color:#4a90d9;font-size:18px;flex-shrink:0;margin-left:8px">✓</span>`:''}
+          </div>
+          <div style="margin-top:6px;height:4px;background:#e8e6e0;border-radius:2px;overflow:hidden">
+            <div style="height:4px;background:${isSel?'#4a90d9':'#c8c6c0'};width:${Math.round(opt.trainingH/22*100)}%;transition:width 0.3s"></div>
+          </div>
+          <div style="font-size:11px;color:#aaa;margin-top:3px">Eficiencia entrenamiento: ${effPct}%</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <button class="main" onclick="G.activeTab='game';G.screen='utHome';render()">Empezar temporada →</button>
+  `;
+}
+
+function renderUtTraining(){
+  const el=document.getElementById('main');
+  const jobOpt=UT_JOB_OPTIONS.find(o=>o.id===(G.utJobChoice||'reducida'))||UT_JOB_OPTIONS[1];
+  const load=G.utBodyLoad||0;
+  const loadHint=load>=70?{type:'warn',msg:'Carga alta — riesgo de lesión si entrenas fuerte.'}:
+                load>=50?{type:'hint',msg:'Carga moderada. Una sesión de recuperación te vendrá bien.'}:null;
+  const nextRaceId=(G.utCalendar||[])[G.utCurrentRaceIdx||0];
+  const nextRace=nextRaceId?UT_RACES.find(r=>r.id===nextRaceId):null;
+  const sel=G.utTrainingBlock;
+
+  el.innerHTML=`
+    <h2>Bloque de entrenamiento</h2>
+    <p class="sub">${jobOpt.trainingH}h/sem disponibles · Año ${G.utYear||1}</p>
+    ${loadHint?`<div class="${loadHint.type}">${loadHint.msg}</div>`:''}
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:4px">
+        <span>Carga corporal acumulada</span>
+        <span style="color:${load>=70?'#c0392b':load>=50?'#c07a10':'#888'}">${load}%</span>
+      </div>
+      <div class="load-bar-track"><div class="bar-fill" style="width:${load}%;background:${load>=70?'#c0392b':load>=50?'#c07a10':'#4a90d9'}"></div></div>
+    </div>
+    ${nextRace&&nextRace.segs&&nextRace.segs.length?`<div style="margin-bottom:12px">
+      <button class="secondary" id="btn-nr-ut" onclick="toggleNR_ut()">Ver próxima carrera ↓</button>
+    </div>
+    <div id="nr-panel-ut" style="display:none;margin-bottom:12px">
+      ${racePreviewCard(nextRace,'preview',0)}
+    </div>
+    <script>if(document.getElementById('nr-panel-ut')&&document.getElementById('nr-panel-ut').style.display!=='none')attachProfHandlers(${JSON.stringify(nextRace)},'${nextRace.id}preview','preview',0);<\/script>
+    `:''}
+    <div style="margin-bottom:16px">
+      ${UT_TRAINING_BLOCKS.map(b=>{
+        const isSel=sel&&sel.id===b.id;
+        const eff=Math.max(0.4,jobOpt.trainingH/14);
+        const loadAfter=b.taperBlock?Math.max(0,load-18):Math.min(100,Math.round(load+b.hours*1.5));
+        const loadCol=loadAfter>=70?'#c0392b':loadAfter>=50?'#c07a10':'#888';
+        const effs=b.taperBlock?
+          `<span style="font-size:12px;color:#4a8a2a">+2 Mental · Carga −18%</span>`:
+          Object.entries(b.effects).filter(([,v])=>v!==0).map(([k,v])=>{
+            const r=Math.round(v*eff);if(r===0)return '';
+            return `<span style="font-size:12px;color:${r>0?'#4a8a2a':'#c0392b'}">${k.charAt(0).toUpperCase()+k.slice(1)} ${r>0?'+':''}${r}</span>`;
+          }).filter(Boolean).join(' <span style="color:#ddd">·</span> ');
+        return `<div class="train-card ${isSel?'sel':''}" onclick="G.utTrainingBlock={id:'${b.id}',name:'${b.name}'};render()">
+          <div class="flex-between">
+            <div style="flex:1">
+              <div class="card-title">${b.name} <span style="font-size:11px;color:#888;font-weight:400">· ${b.hours}h/sem</span></div>
+              <div style="font-size:12px;color:#888;margin:2px 0 6px">${b.desc} ${b.detail}</div>
+              <div class="flex-between-center">
+                <div>${effs}</div>
+                <span style="font-size:12px;color:${loadCol};flex-shrink:0;margin-left:8px">carga → ${loadAfter}%</span>
+              </div>
+              ${b.taperBlock&&nextRace?`<div class="text-ok">✓ Tienes carrera próxima — llegas más fresco.</div>`:''}
+              ${isSel&&b.flavor?.length?`<div style="font-size:12px;color:#555;font-style:italic;margin-top:5px;padding:5px 8px;background:#f5f4f0;border-radius:5px">"${b.flavor[0]}"</div>`:''}
+            </div>
+            ${isSel?`<span style="color:#4a90d9;font-size:16px;margin-left:10px">✓</span>`:''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <button class="main" onclick="doUtTraining()" ${!sel?'disabled':''}>Confirmar entrenamiento →</button>
+    <button class="secondary" style="margin-top:6px" onclick="G.screen='utHome';render()">← Volver</button>
+  `;
+}
+window.toggleNR_ut=()=>{
+  const panel=document.getElementById('nr-panel-ut');
+  const btn=document.getElementById('btn-nr-ut');
+  if(!panel||!btn)return;
+  const isOpen=panel.style.display!=='none';
+  panel.style.display=isOpen?'none':'block';
+  btn.textContent=isOpen?'Ver próxima carrera ↓':'Ocultar carrera ↑';
+  if(!isOpen){
+    const nextRaceId=(G.utCalendar||[])[G.utCurrentRaceIdx||0];
+    const nextRace=nextRaceId?UT_RACES.find(r=>r.id===nextRaceId):null;
+    if(nextRace&&nextRace.segs&&nextRace.segs.length)attachProfHandlers(nextRace,nextRace.id+'preview','preview',0);
+  }
+};
+window.doUtTraining=()=>{
+  const sel=G.utTrainingBlock;
+  if(!sel)return;
+  const b=UT_TRAINING_BLOCKS.find(tb=>tb.id===sel.id);
+  if(!b)return;
+  const jobOpt=UT_JOB_OPTIONS.find(o=>o.id===(G.utJobChoice||'reducida'))||UT_JOB_OPTIONS[1];
+  const eff=Math.max(0.4,jobOpt.trainingH/14);
+  if(b.taperBlock){
+    G.utBodyLoad=Math.max(0,(G.utBodyLoad||0)-18);
+    G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+2);
+    G.utTaperBonus=true;
+  } else {
+    Object.entries(b.effects).forEach(([k,v])=>{
+      const delta=Math.round(v*eff);
+      if(k==='pies'){G.pies=Math.max(0,Math.min(100,(G.pies||100)+delta));}
+      else if(G.runner.stats[k]!==undefined){G.runner.stats[k]=Math.max(0,Math.min(100,(G.runner.stats[k]||50)+delta));}
+    });
+    G.utBodyLoad=Math.min(100,(G.utBodyLoad||0)+Math.round(b.hours*1.5));
+    G.utTaperBonus=false;
+  }
+  showToast(`✓ ${b.name} completado`,'#4a8a2a');
+  G.screen='utHome';render();
+};
+
+function renderUtBetweenRace_ut(){
+  const el=document.getElementById('main');
+  const nextRaceId=(G.utCalendar||[])[G.utCurrentRaceIdx||0];
+  const nextRace=nextRaceId?UT_RACES.find(r=>r.id===nextRaceId):null;
+  const load=G.utBodyLoad||0;
+  const loadCol=load>=70?'#c0392b':load>=50?'#c07a10':'#4a8a2a';
+  const loadHint=load>=70?'Carga alta. Necesitas recuperar antes de la próxima.':
+                load>=50?'Carga moderada. Una sesión te vendrá bien.':'Vas bien. El cuerpo está fresco.';
+  el.innerHTML=`
+    <div style="font-size:12px;font-weight:600;color:#aaa;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Entre carreras</div>
+    ${nextRace?`<h2 style="margin:0 0 2px">Próxima: ${esc(nextRace.name)}</h2>
+    <p class="sub">${nextRace.km?nextRace.km+'K · ':''} ${nextRace.desnivel||''}</p>`
+    :'<h2 style="margin:0 0 2px">Fin de temporada</h2>'}
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:4px">
+        <span>Carga corporal</span><span style="color:${loadCol}">${load}%</span>
+      </div>
+      <div class="load-bar-track"><div class="bar-fill" style="width:${load}%;background:${load>=70?'#c0392b':load>=50?'#c07a10':'#4a90d9'}"></div></div>
+      <div style="font-size:12px;color:${loadCol};margin-top:4px">${loadHint}</div>
+    </div>
+    <div class="section-label">Recuperación</div>
+    ${[
+      {id:'fisio',    label:'Sesión de fisio',    cost:40, loadDelta:-15, desc:'Una sesión rápida. Baja la carga y reduce riesgo de lesión.'},
+      {id:'masaje',   label:'Masaje deportivo',   cost:25, loadDelta:-8,  desc:'Menos intenso pero más barato. Buena recuperación muscular.'},
+      {id:'descanso', label:'Descanso activo',    cost:0,  loadDelta:-5,  desc:'Sin coste. Movilidad suave y stretching.'},
+    ].map(opt=>`
+      <div class="card" style="margin-bottom:8px;cursor:pointer" onclick="doUtRecovery('${opt.id}',${opt.cost},${opt.loadDelta})">
+        <div class="flex-between-center">
+          <div>
+            <div style="font-size:14px;font-weight:600">${opt.label}</div>
+            <div style="font-size:12px;color:#888">${opt.desc}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;margin-left:12px">
+            <div style="font-size:13px;font-weight:600;color:${opt.cost>0?'#c0392b':'#4a8a2a'}">${opt.cost>0?`-€${opt.cost}`:'Gratis'}</div>
+            <div style="font-size:12px;color:#4a8a2a">carga ${opt.loadDelta}%</div>
+          </div>
+        </div>
+      </div>`).join('')}
+    <div class="section-label" style="margin-top:8px">Otras opciones</div>
+    <div class="card" style="margin-bottom:8px;cursor:pointer" onclick="G.activeTab='calendar';render()">
+      <div style="font-size:14px;font-weight:600">📅 Modificar calendario pendiente</div>
+      <div style="font-size:12px;color:#888">Añade o quita carreras que aún no has corrido</div>
+    </div>
+    <div class="card" style="margin-bottom:16px;cursor:pointer" onclick="G.screen='utTraining';render()">
+      <div style="font-size:14px;font-weight:600">🏃 Bloque de entrenamiento</div>
+      <div style="font-size:12px;color:#888">Entrenar antes de la siguiente carrera</div>
+    </div>
+    ${nextRace
+      ?`<button class="main" onclick="utGoToNextRace()">Siguiente carrera →</button>`
+      :`<button class="main" onclick="G.screen='utEndYear';render()">Fin de temporada →</button>`}
+  `;
+}
+window.doUtRecovery=(id,cost,loadDelta)=>{
+  if(cost>0&&(G.utMoney||0)<cost){showToast('No tienes suficiente dinero','#c0392b');return;}
+  if(cost>0)G.utMoney=(G.utMoney||0)-cost;
+  G.utBodyLoad=Math.max(0,(G.utBodyLoad||0)+loadDelta);
+  const msgs={fisio:'Sesión de fisio completada. El cuerpo lo nota.',masaje:'Masaje hecho. Las piernas están mejor.',descanso:'Descanso activo completado.'};
+  showToast(msgs[id]||'Recuperación completada','#4a8a2a');
+  render();
+};
+window.utGoToNextRace=()=>{
+  const nextRaceId=(G.utCalendar||[])[G.utCurrentRaceIdx||0];
+  const race=nextRaceId?UT_RACES.find(r=>r.id===nextRaceId):null;
+  if(!race){G.screen='utEndYear';render();return;}
+  if(race.formato==='backyard'){G.backyardCurrentLoop=0;G.screen='utBackyard';render();return;}
+  if(race.formato==='etapas'){G.mdsEtapaActual=0;G.mdsRacionesRestantes=5;G.screen='utMds';render();return;}
+  utPrepareRace(nextRaceId);G.screen='utPreRace';render();
+};
+
+function renderUtSponsors(){
+  const el=document.getElementById('main');
+  const yr=G.utYear||1;
+  const utSp=G.utSponsors||{};
+  const cats=['zapatillas','mochila','nutricion','tecnologia'];
+  const catLabel={zapatillas:'Zapatillas',mochila:'Mochila',nutricion:'Nutrición',tecnologia:'Tecnología'};
+  el.innerHTML=`
+    <h2>🤝 Patrocinios</h2>
+    <p class="sub">Año ${yr} · ${Object.values(utSp).filter(Boolean).length} contrato${Object.values(utSp).filter(Boolean).length!==1?'s':''} activo${Object.values(utSp).filter(Boolean).length!==1?'s':''}</p>
+    ${cats.map(cat=>{
+      const active=utSp[cat];
+      const available=UT_SPONSORS.filter(s=>s.cat===cat&&s.reqYear<=yr&&!active);
+      return `<div style="margin-bottom:14px">
+        <div class="section-label">${catLabel[cat]||cat}</div>
+        ${active?`<div class="card" style="background:#f0faf0;border-color:#4a8a2a22;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:#2d7a2d">${esc(active.name)}</div>
+              <div style="font-size:12px;color:#555;margin:2px 0">${active.bonus||''}</div>
+              <div style="font-size:12px;color:#4a8a2a">+€${active.salary}/año · ${active.duration} año${active.duration!==1?'s':''}</div>
+            </div>
+            <button class="secondary" style="font-size:11px;padding:3px 8px;margin:0;border-color:#c0392b;color:#c0392b" onclick="utBreakSponsor('${cat}')">Romper</button>
+          </div>
+        </div>`:`<div style="font-size:12px;color:#aaa;margin-bottom:6px">Sin patrocinador activo</div>`}
+        ${available.length?available.map(s=>`
+          <div class="card" style="margin-bottom:6px;cursor:pointer;opacity:${active?'0.4':''}" onclick="${active?`showToast('Primero rompe el contrato con ${active.name}','#c07a10')`:`"utSignSponsor('${cat}','${s.id}')"`}">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <div style="font-size:13px;font-weight:600">${esc(s.name)}</div>
+                <div style="font-size:12px;color:#555">${s.bonus||''}</div>
+                ${Object.entries(s.statBonus||{}).filter(([,v])=>v>0).length?`<div style="font-size:11px;color:#4a8a2a">${Object.entries(s.statBonus).filter(([,v])=>v>0).map(([k,v])=>k+' +'+v).join(' · ')}</div>`:''}
+              </div>
+              <div style="text-align:right;flex-shrink:0;margin-left:8px">
+                <div style="font-size:13px;font-weight:600;color:#4a8a2a">€${s.salary}/año</div>
+                <div style="font-size:11px;color:#aaa">${s.duration} año${s.duration!==1?'s':''}</div>
+              </div>
+            </div>
+          </div>`).join(''):''}
+      </div>`;
+    }).join('')}
+    <button class="secondary" onclick="G.screen='utHome';render()">← Volver</button>
+  `;
+}
+window.utSignSponsor=(cat,id)=>{
+  const sp=UT_SPONSORS.find(s=>s.id===id);if(!sp)return;
+  if(!G.utSponsors)G.utSponsors={};
+  G.utSponsors[cat]={...sp,signedYear:G.utYear||1};
+  showToast(`✓ Contrato firmado con ${sp.name}`,'#2d7a2d');
+  render();
+};
+window.utBreakSponsor=(cat)=>{
+  if(!G.utSponsors||!G.utSponsors[cat])return;
+  const name=G.utSponsors[cat].name||'el sponsor';
+  G.utSponsors[cat]=null;
+  showToast(`Contrato con ${name} rescindido`,'#c07a10');
+  render();
+};
+
 window.utStartNextYear=()=>{
   G.utYear=(G.utYear||1)+1;
   G.utCalendar=[];G.utCurrentRaceIdx=0;G.utCurrentRaceState=null;
+  G.utTrainingBlock=null;G.utTaperBonus=false;G.utWarmedUp=false;G.utPreRaceNutrition='normal';
   G.pies=Math.min(100,(G.pies||100)+15);
   G.combustible=100;
   if(G.utYear>15){G.screen='utLegado';render();return;}
-  G.screen='utHome';render();
+  G.screen='utJobSelect';G.activeTab='game';render();
 };
 
 function renderUtLegado(){
