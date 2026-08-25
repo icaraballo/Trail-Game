@@ -20,7 +20,7 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
-const GAME_BUILD=62; // incrementar con cada versión del juego
+const GAME_BUILD=63; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
@@ -61,9 +61,10 @@ function migrateState(saved){
   ['selectedRaces','raceResults','careerHistory','rivals','liveClass','lastRaceGains',
    'injuryHistory','monthlyEvents','sponsorPenalties','joinedCircuits','circuitCompleted',
    'seasonDiary','aidSelected','paceLog','rivalChildren','lifePendingAthletes',
+   'dropbagItems','workPromotionsUsed','repInvitations',
    'coachSelectedRaces','coachRaceResults','coachAthleteHistory','coachDecisionLog',
    'coachEventLog','coachRoster','coachSponsors','unlockedAchievements',
-   'clubLegadoAthletes','clubMilestones','ownBrandEvents','cnVetHistory','cnRaceResults','cnSelectedRaces']
+   'cnVetHistory','cnRaceResults','cnSelectedRaces']
     .forEach(k=>{if(!Array.isArray(merged[k]))merged[k]=Array.isArray(base[k])?[...base[k]]:[];});
   // Deep-merge de objetos anidados adicionales
   if(saved.dog)          merged.dog={...base.dog,...saved.dog};
@@ -73,7 +74,6 @@ function migrateState(saved){
   if(saved.cnRaceState)  merged.cnRaceState={...base.cnRaceState,...saved.cnRaceState};
   if(saved.coachAthlete) merged.coachAthlete={...base.coachAthlete,...saved.coachAthlete};
   if(saved.lifeAthlete)  merged.lifeAthlete={...base.lifeAthlete,...saved.lifeAthlete};
-  if(saved.legadoData)   merged.legadoData={...base.legadoData,...saved.legadoData};
   if(saved.trainingMomentum) merged.trainingMomentum={...base.trainingMomentum,...saved.trainingMomentum};
   if(saved.trainingBlock)merged.trainingBlock={...base.trainingBlock,...saved.trainingBlock};
   return merged;
@@ -194,8 +194,10 @@ function importFromText(txt, slot){
 }
 
 function autoSave(){
+  // En modo Entrenador hay que volcar antes el slot activo al roster,
+  // si no se perdería el progreso del atleta en curso al serializar G.
+  if(G.gameMode==='coach'){try{saveCoachSlot();}catch(e){}}
   if(G._saveSlot==null)return;
-  if(G.gameMode==='coach'){saveCoachSlot();return;}
   try{saveToSlot(G._saveSlot);}catch(e){}
 }
 
@@ -209,7 +211,8 @@ function slotLabel(data){
   const specRanking=s.specRanking&&s.specRanking<900?'#'+s.specRanking:'—';
   const specLabel=SPEC_LABEL;
   const spec=specLabel[s.runner?.specialty]||'—';
-  const mode={facil:'🟢 Fácil',medio:'🟡 Medio',dificil:'🔴 Difícil',hardcore:'💀 Hardcore',expres:'⚡ Exprés'}[s.gameMode||'medio'];
+  const mode={facil:'🟢 Fácil',medio:'🟡 Medio',dificil:'🔴 Difícil',hardcore:'💀 Hardcore',
+    expres:'⚡ Exprés',coach:'📋 Entrenador',club:'🏕 Club',canicross:'🐕 Canicross'}[s.gameMode||'medio']||'🟡 Medio';
   const totalKm=s.totalCareerKm||0;
   const date=new Date(data.ts).toLocaleDateString('es-ES',{day:'2-digit',month:'short'});
   // Fase del arco narrativo

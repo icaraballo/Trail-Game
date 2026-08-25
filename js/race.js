@@ -826,6 +826,7 @@ window.doPace=p=>{
 function checkMidRaceEvents(){
   const race=G.selectedRaces[G.currentRaceIdx];
   if(!race)return null;
+  const r=G.runner;            // usado por los eventos timed de Exprés (r.legs)
   const segs=curSegs();
   const totalKm=race.km;
   const doneKm=segs.slice(0,G.seg).reduce((a,s)=>a+s.km,0);
@@ -1457,6 +1458,8 @@ function renderMidRaceEvent(){
 }
 window.resolveMidRaceEvent=(evId,choiceId)=>{
   const r=G.runner;
+  // Si el temporizador de Exprés seguía corriendo, el jugador respondió a tiempo
+  if(G._xpTimerInterval)G._xpTimerAnsweredCareer=(G._xpTimerAnsweredCareer||0)+1;
   if(evId==='storm'){
     G.stormActive=true;
     if(choiceId==='shelter'){
@@ -2293,7 +2296,7 @@ function finishRace(){
 }
 function goNextRace(){
   G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;
-  G.dayConditionGenerated=false;G.dayCondition=null;G.raceDayCondition=null;
+  G.dayConditionGenerated=false;G.dayCondition=null;
   G.gelsCarried=0;G.gelsUsed=0;G.warmedUp=false;G.startStrategy=null;
   G._raceInitialized=false;G._warmupApplied=false;G._recoveryUsed=false;
   const isExpres=G.gameMode==='expres';

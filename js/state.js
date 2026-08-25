@@ -55,7 +55,7 @@ function freshState(){
     trainingMomentum:null,
     taperBonus:false,
     personalBests:{},
-    raceDayCondition:null,
+    dayCondition:null,        // condición del día generada en initRace()
     trainingEvent:null,
     startStrategy:null,       // 'conservador'|'equilibrado'|'atope'
     nemesis:null,             // {name,flag,wins,lastGap}
@@ -204,7 +204,6 @@ function freshState(){
     cnDogFoodPremium:false, cnDogSupplements:false,
     cnVetHistory:[], cnBirthdayToastShown:{}, cnRaceState:null,
     dog:null,
-    legadoData:null,
   };
 }
 let G=freshState();
@@ -418,6 +417,7 @@ function startExpressTimer(defaultChoiceIdx){
     if(num)num.textContent=G._xpTimerVal;
     if(G._xpTimerVal<=0){
       clearExpressTimer();
+      G._xpTimerExpiredCareer=(G._xpTimerExpiredCareer||0)+1; // tracking logros Exprés
       const ev=G.midRaceEvent;
       if(ev&&ev.choices[defaultChoiceIdx]){
         resolveMidRaceEvent(ev.id,ev.choices[defaultChoiceIdx].id);

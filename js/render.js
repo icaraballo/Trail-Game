@@ -723,7 +723,6 @@ function renderRunnerTab(){
 function renderSaveScreen(){
   const el=document.getElementById('main');
   const slots=getAllSlots();
-  const autoData=loadFromSlot('auto');
   el.innerHTML=`
     <h1>Juego Trail</h1>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v${GAME_BUILD}</span></div>
@@ -1040,7 +1039,7 @@ window.doExpresPrep=choice=>{
   G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;
   G._raceInitialized=false;G._warmupApplied=false;G._recoveryUsed=false;
   G.redZoneStreak=0;G.redZoneMax=0;
-  G.dayConditionGenerated=false;G.dayCondition=null;G.raceDayCondition=null;
+  G.dayConditionGenerated=false;G.dayCondition=null;
   G.gelsCarried=0;G.gelsUsed=0;G.warmedUp=false;G.startStrategy=null;
   G.screen='expresPreRacePrep';render();
 };
@@ -1343,7 +1342,7 @@ function renderIntro(){
   el.innerHTML=`
     <h1>Juego Trail</h1>
     <p class="sub">Crea tu corredor y empieza tu carrera deportiva</p>
-    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v56</div>
+    <div style="display:inline-block;font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:8px">v${GAME_BUILD}</div>
     ${G.gameMode==='expres'?`<div class="warn" style="margin-bottom:14px">⚡ <strong>Carrera Exprés</strong> — 3 temporadas · sin gestión de jornada · ganancias de entrenamiento ×1.5</div>`:''}
     <label class="field-label">Nombre de la partida</label>
     <input id="runname" type="text" placeholder="Ej: Temporada del reto, Sin trabajo año 1..." value="${esc(G.runName||'')}" maxlength="30" style="margin-bottom:14px"/>
@@ -2106,8 +2105,8 @@ window.toggleRaceMid=id=>{
     if(spent+race.cost>G.money){alert('Sin presupuesto para esta inscripción.');return;}
     // Insertar en la posición correcta según mes
     const insertAt=G.selectedRaces.findIndex((r,i)=>i>=G.currentRaceIdx&&r.month>race.month);
-    if(insertAt===-1)G.selectedRaces.push(race);
-    else G.selectedRaces.splice(insertAt,0,race);
+    if(insertAt===-1)G.selectedRaces.push({...race});
+    else G.selectedRaces.splice(insertAt,0,{...race});
   }
   render();
 };
@@ -2495,7 +2494,7 @@ window.toggleRace=id=>{
   else{
     const spent=G.selectedRaces.reduce((a,r)=>a+r.cost,0);
     if(spent+race.cost>G.money){alert('Sin presupuesto para esta carrera.');return;}
-    G.selectedRaces.push(race);
+    G.selectedRaces.push({...race});
     G.selectedRaces.sort((a,b)=>a.month-b.month);
   }render();
 };
@@ -2628,7 +2627,9 @@ window.confirmBreakSponsor=(cat)=>{
   G.money=Math.max(0,G.money-penaltyAmount);
   const spName=sp.name;
   G.sponsors[cat]=null;
+  G._sponsorBreaks=(G._sponsorBreaks||0)+1;   // tracking logro 'joke_fire_sponsor'
   showToast(`Roto contrato con ${spName} · -€${penaltyAmount}`, '#c0392b');
+  checkAndUnlockAchievements();
   autoSave();
   render();
 };
@@ -2824,7 +2825,13 @@ window.doNextYear=yearNet=>{
     const sp=G.sponsors[cat];if(!sp)return;
     const met=checkSponsorObjective(sp);
     if(met&&!G._firstSponsorObjMet)G._firstSponsorObjMet=true;
-    if(!met){const penalty=Math.round(sp.salary*(sp.penaltyPct||0.15));G.sponsorPenalties.push({id:sp.id+'_'+G.year,name:sp.name,amount:penalty,cat});}
+    if(!met){
+      const penalty=Math.round(sp.salary*(sp.penaltyPct||0.15));
+      G.sponsorPenalties.push({id:sp.id+'_'+G.year,name:sp.name,amount:penalty,cat,year:G.year});
+      // tracking logro 'joke_broke_sponsor' — sponsors distintos incumplidos
+      if(!G._distinctPenaltySponsorIds)G._distinctPenaltySponsorIds=[];
+      if(!G._distinctPenaltySponsorIds.includes(sp.id))G._distinctPenaltySponsorIds.push(sp.id);
+    }
     sp.duration=(sp.duration||1)-1;if(sp.duration<=0)G.sponsors[cat]=null;
   });
   // Otorgar premios de circuitos completados (antes en render, ahora aquí)
@@ -2881,7 +2888,7 @@ window.doNextYear=yearNet=>{
   G.seasonKm=0;
   G.fatBurning=false;
   G.trainingMomentum=null;G.taperBonus=false;
-  G.dayConditionGenerated=false;G.dayCondition=null;G.raceDayCondition=null;
+  G.dayConditionGenerated=false;G.dayCondition=null;
   G.gelsCarried=0;G.gelsUsed=0;G.warmedUp=false;G.startStrategy=null;
   // Arco narrativo — actualizar atleta y resetear horas
   if(G.carreraVida&&G.lifeAthlete&&G.lifecyclePhase==='overlap'){
@@ -3657,7 +3664,7 @@ window.handleEv=(evId,choiceIdx)=>{
     case'train_penalty':G.trainingEff=Math.min(G.trainingEff,0.65);break;
     case'special_train':G.money=Math.max(0,G.money-150);break;
     case'change_block':G.pendingEvent=null;G.screen='training';render();return;
-    case'add_race':const extras=RACES_DB.filter(r=>!G.selectedRaces.find(s=>s.id===r.id));if(extras.length>0)G.selectedRaces.splice(G.currentRaceIdx,0,extras[0]);break;
+    case'add_race':const extras=RACES_DB.filter(r=>!G.selectedRaces.find(s=>s.id===r.id));if(extras.length>0)G.selectedRaces.splice(G.currentRaceIdx,0,{...extras[0]});break;
     default:break;
   }
   G.pendingEvent=null;goNextRace();
