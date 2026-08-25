@@ -650,11 +650,13 @@ function renderRunnerTab(){
       <div style="font-size:12px;font-weight:700;color:#c0392b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Penalizaciones pendientes</div>
       ${G.sponsorPenalties.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #fef0f0">
         <div style="font-size:13px;color:var(--color-text-primary)">${p.name}</div>
-        <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:13px;font-weight:600;color:#c0392b">-€${p.amount}</span>
           <button class="secondary" style="font-size:12px;padding:3px 10px" onclick="payPenalty('${p.id}')">Pagar</button>
+          <button class="secondary" style="font-size:12px;padding:3px 10px;border-color:#c07a10;color:#c07a10" onclick="negotiatePenalty('${p.id}')">Negociar</button>
         </div>
       </div>`).join('')}
+      <div style="font-size:12px;color:#888;margin-top:8px">Negociar deja la sanción en el 40% si el sponsor acepta — ${Math.round(penaltyNegotiationChance()*100)}% de probabilidad con tu reputación actual. Si se niega, pagas el total y pierdes seguidores. Lo que no resuelvas se cobra solo al cerrar la temporada que viene.</div>
     </div>`:''}
 
     ${G.club&&G.club.id!=='none'?(()=>{
@@ -1703,10 +1705,14 @@ function renderSponsors(){
     ${G.sponsorPenalties&&G.sponsorPenalties.length>0?`
     <div class="danger" style="margin-bottom:14px">
       <div style="font-weight:600;margin-bottom:6px">Penalizaciones por incumplimiento</div>
-      ${G.sponsorPenalties.map(p=>`<div style="font-size:13px;display:flex;justify-content:space-between;margin-bottom:4px">
+      ${G.sponsorPenalties.map(p=>`<div style="font-size:13px;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
         <span>${p.name}</span>
-        <span style="font-weight:600">-€${p.amount} <button class="secondary" style="font-size:12px;padding:2px 8px;margin-left:8px" onclick="payPenalty('${p.id}')">Pagar</button></span>
+        <span style="font-weight:600">-€${p.amount}
+          <button class="secondary" style="font-size:12px;padding:2px 8px;margin-left:8px" onclick="payPenalty('${p.id}')">Pagar</button>
+          <button class="secondary" style="font-size:12px;padding:2px 8px;margin-left:4px;border-color:#c07a10;color:#c07a10" onclick="negotiatePenalty('${p.id}')">Negociar</button>
+        </span>
       </div>`).join('')}
+      <div style="font-size:12px;color:#7a5a10;margin-top:6px">Negociar rebaja la sanción al 40% si aceptan (${Math.round(penaltyNegotiationChance()*100)}% de éxito con tu reputación actual). Si se niegan, pagas el total y pierdes seguidores. Sin resolver, se te cobra de oficio al cerrar la temporada que viene.</div>
     </div>`:''}
 
     ${cats.map(cat=>{
@@ -1792,6 +1798,41 @@ window.payPenalty=id=>{
   const p=G.sponsorPenalties[idx];
   G.money=Math.max(0,G.money-p.amount);
   G.sponsorPenalties.splice(idx,1);
+  checkAndUnlockAchievements();
+  autoSave();
+  render();
+};
+
+// ── NEGOCIACIÓN DE PENALIZACIONES ──────
+// Probabilidad de que el sponsor acepte rebajar la penalización.
+// Tu peso mediático (seguidores) y tu ranking son los argumentos:
+// sin reputación no tienes nada que ofrecerles a cambio.
+function penaltyNegotiationChance(){
+  const f=G.followers||0;
+  const repBonus  = f>=25000?0.30 : f>=10000?0.20 : f>=2500?0.10 : 0;
+  const rankBonus = G.ranking<=10?0.20 : G.ranking<=50?0.10 : 0;
+  return Math.min(0.85, 0.25+repBonus+rankBonus);
+}
+window.negotiatePenalty=id=>{
+  if(!G.sponsorPenalties)return;
+  const idx=G.sponsorPenalties.findIndex(p=>p.id===id);
+  if(idx<0)return;
+  const p=G.sponsorPenalties[idx];
+  const ok=Math.random()<penaltyNegotiationChance();
+  if(ok){
+    const reducida=Math.round(p.amount*0.4);
+    G.money=Math.max(0,G.money-reducida);
+    G.sponsorPenalties.splice(idx,1);
+    G._sponsorNegotiations=(G._sponsorNegotiations||0)+1; // tracking logro 'sponsor_negotiate'
+    showToast(`Acuerdo con ${p.name} · -€${reducida} en vez de -€${p.amount}`,'#4a8a2a');
+  } else {
+    G.money=Math.max(0,G.money-p.amount);
+    G.sponsorPenalties.splice(idx,1);
+    applyRepDecay('bad_result');
+    showToast(`${p.name} no cede. Pagas los €${p.amount} completos.`,'#c0392b');
+  }
+  checkAndUnlockAchievements();
+  autoSave();
   render();
 };
 
@@ -2844,6 +2885,18 @@ window.doNextYear=yearNet=>{
     }
   });
   G.money=Math.max(0,G.money+yearNet);
+
+  // ── Penalizaciones de sponsor vencidas ──────────────────────────
+  // Tienes una temporada de margen para pagarlas o negociarlas. Las que
+  // sigan pendientes al cerrar la temporada siguiente se cobran de oficio.
+  (G.sponsorPenalties||[]).forEach(p=>{if(p.year==null)p.year=G.year;}); // saves anteriores a v63
+  const _vencidas=(G.sponsorPenalties||[]).filter(p=>p.year<G.year);
+  if(_vencidas.length){
+    const _totalVenc=_vencidas.reduce((a,p)=>a+p.amount,0);
+    G.money=Math.max(0,G.money-_totalVenc);
+    G.sponsorPenalties=G.sponsorPenalties.filter(p=>p.year>=G.year);
+    setTimeout(()=>showToast(`Penalizaciones vencidas cobradas: -€${_totalVenc}`,'#c0392b'),600);
+  }
 
   // Ingresos anuales de marca (ya están en yearNet a través de monthlyNet, pero el empleado se paga aparte)
   // El coste del empleado ya está descontado en monthlyBrandIncome() = 600 neto
