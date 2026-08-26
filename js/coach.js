@@ -729,6 +729,15 @@ window.doCoachTraining=blockId=>{
       break;}
     case'obediente':
       reactionMsg=`Ejecuta el plan exactamente como se lo has dado. Ni más, ni menos.`;effMult=1.0;trustDelta=+1;break;
+    case'perfeccionista':
+      if((G.coachTrust||0)>=75){
+        reactionMsg=`Analiza cada detalle del plan y lo ejecuta con precisión milimétrica. Confía en tu criterio.`;
+        effMult=1.3;trustDelta=+1;
+      } else {
+        reactionMsg=`Duda del plan, pide explicaciones constantes y lo ejecuta con reservas.`;
+        effMult=0.85;trustDelta=0;
+      }
+      break;
     case'quemado':
       if(Math.random()<0.25){reactionMsg=`Hoy no aparece al entrenamiento. Necesita espacio, dice.`;effMult=0;trustDelta=-2;}
       else{reactionMsg=`Entrena, pero con la mente en otro lado. Rendimiento por debajo de lo esperado.`;effMult=0.65;trustDelta=+1;}

@@ -20,17 +20,35 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
-const GAME_BUILD=64; // incrementar con cada versión del juego
+const GAME_BUILD=65; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
 
-// Devuelve una copia de G sin las claves transitorias (prefijo _)
-// Evita serializar timers, cachés de HTML, borradores de UI, etc.
+// Contadores de progreso/logros con prefijo _ que SÍ deben sobrevivir al guardado
+// (se leen desde ACHIEVEMENTS en constants.js). El resto de claves _ son timers,
+// handles o flags de un solo render y no deben persistirse.
+const PERSISTENT_UNDERSCORE_KEYS=[
+  '_nemesisDefeatCount','_firstSponsorObjMet','_wonWithTaper','_sponsorRenewals',
+  '_cleanSponsorSeason','_clubFisioUsed','_clubEntrenadorUsed','_clubLoyaltyStreak',
+  '_clubLoyaltyId','_clubAscent','_sponsorNegotiations','_sponsorBreaks',
+  '_distinctPenaltySponsorIds','_abandonsByYear','_lastPlaceCount','_sabotageCount',
+  '_helpingCount','_stormLowEnergyFinishes','_noTrainSeasonDone','_retireYear',
+  '_rivalLossStreak','_xpTimerAnsweredCareer','_xpTimerExpiredCareer','_xpAllTimedInARace',
+  '_xpNoAnswerRace','_xpPerfectTimedRace','_cnInjuryComeback','_cnBondRecovered',
+  '_cnBondMinReached','_cnLowBondRaced','_cnDogDnfCount','_cnDogHealthyStreak',
+  '_cnDogHealthyPrev','_cnDogInjury2Consecutive','_cnPerfectSeasons','_cnRacedWithoutCommands',
+  '_cnLastPlaceCount','_cnPreseasonNothing','_cnIgnoredVetSeason','_cnVetThisSeason',
+  '_yearObjectiveRewardPaid',
+];
+
+// Devuelve una copia de G sin las claves transitorias (timers, flags de un solo
+// render, cachés de HTML) pero conservando los contadores de logros (prefijo _
+// que están en PERSISTENT_UNDERSCORE_KEYS).
 function serializableState(){
   const clean={};
   for(const k in G){
-    if(!k.startsWith('_')) clean[k]=G[k];
+    if(!k.startsWith('_')||PERSISTENT_UNDERSCORE_KEYS.includes(k)) clean[k]=G[k];
   }
   return JSON.parse(JSON.stringify(clean));
 }
@@ -57,6 +75,11 @@ function migrateState(saved){
   merged.circuitPoints={...(saved.circuitPoints||{})};
   merged.rivalRetirements={...(saved.rivalRetirements||{})};
   merged.midRaceEventTriggered={...(saved.midRaceEventTriggered||{})};
+  // v65: 'basic_line' nunca existió en CANICROSS_EQUIPMENT.line — migrar a 'soft_line'
+  if(merged.equipment&&merged.equipment.line==='basic_line')merged.equipment.line='soft_line';
+  if(merged.cnOwnedEquipment&&Array.isArray(merged.cnOwnedEquipment.line)){
+    merged.cnOwnedEquipment.line=merged.cnOwnedEquipment.line.map(id=>id==='basic_line'?'soft_line':id);
+  }
   // Asegurar arrays
   ['selectedRaces','raceResults','careerHistory','rivals','liveClass','lastRaceGains',
    'injuryHistory','monthlyEvents','sponsorPenalties','joinedCircuits','circuitCompleted',

@@ -239,7 +239,6 @@ function initRace(){
 
   G.weather=Math.random()<race.weather_risk?'extremo':Math.random()>0.5?'soleado':'nublado';
   G.runner.energy=100;G.runner.hydration=100;
-  G.runner.legs=G.legsPenalty?82:100;G.legsPenalty=false;
   G.time=0;G.seg=0;G.raceEvent='';G.aidSelected=[];
   // ── Condición del día (genera solo una vez por carrera) ───────────
   if(!G.dayConditionGenerated){
@@ -795,6 +794,7 @@ window.doPace=p=>{
     }
   } else if(descentFall){
     const sbVal=getEffStat('bajada');
+    const load=getBodyLoad();
     const cause=sbVal<50&&load>=70?'Cuerpo cargado y técnica ajustada en la bajada':
                 load>=70?'El cuerpo cargado no respondió en la bajada':
                 'Resbalón en terreno técnico';

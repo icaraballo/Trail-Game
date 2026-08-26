@@ -673,7 +673,7 @@ const PRIZE_TABLE=[1.0,0.5,0.25,0.12,0.07,0.04,0.02,0.01]; // idx 0=1º... >8=0
 const RIVALS_POOL=[
   {name:'Kilian Jornet',    flag:'🇪🇸',country:'España',        spec:'montanero',  base:0.92, tier:3},
   {name:'François D\'Haene',flag:'🇫🇷',country:'Francia',       spec:'fondista',   base:0.93, tier:3},
-  {name:'Jim Walmsley',    flag:'🇺🇸',country:'Estados Unidos', spec:'velocidad',  base:0.94, tier:3},
+  {name:'Jim Walmsley',    flag:'🇺🇸',country:'Estados Unidos', spec:'fondista',   base:0.94, tier:3},
   {name:'Courtney Dauwalter',flag:'🇺🇸',country:'Estados Unidos',spec:'fondista',  base:0.93, tier:3},
   {name:'Pau Capell',      flag:'🇪🇸',country:'España',        spec:'montanero',  base:0.95, tier:3},
   {name:'Tom Evans',       flag:'🇬🇧',country:'Reino Unido',   spec:'fondista',   base:0.96, tier:3},
@@ -1586,12 +1586,22 @@ const CLUB_EVENTS=[
      {text:'Dejarle ir y buscar otro — más libertad, menos ingresos',repDelta:-3,income:-300},
    ]},
 ];
-const EXCLUSIVE_CLUB_RACE={
-  id:'copa_clubes',name:'Copa de Clubes Trail',dist:42,month:9,cost:0,
-  minYear:1,spec:'all',circuit:null,
-  desc:'Carrera exclusiva para miembros con alta reputación en su club. Rivales top, sin inscripción.',
-  prize:300,isExclusive:true
-};
+// Clona el esquema completo de una carrera real de RACES_DB (segs, km, desnivel,
+// weather_risk, tier, etc.) para evitar mantener a mano un segundo dataset de
+// tramos que pueda desincronizarse del esquema real (CR-07).
+const EXCLUSIVE_CLUB_RACE=(()=>{
+  const template=RACES_DB.find(r=>r.id==='julio'); // Maratón Alpino Madrileño, 42K nacional
+  return {
+    ...template,
+    id:'copa_clubes',
+    name:'Copa de Clubes Trail',
+    type:'42K exclusiva',
+    desc:'Carrera exclusiva para miembros con alta reputación en su club. Rivales top, sin inscripción.',
+    month:9,monthName:'Septiembre',quarter:3,
+    cost:0,prize:300,reqRanking:999,
+    isExclusive:true,
+  };
+})();
 const TRAINING_EVENTS_POOL=[
   {id:'revelation', prob:0.12, type:'good',
    title:'Algo hace clic',

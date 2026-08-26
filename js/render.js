@@ -1095,8 +1095,8 @@ function renderExpresSeasonBalance(){
 
   el.innerHTML=`
     <div style="background:#fef9ec;border:1.5px solid #f0d98a;border-radius:12px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
-      <span style="font-size:13px;font-weight:700;color:#8a4a00">⚡ Temporada ${G.year}/3 completada</span>
-      ${G.year>=3?'<span style="font-size:12px;color:#c07a10;font-weight:600">Última temporada 🏁</span>':''}
+      <span style="font-size:13px;font-weight:700;color:#8a4a00">⚡ Temporada ${G.year}/${modeCfg().maxYears} completada</span>
+      ${G.year>=modeCfg().maxYears?'<span style="font-size:12px;color:#c07a10;font-weight:600">Última temporada 🏁</span>':''}
     </div>
     <h2>Balance de temporada</h2>
     <p class="sub">${esc(G.runner.name||'Corredor')} · Ranking #${G.ranking<900?G.ranking:'—'}</p>
@@ -1123,7 +1123,7 @@ function renderExpresSeasonBalance(){
       <div class="sec-title-sm">Stats finales</div>
       ${Object.entries(G.runner.stats).map(([k,v])=>srow(k.charAt(0).toUpperCase()+k.slice(1),v)).join('')}
     </div>
-    <button class="main" onclick="doNextYear(${yearNet})">${G.year>=3?'Ver resumen de carrera →':'Temporada '+(G.year+1)+' →'}</button>
+    <button class="main" onclick="doNextYear(${yearNet})">${G.year>=modeCfg().maxYears?'Ver resumen de carrera →':'Temporada '+(G.year+1)+' →'}</button>
     ${G.year>=2?`<button class="main" style="margin-top:6px;border-color:#c0392b;color:#c0392b" onclick="doRetire()">Retiro anticipado — ver resumen</button>`:''}`;
 }
 
@@ -2466,7 +2466,7 @@ function renderSeasonBalance(){
         <span class="aid-time" style="font-size:13px;font-weight:600">€${cost}</span>
       </div>`).join('')}
 
-    <button class="main" style="margin-top:14px" onclick="doNextYear(${yearNet})">${G.gameMode==='expres'&&G.year>=3?'Ver resumen final →':`Temporada ${G.year+1} →`}</button>
+    <button class="main" style="margin-top:14px" onclick="doNextYear(${yearNet})">${G.gameMode==='expres'&&G.year>=modeCfg().maxYears?'Ver resumen final →':`Temporada ${G.year+1} →`}</button>
     ${(G.runner.age||25)>=42&&G.gameMode!=='expres'?`<button class="main" style="margin-top:6px;border-color:#c0392b;color:#c0392b" onclick="doRetire()">Retirarse — ver resumen de carrera</button>`:''}
     ${G.carreraVida&&G.lifecyclePhase==='overlap'&&(G.runner.age||25)<42?`<button class="main" style="margin-top:6px;border-color:#534AB7;color:#3C3489" onclick="doRetire()">Dejar la competición — pasar a entrenador</button>`:''}
     ${G.gameMode==='expres'&&G.year>=2?`<button class="main" style="margin-top:6px;border-color:#c0392b;color:#c0392b" onclick="doRetire()">Retiro anticipado — ver resumen</button>`:''}
@@ -2541,6 +2541,7 @@ window.toggleRace=id=>{
 };
 window.selectYearObjective=(objId)=>{
   G.yearObjective=objId;
+  G._yearObjectiveRewardPaid=false;
   showToast(`Objetivo elegido: ${SEASON_OBJECTIVES.find(o=>o.id===objId)?.label||''}`, '#4a90d9');
   autoSave();
   render();
@@ -2886,6 +2887,16 @@ window.doNextYear=yearNet=>{
   });
   G.money=Math.max(0,G.money+yearNet);
 
+  // ── Recompensa de objetivo de temporada (pago único) ─────────────
+  if(G.yearObjective&&!G._yearObjectiveRewardPaid){
+    const objRes=checkYearObjectiveMet();
+    if(objRes&&objRes.met){
+      G.money+=objRes.reward;
+      G._yearObjectiveRewardPaid=true;
+      setTimeout(()=>showToast(`✓ Objetivo cumplido: +€${objRes.reward}`,'#4a8a2a'),400);
+    }
+  }
+
   // ── Penalizaciones de sponsor vencidas ──────────────────────────
   // Tienes una temporada de margen para pagarlas o negociarlas. Las que
   // sigan pendientes al cerrar la temporada siguiente se cobran de oficio.
@@ -2925,8 +2936,8 @@ window.doNextYear=yearNet=>{
 
   G.year++;
 
-  // Fin de modo Exprés (3 temporadas)
-  if(G.gameMode==='expres'&&G.year>3){G.screen='retirement';render();return;}
+  // Fin de modo Exprés (temporadas según modeCfg().maxYears)
+  if(G.gameMode==='expres'&&G.year>modeCfg().maxYears){G.screen='retirement';render();return;}
 
   if(G.year>=3&&G.ranking<200&&monthlyNet()>=0)G.workPct=Math.min(G.workPct,80);
   // Traspasar clasificación Zegama

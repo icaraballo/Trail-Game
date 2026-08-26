@@ -215,7 +215,6 @@ function cnFinishRace(){
   const rs=G.cnRaceState;if(!rs)return;
   const d=G.dog;if(!d)return;
   const race=(G.cnSelectedRaces||[])[G.cnCurrentRaceIdx]||{};
-  const mods=cnGetEquipMods();
 
   const totalBond=rs.bondDelta||0;
   const prevBond=d.bond||0;
@@ -284,8 +283,8 @@ window.doStartCanicross=()=>{
   G.cnTrainingBlock=null;G.cnWeek=0;
   G.cnVacationDays=15;G.cnVacationUsed=0;G.cnVacationThisSeason=0;G.cnOpenMonths=[];G.cnOpenSeasonMonths=[];
   G.cnTrainAdrainSessions={left:0,hold:0,forward:0};
-  G.equipment={dogHarness:'basic_harness',humanBelt:'basic_belt',line:'basic_line'};
-  G.cnOwnedEquipment={dogHarness:['basic_harness'],humanBelt:['basic_belt'],line:['basic_line']};
+  G.equipment={dogHarness:'basic_harness',humanBelt:'basic_belt',line:'soft_line'};
+  G.cnOwnedEquipment={dogHarness:['basic_harness'],humanBelt:['basic_belt'],line:['soft_line']};
   G.cnDogFoodPremium=false;G.cnDogSupplements=false;
   G.cnVetHistory=[];G.cnBirthdayToastShown={};G.cnRaceState=null;
   G.dog=null;G._cnDogBreed=null;G._cnDogName=null;
@@ -466,7 +465,11 @@ window.cnMakeDecision=optIdx=>{
   const opt=(ev.options||[])[optIdx];if(!opt)return;
   if(opt.bondMod)rs.bondDelta=(rs.bondDelta||0)+opt.bondMod;
   if(opt.timeLoss)rs.timePenalty=(rs.timePenalty||0)+opt.timeLoss;
-  if(opt.injuryRisk&&Math.random()<0.4)rs.injuryPending=opt.injurySevere?'luxacion':'almohadillas';
+  if(opt.injuryRisk){
+    const mods=cnGetEquipMods();
+    const riskChance=Math.max(0,0.4+(mods.injuryRisk/100));
+    if(Math.random()<riskChance)rs.injuryPending=opt.injurySevere?'luxacion':'almohadillas';
+  }
   if(opt.retire)rs.retired=true;
   rs.eventLog.push({seg:rs.currentSeg,event:ev,choice:optIdx,resolved:true});
   rs.pendingEvent=null;
@@ -482,8 +485,9 @@ window.cnChoosePace=paceId=>{
   const seg=rs.segs?.[rs.currentSeg];
   const basePace=rs.basePace||390;
   const kmPerSeg=(rs.km||8)/rs.numSegs;
-  const speedFactor=Math.max(0.7,Math.min(1.3,(d?.speed||50)/50));
-  const staminaFactor=Math.max(0.8,(d?.stamina||50)/100);
+  const mods=cnGetEquipMods();
+  const speedFactor=Math.max(0.7,Math.min(1.3,((d?.speed||50)+mods.speedMod)/50));
+  const staminaFactor=Math.max(0.8,((d?.stamina||50)+mods.staminaMod)/100);
 
   let tm=Math.round(basePace*kmPerSeg*pace.timeMult/speedFactor);
   let ec=pace.energyCost;
@@ -569,7 +573,7 @@ window.cnCallVet=type=>{
 window.cnBuyEquip=(category,id)=>{
   const items=CANICROSS_EQUIPMENT[category]||[];
   const item=items.find(i=>i.id===id);if(!item)return;
-  if(!G.cnOwnedEquipment)G.cnOwnedEquipment={dogHarness:['basic_harness'],humanBelt:['basic_belt'],line:['basic_line']};
+  if(!G.cnOwnedEquipment)G.cnOwnedEquipment={dogHarness:['basic_harness'],humanBelt:['basic_belt'],line:['soft_line']};
   if((G.cnOwnedEquipment[category]||[]).includes(id)){showToast('Ya tienes este equipo','#888');return;}
   if((G.cnMoney||0)<item.price){showToast('Sin fondos suficientes','#c0392b');return;}
   G.cnMoney-=item.price;
@@ -581,7 +585,7 @@ window.cnBuyEquip=(category,id)=>{
 
 window.cnSelectEquip=(category,id)=>{
   if(!(G.cnOwnedEquipment[category]||[]).includes(id))return;
-  if(!G.equipment)G.equipment={dogHarness:'basic_harness',humanBelt:'basic_belt',line:'basic_line'};
+  if(!G.equipment)G.equipment={dogHarness:'basic_harness',humanBelt:'basic_belt',line:'soft_line'};
   G.equipment[category]=id;
   render();
 };
@@ -1038,8 +1042,8 @@ function renderCnPerroTab(){
 // ── TAB: EQUIPO ───────────────────────────────────────
 function renderCnEquipoTab(){
   const el=document.getElementById('main');
-  const owned=G.cnOwnedEquipment||{dogHarness:['basic_harness'],humanBelt:['basic_belt'],line:['basic_line']};
-  const eq=G.equipment||{dogHarness:'basic_harness',humanBelt:'basic_belt',line:'basic_line'};
+  const owned=G.cnOwnedEquipment||{dogHarness:['basic_harness'],humanBelt:['basic_belt'],line:['soft_line']};
+  const eq=G.equipment||{dogHarness:'basic_harness',humanBelt:'basic_belt',line:'soft_line'};
 
   const renderSection=(title,category)=>{
     const items=CANICROSS_EQUIPMENT[category]||[];
