@@ -375,7 +375,7 @@ function modeCfg(){
     facil:    {injuryRiskMult:0.4, fatigueMult:0.7, rivalMult:1.12, startMoney:550, sponsorMult:1.2, trainingMult:1.0, maxYears:99},
     medio:    {injuryRiskMult:1.0, fatigueMult:1.0, rivalMult:1.00, startMoney:300, sponsorMult:1.0, trainingMult:1.0, maxYears:99},
     dificil:  {injuryRiskMult:1.6, fatigueMult:1.3, rivalMult:0.90, startMoney:180, sponsorMult:0.85,trainingMult:1.0, maxYears:99},
-    hardcore: {injuryRiskMult:2.2, fatigueMult:1.6, rivalMult:0.85, startMoney:200, sponsorMult:0.7, trainingMult:1.0, maxYears:99},
+    hardcore: {injuryRiskMult:2.2, fatigueMult:1.6, rivalMult:0.85, startMoney:150, sponsorMult:0.7, trainingMult:1.0, maxYears:99},
     expres:   {injuryRiskMult:0.6, fatigueMult:0.8, rivalMult:0.98, startMoney:500, sponsorMult:1.1, trainingMult:1.5, maxYears:3},
     coach:    {injuryRiskMult:1.0, fatigueMult:1.0, rivalMult:1.00, startMoney:500, sponsorMult:1.0, trainingMult:1.0, maxYears:99},
   }[m]||{injuryRiskMult:1.0,fatigueMult:1.0,rivalMult:1.00,startMoney:300,sponsorMult:1.0,trainingMult:1.0,maxYears:99};

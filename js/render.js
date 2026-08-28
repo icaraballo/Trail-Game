@@ -850,7 +850,7 @@ window.doImport=(slot)=>{
 
 function renderExpresSeasonStart(){
   const el=document.getElementById('main');
-  const showObjectives=G.year===1&&!G.yearObjective;
+  const showObjectives=!G.yearObjective||G._yearObjectiveRewardPaid;
   el.innerHTML=`
     <div style="background:#fef9ec;border:1.5px solid #f0d98a;border-radius:14px;padding:14px 16px;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -1506,7 +1506,7 @@ function renderSeasonStart(){
   const el=document.getElementById('main');
   const wo=WORK_OPTIONS.find(o=>o.pct===G.workPct);
   const net=monthlyNet();
-  const showObjectives=G.year===1&&!G.yearObjective; // Solo mostrar en primer año, una sola vez
+  const showObjectives=!G.yearObjective||G._yearObjectiveRewardPaid; // Se vuelve a ofrecer cada vez que se cobra el objetivo actual
   
   el.innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px">
@@ -2732,7 +2732,7 @@ window.doStartRaces=()=>{
 // ── Calcula costes y multiplicador de tiempo para un ritmo ──
 // 5b: Mejora marginal decreciente por encima del techo suave según modo
 function statCapMult(currentVal){
-  const softCap={facil:85,medio:75,dificil:82,hardcore:82,expres:75}[G.gameMode||'medio']||75;
+  const softCap={facil:90,medio:85,dificil:80,hardcore:75,expres:85}[G.gameMode||'medio']||75;
   if(currentVal<softCap)return 1.0;
   return Math.max(0.05,1.0-(currentVal-softCap)*0.09);
 }

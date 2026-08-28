@@ -510,6 +510,11 @@ window.cnChoosePace=paceId=>{
     rs.dogHealth=Math.min(100,(rs.dogHealth||100)+4);
     setTimeout(()=>showToast(esc(d.name)+' mantiene el ritmo — "Aguanta" ✓','#4a8a2a'),50);
   }
+  if(seg?.type==='descent'&&d?.commands?.left){
+    rs.time=Math.max(0,(rs.time||0)-6);
+    rs.dogHealth=Math.min(100,(rs.dogHealth||100)+2);
+    setTimeout(()=>showToast(esc(d.name)+' toma las curvas — "Izquierda" ✓ −6s','#4a8a2a'),50);
+  }
 
   const ev=cnPickEvent(rs.month||1);
   if(ev&&!ev.decision){

@@ -203,6 +203,7 @@ function getSpecificInjury(paceLog,load){
   else if(load>=70)risk+=0.12;
   if(allout>=3)risk+=0.15;
   if(allout>=2)risk+=0.08;
+  risk=Math.min(0.95,risk*modeCfg().injuryRiskMult);
   if(hasFisio())risk*=0.35;
   if(Math.random()>risk)return null;
   // Type depends on what dominated
@@ -711,6 +712,7 @@ function checkSegInjury(p,seg,alloutStreak,sb){
     if(load>=85) fallRisk+=0.30;
     else if(load>=70)fallRisk+=0.18;
     else if(load>=55)fallRisk+=0.07;
+    fallRisk=Math.min(0.95,fallRisk*modeCfg().injuryRiskMult);
     if(hasFisio())fallRisk*=0.45;
     if(Math.random()<fallRisk)descentFall=true;
   }
