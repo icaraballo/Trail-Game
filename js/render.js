@@ -519,9 +519,7 @@ function renderRunnerTab(){
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#bbb;margin-top:4px">
         <span>0%</span><span style="color:#c07a10">70% riesgo</span><span style="color:#c0392b">100% lesión</span>
       </div>
-      ${getBodyLoad()>=70?`<div style="font-size:12px;color:#c0392b;margin-top:6px">⚠ Cuerpo muy cargado — riesgo de lesión elevado</div>`:
-        getBodyLoad()>=50?`<div style="font-size:12px;color:#c07a10;margin-top:6px">Carga moderada — vigila el volumen de entrenamiento</div>`:
-        `<div style="font-size:12px;color:#4a8a2a;margin-top:6px">✓ Carga bajo control</div>`}
+      ${(()=>{const w=getLoadWarningMsg(getBodyLoad());return w.msg?`<div style="font-size:12px;color:${w.color};margin-top:6px">${w.msg}</div>`:`<div style="font-size:12px;color:#4a8a2a;margin-top:6px">✓ Carga bajo control</div>`;})()}
     </div>
 
     <div class="card">

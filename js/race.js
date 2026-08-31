@@ -523,17 +523,18 @@ function renderSegment(){
         const alloutStreak=recentLog.slice(-3).filter(x=>x==='allout').length;
         const hardCount=recentLog.slice(-4).filter(x=>x==='allout'||x==='push').length;
         let warningMsg='';let warningCol='';
+        const lt=getLoadThresholdsByMode();
         if(isAllout&&alloutStreak>=2){
           {const baseMult=alloutStreak>=3?2.2:1.6;const realMult=(baseMult*(modeCfg().fatigueMult||1.0)).toFixed(1);warningMsg=`⚠ ${alloutStreak} tramos a tope seguidos — fatiga ×${realMult} en energía y piernas`;warningCol='#c0392b';}
         } else if((isAllout||isPush)&&hardCount>=3){
           warningMsg=`⚠ Llevas ${hardCount} tramos duros — el cuerpo está pagando el precio`;warningCol='#c07a10';
         } else if(isAllout&&onDescent){
-          if(sb<50&&load>=70){warningMsg=`⚠ bajada técnica + cuerpo cargado (${load}%) — riesgo alto`;warningCol='#c0392b';}
+          if(sb<50&&load>=lt.warningLevel2){warningMsg=`⚠ bajada técnica + cuerpo cargado (${load}%) — riesgo alto`;warningCol=getLoadWarningColor(load)||'#c0392b';}
           else if(sb<50)     {warningMsg=`⚠ bajada técnica (bajada ${sb}) — posible caída`;warningCol='#c0392b';}
-          else if(load>=85)  {warningMsg=`⚠ cuerpo muy al límite (${load}%) — posible caída`;warningCol='#c0392b';}
-          else if(load>=70)  {warningMsg=`⚠ cuerpo cargado (${load}%) — hay riesgo de caída`;warningCol='#c07a10';}
-        } else if(isAllout&&load>=70&&!onDescent){
-          warningMsg=`⚠ cuerpo cargado — recuperación lenta`;warningCol='#c07a10';
+          else if(load>=lt.criticalLevel)  {warningMsg=`⚠ cuerpo muy al límite (${load}%) — posible caída`;warningCol=getLoadWarningColor(load)||'#c0392b';}
+          else if(load>=lt.warningLevel2)  {warningMsg=`⚠ cuerpo cargado (${load}%) — hay riesgo de caída`;warningCol=getLoadWarningColor(load)||'#c07a10';}
+        } else if(isAllout&&load>=lt.warningLevel2&&!onDescent){
+          warningMsg=`⚠ cuerpo cargado — recuperación lenta`;warningCol=getLoadWarningColor(load)||'#c07a10';
         }
         // Adjust displayed cost if fatigue multiplier active
         const fatigueMult=alloutStreak>=3?2.2:alloutStreak===2?1.6:hardCount>=3?1.3:1.0;
@@ -550,9 +551,11 @@ function renderSegment(){
       const minStat=Math.min(r.energy,r.hydration,r.legs);
       const critCount=[r.energy,r.hydration,r.legs].filter(v=>v<10).length;
       if(minStat<10){
+        const scaled=getLoadWarningMsg(getBodyLoad());
         const col=critCount>=2?'#c0392b':critCount===1?'#c07a10':'#888';
         const bg=critCount>=2?'#fef0f0':critCount===1?'#fff9f0':'#f5f5f5';
-        const msg=critCount>=2?'⚠ Límite físico — continuar tiene consecuencias graves':critCount===1?'⚠ Al límite — continuar puede costar caro':'Al límite — considera abandonar';
+        const fallback=critCount>=2?'⚠ Límite físico — continuar tiene consecuencias graves':critCount===1?'⚠ Al límite — continuar puede costar caro':'Al límite — considera abandonar';
+        const msg=critCount>=1&&scaled.msg?scaled.msg:fallback;
         return `<div style="margin-top:10px;padding:10px 12px;background:${bg};border:1.5px solid ${col};border-radius:8px">
           <div style="font-size:12px;color:${col};font-weight:600;margin-bottom:6px">${msg}</div>
           <button class="abandon-btn" style="border-color:${col};color:${col};background:${bg};margin-top:0" onclick="doAbandon()">Abandonar carrera</button>
@@ -650,8 +653,10 @@ function renderAid(){
       const r=G.runner;
       const minStat=Math.min(r.energy,r.hydration,r.legs);
       const critCount=[r.energy,r.hydration,r.legs].filter(v=>v<10).length;
+      const scaledAid=getLoadWarningMsg(getBodyLoad());
       const col=critCount>=2?'#c0392b':critCount===1?'#c07a10':'#bbb';
-      const label=critCount>=2?'⚠ Al límite — retirarse aquí es lo sensato':critCount===1?'Al límite — ¿seguir o retirarse?':'Retirarse en este avituallamiento';
+      const fallbackLabel=critCount>=2?'⚠ Al límite — retirarse aquí es lo sensato':critCount===1?'Al límite — ¿seguir o retirarse?':'Retirarse en este avituallamiento';
+      const label=critCount>=1&&scaledAid.msg?scaledAid.msg:fallbackLabel;
       return `<button class="abandon-btn" style="margin-top:6px;border-color:${col};color:${col};background:${critCount>=2?'#fef0f0':critCount===1?'#fff9f0':'#fafafa'};font-size:13px;font-weight:${critCount>=1?'600':'400'}" onclick="doAbandon()">${label}</button>`;
     })()}
     `;
@@ -699,15 +704,20 @@ function calcPaceCosts(p,seg,paceLog){
   if(r.hydration<LOW_STAT_PENALTIES.hydration.threshold)tm*=LOW_STAT_PENALTIES.hydration.timeMult;
   if(r.legs<LOW_STAT_PENALTIES.legs.threshold)tm*=LOW_STAT_PENALTIES.legs.timeMult;
 
-  return {tm,ec,hc,lc,alloutStreak,sb};
+  // Riesgo base de lesión SEGÚN el ritmo elegido, sin escalar todavía por dificultad
+  // (checkSegInjury aplica modeCfg().injuryRiskMult una sola vez, sobre el total)
+  const INJURY_RISK_BASE={conservar:0,steady:0.01,push:0.03,allout:0.06};
+  const injuryRiskBase=INJURY_RISK_BASE[p]??0.01;
+
+  return {tm,ec,hc,lc,alloutStreak,sb,injuryRiskBase};
 }
 
 // ── Comprueba lesión durante el tramo ──
-function checkSegInjury(p,seg,alloutStreak,sb){
+function checkSegInjury(p,seg,alloutStreak,sb,injuryRiskBase){
   const load=getBodyLoad();
   let descentFall=false,midRaceInjury=null;
   if(seg.type==='descent'&&p==='allout'){
-    let fallRisk=0;
+    let fallRisk=injuryRiskBase;
     if(sb<50)    fallRisk+=((50-sb)/50)*0.30;
     if(load>=85) fallRisk+=0.30;
     else if(load>=70)fallRisk+=0.18;
@@ -717,7 +727,10 @@ function checkSegInjury(p,seg,alloutStreak,sb){
     if(Math.random()<fallRisk)descentFall=true;
   }
   if(alloutStreak>=3&&load>=70&&!hasFisio()){
-    const injRisk=(0.08+(load-70)*0.004)*modeCfg().injuryRiskMult*(1+agingDeg()*0.8);
+    let injRisk=injuryRiskBase;
+    injRisk+=(0.08+(load-70)*0.004);
+    injRisk=Math.min(0.95,injRisk*modeCfg().injuryRiskMult);
+    injRisk*=(1+agingDeg()*0.8);
     if(Math.random()<injRisk)midRaceInjury=load>=85?'fractura':'rotura';
   } else if(alloutStreak>=2&&load>=80&&!hasFisio()){
     if(Math.random()<0.06*modeCfg().injuryRiskMult*(1+agingDeg()*0.8))midRaceInjury='tendinitis';
@@ -731,10 +744,10 @@ window.doPace=p=>{
   G.paceLog.push(p);
 
   // Calcular costes del ritmo
-  const {tm,ec,hc,lc,alloutStreak,sb}=calcPaceCosts(p,s,G.paceLog);
+  const {tm,ec,hc,lc,alloutStreak,sb,injuryRiskBase}=calcPaceCosts(p,s,G.paceLog);
 
   // Lesión durante el tramo
-  const {descentFall,midRaceInjury}=checkSegInjury(p,s,alloutStreak,sb);
+  const {descentFall,midRaceInjury}=checkSegInjury(p,s,alloutStreak,sb,injuryRiskBase);
 
   G.time+=Math.round(s.base*tm);
   r.energy=Math.max(0,r.energy-ec);
@@ -824,17 +837,20 @@ window.doPace=p=>{
 
 
 // ── EVENTOS MID-RACE ──────────────────
-// Devuelve un objeto de evento o null si no hay nada que disparar
-function checkMidRaceEvents(){
+// Fragmentado en subfunciones por sistema (CR-20) — antes era una única función de ~600 líneas.
+// Cada subfunción devuelve un evento o null; checkMidRaceEvents() las llama en orden y
+// retorna el primer evento que dispare. Orden entre sistemas: clima → terreno → lesiones →
+// fatiga → social → exprés (no es el orden intercalado original línea a línea — ver nota en
+// Tareas/Instrucciones.md § Tanda — Auditoría Carrera Clásico sobre el riesgo de prioridad).
+
+// SISTEMA 1: CLIMA Y AMBIENTE
+function checkWeatherAndEnvironmentEvents(){
   const race=G.selectedRaces[G.currentRaceIdx];
   if(!race)return null;
-  const r=G.runner;            // usado por los eventos timed de Exprés (r.legs)
   const segs=curSegs();
   const totalKm=race.km;
   const doneKm=segs.slice(0,G.seg).reduce((a,s)=>a+s.km,0);
   const pct=totalKm>0?doneKm/totalKm:0;
-  const mental=getEffStat('mental');
-  if(!G.midRaceEventTriggered)G.midRaceEventTriggered={};
 
   // ⛈ TORMENTA — km >20, carreras >=35km, 1 sola vez por carrera
   if(!G.stormActive&&!G.midRaceEventTriggered.storm&&totalKm>=35&&doneKm>20){
@@ -847,52 +863,6 @@ function checkMidRaceEvents(){
         choices:[
           {text:'Refugiarse y ponerse el chubasquero (+3 min · hidratación protegida)',id:'shelter'},
           {text:'Apretar y cruzar sin parar (pierde más hidratación en todos los tramos)',id:'push_through'},
-        ]
-      };
-    }
-  }
-
-  // 🩹 CORREDOR LESIONADO — tramo central (25%-75%), carreras >=18km, 1 vez por carrera
-  if(!G.midRaceEventTriggered.injured_runner&&totalKm>=18&&pct>=0.25&&pct<0.75){
-    if(Math.random()<0.15){
-      G.midRaceEventTriggered.injured_runner=true;
-      return{id:'injured_runner',
-        title:'🩹 Corredor en el suelo',
-        desc:'Hay un corredor caído al lado de la senda. Parece que se ha torcido el tobillo. Nadie más está cerca. Te mira buscando ayuda.',
-        choices:[
-          {text:'Parar y ayudarle hasta que llegue un voluntario (+2 min · +2 Mental)',id:'help'},
-          {text:'Avisarle de que llamarás en el siguiente avituallamiento y seguir',id:'warn'},
-          {text:'Seguir tu ritmo (eres competidor, hay voluntarios para esto)',id:'ignore'},
-        ]
-      };
-    }
-  }
-
-  // 🌫 PERDERSE EN RUTA — Mental bajo + clima extremo/tormenta, 1 vez por carrera
-  if(!G.midRaceEventTriggered.lost&&(G.weather==='extremo'||G.stormActive)&&mental<45&&pct>=0.3&&pct<0.8){
-    if(Math.random()<0.35){
-      G.midRaceEventTriggered.lost=true;
-      return{id:'lost',
-        title:'🌫 Visibilidad cero',
-        desc:`La niebla y la tormenta borran las marcas. En el km ${Math.round(doneKm)} llevas unos minutos sin ver ninguna señal. El GPS parpadea.`,
-        choices:[
-          {text:'Usar el GPS (pierdes batería y 2:30 min, pero llegas seguro)',id:'gps'},
-          {text:`Buscar la senda a ojo (Mental ${mental} — resultado incierto)`,id:'find_trail'},
-        ]
-      };
-    }
-  }
-
-  // 👥 AMIGOS ANIMANDO — tramo cualquiera (15%-85%), 1 vez por carrera
-  if(!G.midRaceEventTriggered.friends&&pct>=0.15&&pct<0.85){
-    if(Math.random()<0.18){
-      G.midRaceEventTriggered.friends=true;
-      return{id:'friends_cheer',
-        title:'👥 ¡Tus amigos están aquí!',
-        desc:`Al girar un recodo, un grupo te reconoce y se pone a gritar tu nombre. Carteles, silbatos y todo el equipo. El km ${Math.round(doneKm)} de repente parece mucho más corto.`,
-        choices:[
-          {text:'Acelerar con esa energía (−3 min extra, −3 energía, +4 Mental)',id:'sprint'},
-          {text:'Saludar y seguir tu ritmo (+4 Mental, sin coste)',id:'wave'},
         ]
       };
     }
@@ -913,16 +883,60 @@ function checkMidRaceEvents(){
     }
   }
 
-  // 🧦 ROZADURA EN EL PIE — cualquier tramo (20%-70%), 1 vez
-  if(!G.midRaceEventTriggered.sock&&pct>=0.2&&pct<0.7){
-    if(Math.random()<0.12){
-      G.midRaceEventTriggered.sock=true;
-      return{id:'sock_adjust',
-        title:'🧦 Rozadura en el pie',
-        desc:`Algo se ha desplazado dentro de la zapatilla y notas un punto de roce que va a más. En el km ${Math.round(doneKm)} aún puedes cortarlo.`,
+  // 🌡 CAMBIO BRUSCO DE TEMPERATURA — altitud o otoño/invierno, 1 vez
+  if(!G.midRaceEventTriggered.temp_change&&(G.selectedRaces[G.currentRaceIdx]?.altitude||[10,11,3,4,12,1,2].includes(G.selectedRaces[G.currentRaceIdx]?.month||6))&&pct>=0.15&&pct<0.65){
+    if(Math.random()<0.14){
+      G.midRaceEventTriggered.temp_change=true;
+      return{id:'temp_change',
+        title:'🌡 El frío llega de golpe',
+        desc:`Al salir de la ladera protegida, el viento frío de cresta te da de pleno. En minutos, la temperatura ha bajado diez grados. Km ${Math.round(doneKm)}.`,
         choices:[
-          {text:'Parar 1 minuto a recolocar (+1 min, evitas ampollas)',id:'fix_sock'},
-          {text:'Ignorar y aguantar (sin pausa, riesgo de ampolla real)',id:'push_sock'},
+          {text:'Parar a ponerse el cortavientos (+1:30 min, protección térmica completa)',id:'put_jacket'},
+          {text:'Apretar el paso para entrar en calor (sin pausa, −5 hidratación por el esfuerzo extra)',id:'run_warm'},
+        ]
+      };
+    }
+  }
+
+  // 🥶 MANOS CONGELADAS — invierno/cresta, 1 vez
+  if(!G.midRaceEventTriggered.frozen_hands&&(G.weather==='extremo'||[12,1,2].includes(G.selectedRaces[G.currentRaceIdx]?.month||6))&&pct>=0.15&&pct<0.7){
+    if(Math.random()<0.16){
+      G.midRaceEventTriggered.frozen_hands=true;
+      return{id:'frozen_hands',
+        title:'🥶 Las manos dejan de responder',
+        desc:`En la cresta el viento corta y las manos se te han quedado blancas. Los bastones se mueven solos y no sientes los dedos. Km ${Math.round(doneKm)}.`,
+        choices:[
+          {text:'Parar 2 min a calentar con el cuerpo (+2 min, agarre recuperado al 100%)',id:'warm_hands'},
+          {text:'Guardar los bastones y seguir sin ellos (+ritmo en llano, −piernas en subidas)',id:'no_poles'},
+          {text:'Aguantar — el frío es temporal (sin pausa, −8 piernas por mal apoyo de bastones)',id:'push_cold'},
+        ]
+      };
+    }
+  }
+
+  return null;
+}
+
+// SISTEMA 2: TERRENO Y NAVEGACIÓN
+function checkTerrainNavigationEvents(){
+  const race=G.selectedRaces[G.currentRaceIdx];
+  if(!race)return null;
+  const segs=curSegs();
+  const totalKm=race.km;
+  const doneKm=segs.slice(0,G.seg).reduce((a,s)=>a+s.km,0);
+  const pct=totalKm>0?doneKm/totalKm:0;
+  const mental=getEffStat('mental');
+
+  // 🌫 PERDERSE EN RUTA — Mental bajo + clima extremo/tormenta, 1 vez por carrera
+  if(!G.midRaceEventTriggered.lost&&(G.weather==='extremo'||G.stormActive)&&mental<45&&pct>=0.3&&pct<0.8){
+    if(Math.random()<0.35){
+      G.midRaceEventTriggered.lost=true;
+      return{id:'lost',
+        title:'🌫 Visibilidad cero',
+        desc:`La niebla y la tormenta borran las marcas. En el km ${Math.round(doneKm)} llevas unos minutos sin ver ninguna señal. El GPS parpadea.`,
+        choices:[
+          {text:'Usar el GPS (pierdes batería y 2:30 min, pero llegas seguro)',id:'gps'},
+          {text:`Buscar la senda a ojo (Mental ${mental} — resultado incierto)`,id:'find_trail'},
         ]
       };
     }
@@ -938,61 +952,6 @@ function checkMidRaceEvents(){
         choices:[
           {text:'Levantarse y seguir sin perder tiempo (−5 piernas, −2 energía)',id:'get_up_fast'},
           {text:'Tomarse 30 seg para evaluarte (+30 seg, −3 piernas)',id:'check_first'},
-        ]
-      };
-    }
-  }
-
-  // 😈 PENSAMIENTO INTRUSO: dilema moral con otro corredor, 1 vez
-  if(!G.midRaceEventTriggered.sabotage&&totalKm>=15&&pct>=0.35&&pct<0.75){
-    const sabotageChance=mental<50?0.18:0.10;
-    if(Math.random()<sabotageChance){
-      G.midRaceEventTriggered.sabotage=true;
-      const scenarios=[
-        {title:'😈 Un rival te pregunta por dónde es',
-         desc:'Llevas varios kms batallando con el mismo corredor. En una bifurcación te pregunta: "¿Por cuál es?" Tú lo sabes perfectamente. Una pequeña voz te dice que podrías aprovechar el momento.',
-         opts:[
-           {text:'Señalar el camino correcto — fair play (+2 Mental)',id:'honest'},
-           {text:'Señalarle el camino equivocado (ganas ~5 min, −5 popularidad, −3 Mental)',id:'deceive'},
-         ]},
-        {title:'😈 Una señal de ruta está caída',
-         desc:'Hay una marca de ruta en el suelo, tumbada por el viento. Dos corredores vienen justo detrás. Podrías colocarla mal sin que nadie lo vea.',
-         opts:[
-           {text:'Dejarla como está y seguir (+1 Mental)',id:'honest'},
-           {text:'Colocarla en dirección incorrecta (pueden perderse, −6 popularidad)',id:'deceive'},
-         ]},
-      ];
-      const s=scenarios[Math.floor(Math.random()*scenarios.length)];
-      return{id:'sabotage',title:s.title,desc:s.desc,choices:s.opts};
-    }
-  }
-
-  // 🫗 AVITUALLAMIENTO VACÍO — cualquier carrera, tramo 20%-70%, 1 vez
-  if(!G.midRaceEventTriggered.empty_aid&&pct>=0.2&&pct<0.7){
-    if(Math.random()<0.12){
-      G.midRaceEventTriggered.empty_aid=true;
-      return{id:'empty_aid',
-        title:'🫗 El avituallamiento está vacío',
-        desc:`Llegas al puesto del km ${Math.round(doneKm)} y no hay ni agua ni comida. Los voluntarios se disculpan — el suministro se ha agotado. El siguiente puesto está en varios kilómetros.`,
-        choices:[
-          {text:'Racionarte estrictamente hasta el siguiente (−5 hidratación, −4 energía)',id:'ration'},
-          {text:'Beber de un arroyo cercano (recuperas hidratación, pero riesgo digestivo)',id:'stream'},
-          {text:'Forzar sin recargar (sigues a ritmo pero el cuerpo lo pagará más adelante)',id:'push_empty'},
-        ]
-      };
-    }
-  }
-
-  // 🤢 GEL EN MAL ESTADO — tramo 25%-65%, 1 vez
-  if(!G.midRaceEventTriggered.bad_gel&&pct>=0.25&&pct<0.65){
-    if(Math.random()<0.10){
-      G.midRaceEventTriggered.bad_gel=true;
-      return{id:'bad_gel',
-        title:'🤢 El gel sabe raro',
-        desc:'Abres un gel y el olor no es el habitual. El calor o la fecha de caducidad han hecho de las suyas. Queda poco y lo necesitas, pero el estómago ya da señales.',
-        choices:[
-          {text:'Tomarlo de todas formas (+5 energía, riesgo estomacal)',id:'eat_gel'},
-          {text:'Tirarlo y continuar sin gel (sin riesgo, pero sin recarga)',id:'discard_gel'},
         ]
       };
     }
@@ -1030,6 +989,282 @@ function checkMidRaceEvents(){
     }
   }
 
+  // 🥾 BARRO HASTA EL TOBILLO — bajada lluviosa, 1 vez
+  if(!G.midRaceEventTriggered.ankle_mud&&(G.terrainCondition?.id==='barro'||G.weather==='extremo')&&pct>=0.3&&pct<0.8){
+    if(Math.random()<0.15){
+      G.midRaceEventTriggered.ankle_mud=true;
+      return{id:'ankle_mud',
+        title:'🥾 Barro hasta el tobillo',
+        desc:`La bajada se ha convertido en un lodazal. Con cada paso las zapatillas se hunden y el esfuerzo de sacar el pie se multiplica. Km ${Math.round(doneKm)}.`,
+        choices:[
+          {text:'Cambiar a la trazada de roca lateral (+30 seg, piernas conservadas)',id:'rock_line'},
+          {text:'Atravesar directo — cada segundo cuenta (−10 piernas, sin pausa)',id:'mud_direct'},
+        ]
+      };
+    }
+  }
+
+  // 📐 FALSA LLANURA — tramo 15%-65%, 1 vez
+  if(!G.midRaceEventTriggered.false_flat&&pct>=0.15&&pct<0.65){
+    if(Math.random()<0.09){
+      G.midRaceEventTriggered.false_flat=true;
+      return{id:'false_flat',
+        title:'📐 Parece llano pero no lo es',
+        desc:`Llevas 10 minutos a un ritmo que debería ser cómodo pero el GPS no cuadra y la respiración se dispara. El perfil te estaba mintiendo — es un repecho sostenido del 4% que parece llano.`,
+        choices:[
+          {text:'Bajar el ritmo y leer bien el terreno (−0 tiempo extra, −6 energía)',id:'read_terrain'},
+          {text:'Mantener el esfuerzo creyendo que es llano (−14 energía, forzando el cuerpo)',id:'ignore_flat'},
+        ]
+      };
+    }
+  }
+
+  // 🏔 DESNIVEL INFINITO — carreras con mucho desnivel (>2000m), tramo 30%-65%, 1 vez
+  if(!G.midRaceEventTriggered.endless_climb&&(G.selectedRaces[G.currentRaceIdx]?.gain||0)>=2000&&pct>=0.3&&pct<0.65){
+    if(Math.random()<0.13){
+      G.midRaceEventTriggered.endless_climb=true;
+      return{id:'endless_climb',
+        title:'🏔 La subida no tiene fin',
+        desc:`Llevas 20 minutos subiendo y el collado no aparece. El mapa dice que ya debería estar aquí. Mentira. La montaña se burla del papel. Sientes las piernas llenarse de lava.`,
+        choices:[
+          {text:'Gestionar: marchar rápido y conservar energía para la cima (−8 energía, llegada estable)',id:'manage_climb'},
+          {text:'Empujar hasta arriba — la cima tiene que aparecer ya (−20 energía, ganas 2 min)',id:'push_climb'},
+        ]
+      };
+    }
+  }
+
+  return null;
+}
+
+// SISTEMA 3: LESIONES Y CAÍDAS
+function checkInjuryAndFallEvents(){
+  const race=G.selectedRaces[G.currentRaceIdx];
+  if(!race)return null;
+  const segs=curSegs();
+  const totalKm=race.km;
+  const doneKm=segs.slice(0,G.seg).reduce((a,s)=>a+s.km,0);
+  const pct=totalKm>0?doneKm/totalKm:0;
+
+  // 🩹 CORREDOR LESIONADO — tramo central (25%-75%), carreras >=18km, 1 vez por carrera
+  if(!G.midRaceEventTriggered.injured_runner&&totalKm>=18&&pct>=0.25&&pct<0.75){
+    if(Math.random()<0.15){
+      G.midRaceEventTriggered.injured_runner=true;
+      return{id:'injured_runner',
+        title:'🩹 Corredor en el suelo',
+        desc:'Hay un corredor caído al lado de la senda. Parece que se ha torcido el tobillo. Nadie más está cerca. Te mira buscando ayuda.',
+        choices:[
+          {text:'Parar y ayudarle hasta que llegue un voluntario (+2 min · +2 Mental)',id:'help'},
+          {text:'Avisarle de que llamarás en el siguiente avituallamiento y seguir',id:'warn'},
+          {text:'Seguir tu ritmo (eres competidor, hay voluntarios para esto)',id:'ignore'},
+        ]
+      };
+    }
+  }
+
+  // 😬 RESBALÓN SIN CAÍDA — terreno técnico o húmedo, tramo 20%-75%, 1 vez
+  if(!G.midRaceEventTriggered.slip_nf&&(G.terrainCondition?.id==='barro'||G.terrainCondition?.id==='tecnico'||G.terrainCondition?.id==='nieve')&&pct>=0.2&&pct<0.75){
+    if(Math.random()<0.18){
+      G.midRaceEventTriggered.slip_nf=true;
+      return{id:'slip_nf',
+        title:'😬 El pie patina — no llegas a caer',
+        desc:`Un resbalón brusco en una raíz mojada. El cuerpo reacciona solo, recuperas el equilibrio, pero el esfuerzo de frenada lo notan los isquios. Km ${Math.round(doneKm)}.`,
+        choices:[
+          {text:'Bajar el ritmo un tramo — el cuerpo manda (−4 piernas, sin tiempo extra)',id:'ease_slip'},
+          {text:'Sacudir la cabeza y seguir igual (−6 piernas, riesgo si el terreno continúa así)',id:'push_slip'},
+        ]
+      };
+    }
+  }
+
+  // 💥 CAÍDA GRAVE — barro/nieve/técnico, tramo 30%-70%, 1 vez
+  if(!G.midRaceEventTriggered.bad_fall&&(G.terrainCondition?.id==='barro'||G.terrainCondition?.id==='nieve'||G.terrainCondition?.id==='tecnico')&&pct>=0.3&&pct<0.7){
+    if(Math.random()<0.08){
+      G.midRaceEventTriggered.bad_fall=true;
+      return{id:'bad_fall',
+        title:'💥 Caída de verdad',
+        desc:`El pie se va en una raíz y caes de rodillas sobre la roca. Un segundo de blanco. Te levantas — las manos y la rodilla sangran — pero todo parece moverse. Km ${Math.round(doneKm)}.`,
+        choices:[
+          {text:'Evaluarte 2 min antes de seguir (+2 min, evitas agravar lesión)',id:'check_fall'},
+          {text:'Levantarse y correr — si puedes caminar puedes correr (sin pausa, −14 piernas, −8 energía)',id:'run_fall'},
+        ]
+      };
+    }
+  }
+
+  return null;
+}
+
+// SISTEMA 4: FATIGA Y ENERGÍA
+function checkFatigueAndEnergyEvents(){
+  const race=G.selectedRaces[G.currentRaceIdx];
+  if(!race)return null;
+  const segs=curSegs();
+  const totalKm=race.km;
+  const doneKm=segs.slice(0,G.seg).reduce((a,s)=>a+s.km,0);
+  const pct=totalKm>0?doneKm/totalKm:0;
+
+  // 🧦 ROZADURA EN EL PIE — cualquier tramo (20%-70%), 1 vez
+  if(!G.midRaceEventTriggered.sock&&pct>=0.2&&pct<0.7){
+    if(Math.random()<0.12){
+      G.midRaceEventTriggered.sock=true;
+      return{id:'sock_adjust',
+        title:'🧦 Rozadura en el pie',
+        desc:`Algo se ha desplazado dentro de la zapatilla y notas un punto de roce que va a más. En el km ${Math.round(doneKm)} aún puedes cortarlo.`,
+        choices:[
+          {text:'Parar 1 minuto a recolocar (+1 min, evitas ampollas)',id:'fix_sock'},
+          {text:'Ignorar y aguantar (sin pausa, riesgo de ampolla real)',id:'push_sock'},
+        ]
+      };
+    }
+  }
+
+  // 🫗 AVITUALLAMIENTO VACÍO — cualquier carrera, tramo 20%-70%, 1 vez
+  if(!G.midRaceEventTriggered.empty_aid&&pct>=0.2&&pct<0.7){
+    if(Math.random()<0.12){
+      G.midRaceEventTriggered.empty_aid=true;
+      return{id:'empty_aid',
+        title:'🫗 El avituallamiento está vacío',
+        desc:`Llegas al puesto del km ${Math.round(doneKm)} y no hay ni agua ni comida. Los voluntarios se disculpan — el suministro se ha agotado. El siguiente puesto está en varios kilómetros.`,
+        choices:[
+          {text:'Racionarte estrictamente hasta el siguiente (−5 hidratación, −4 energía)',id:'ration'},
+          {text:'Beber de un arroyo cercano (recuperas hidratación, pero riesgo digestivo)',id:'stream'},
+          {text:'Forzar sin recargar (sigues a ritmo pero el cuerpo lo pagará más adelante)',id:'push_empty'},
+        ]
+      };
+    }
+  }
+
+  // 🤢 GEL EN MAL ESTADO — tramo 25%-65%, 1 vez
+  if(!G.midRaceEventTriggered.bad_gel&&pct>=0.25&&pct<0.65){
+    if(Math.random()<0.10){
+      G.midRaceEventTriggered.bad_gel=true;
+      return{id:'bad_gel',
+        title:'🤢 El gel sabe raro',
+        desc:'Abres un gel y el olor no es el habitual. El calor o la fecha de caducidad han hecho de las suyas. Queda poco y lo necesitas, pero el estómago ya da señales.',
+        choices:[
+          {text:'Tomarlo de todas formas (+5 energía, riesgo estomacal)',id:'eat_gel'},
+          {text:'Tirarlo y continuar sin gel (sin riesgo, pero sin recarga)',id:'discard_gel'},
+        ]
+      };
+    }
+  }
+
+  // 🍬 MINI CRISIS DE HAMBRE — tramo 35%-75%, 1 vez
+  if(!G.midRaceEventTriggered.hunger_crisis&&pct>=0.35&&pct<0.75){
+    if(Math.random()<0.13){
+      G.midRaceEventTriggered.hunger_crisis=true;
+      return{id:'hunger_crisis',
+        title:'🍬 Bajón de glucosa',
+        desc:`Sin aviso, las piernas se vuelven de plomo y la cabeza se nubla un momento. El reloj marca km ${Math.round(doneKm)} y reconoces la sensación: el cuerpo pide azúcar ahora.`,
+        choices:[
+          {text:'Usar un gel de emergencia ahora (+12 energía, gastas tu reserva)',id:'use_gel_now'},
+          {text:'Bajar el ritmo y aguantar hasta el avituallamiento (−10 energía extra, sin gastar gel)',id:'slow_hunger'},
+          {text:'Tomar una fecha o barrita que llevas (−8 energía, +5 sostenido)',id:'snack_bar'},
+        ]
+      };
+    }
+  }
+
+  // ⛰ MEDIA MONTAÑA TRAICIONERA — carreras con altitud, tramo 25%-65%, 1 vez
+  if(!G.midRaceEventTriggered.mid_trap&&G.selectedRaces[G.currentRaceIdx]?.altitude&&pct>=0.25&&pct<0.65){
+    if(Math.random()<0.11){
+      G.midRaceEventTriggered.mid_trap=true;
+      return{id:'mid_trap',
+        title:'⛰ La montaña te engaña',
+        desc:`Parece que llegas al collado pero hay otro detrás. Y otro más. El perfil miente en terreno de media montaña — las cumbres se ocultan entre sí. El cuerpo empieza a pedir explicaciones.`,
+        choices:[
+          {text:'Gestionar el esfuerzo — bajar la potencia y adaptarse (−5 energía controlada)',id:'manage_trap'},
+          {text:'Seguir empujando — ya llegará el plano (−15 energía, pero mantienes el ritmo)',id:'push_trap'},
+        ]
+      };
+    }
+  }
+
+  // 🧱 PIERNAS DE MADERA — bodyLoad alto o pct>40%, 1 vez
+  if(!G.midRaceEventTriggered.heavy_legs&&(G.bodyLoad||0)>=55&&pct>=0.35&&pct<0.75){
+    if(Math.random()<0.14){
+      G.midRaceEventTriggered.heavy_legs=true;
+      return{id:'heavy_legs',
+        title:'🧱 Piernas de piedra',
+        desc:`Sin aviso, las piernas pesan el doble. No es dolor — es un cansancio muscular profundo que sube desde las pantorrillas. Km ${Math.round(doneKm)}. El entrenamiento acumulado pasa factura.`,
+        choices:[
+          {text:'Parar 1 min a estirar y activar la circulación (+1 min, −3 piernas)',id:'stretch_legs'},
+          {text:'Cambiar la zancada — pasos cortos, mayor cadencia (sin pausa, −8 piernas)',id:'shuffle_legs'},
+          {text:'Aguantar y forzar — esto es trail (−15 piernas, riesgo calambre posterior)',id:'force_legs'},
+        ]
+      };
+    }
+  }
+
+  // 🪨 PIERNAS LLENAS DE PIEDRA — segunda mitad de carrera, bodyLoad alto, 1 vez
+  if(!G.midRaceEventTriggered.stone_legs&&(G.bodyLoad||0)>=60&&pct>=0.55&&pct<0.85){
+    if(Math.random()<0.14){
+      G.midRaceEventTriggered.stone_legs=true;
+      return{id:'stone_legs',
+        title:'🪨 Los cuádriceps ya no responden',
+        desc:`Km ${Math.round(doneKm)}. La bajada que antes era tu punto fuerte ahora duele. Los cuádriceps están saturados — cada paso hacia abajo es un impacto. La meta parece muy lejos.`,
+        choices:[
+          {text:'Andar las bajadas — conservar lo que queda (sin tiempo extra, −5 piernas)',id:'walk_descents'},
+          {text:'Seguir corriendo bajadas con bastones de apoyo (−10 piernas, ganas 1:30 min)',id:'run_descents'},
+          {text:'Buscar la trazada más suave aunque sea más larga (+1 min, −6 piernas)',id:'soft_line'},
+        ]
+      };
+    }
+  }
+
+  return null;
+}
+
+// SISTEMA 5: SOCIAL Y RIVAL
+function checkSocialAndRivalEvents(){
+  const race=G.selectedRaces[G.currentRaceIdx];
+  if(!race)return null;
+  const totalKm=race.km;
+  const segs=curSegs();
+  const doneKm=segs.slice(0,G.seg).reduce((a,s)=>a+s.km,0);
+  const pct=totalKm>0?doneKm/totalKm:0;
+  const mental=getEffStat('mental');
+
+  // 👥 AMIGOS ANIMANDO — tramo cualquiera (15%-85%), 1 vez por carrera
+  if(!G.midRaceEventTriggered.friends&&pct>=0.15&&pct<0.85){
+    if(Math.random()<0.18){
+      G.midRaceEventTriggered.friends=true;
+      return{id:'friends_cheer',
+        title:'👥 ¡Tus amigos están aquí!',
+        desc:`Al girar un recodo, un grupo te reconoce y se pone a gritar tu nombre. Carteles, silbatos y todo el equipo. El km ${Math.round(doneKm)} de repente parece mucho más corto.`,
+        choices:[
+          {text:'Acelerar con esa energía (−3 min extra, −3 energía, +4 Mental)',id:'sprint'},
+          {text:'Saludar y seguir tu ritmo (+4 Mental, sin coste)',id:'wave'},
+        ]
+      };
+    }
+  }
+
+  // 😈 PENSAMIENTO INTRUSO: dilema moral con otro corredor, 1 vez
+  if(!G.midRaceEventTriggered.sabotage&&totalKm>=15&&pct>=0.35&&pct<0.75){
+    const sabotageChance=mental<50?0.18:0.10;
+    if(Math.random()<sabotageChance){
+      G.midRaceEventTriggered.sabotage=true;
+      const scenarios=[
+        {title:'😈 Un rival te pregunta por dónde es',
+         desc:'Llevas varios kms batallando con el mismo corredor. En una bifurcación te pregunta: "¿Por cuál es?" Tú lo sabes perfectamente. Una pequeña voz te dice que podrías aprovechar el momento.',
+         opts:[
+           {text:'Señalar el camino correcto — fair play (+2 Mental)',id:'honest'},
+           {text:'Señalarle el camino equivocado (ganas ~5 min, −5 popularidad, −3 Mental)',id:'deceive'},
+         ]},
+        {title:'😈 Una señal de ruta está caída',
+         desc:'Hay una marca de ruta en el suelo, tumbada por el viento. Dos corredores vienen justo detrás. Podrías colocarla mal sin que nadie lo vea.',
+         opts:[
+           {text:'Dejarla como está y seguir (+1 Mental)',id:'honest'},
+           {text:'Colocarla en dirección incorrecta (pueden perderse, −6 popularidad)',id:'deceive'},
+         ]},
+      ];
+      const s=scenarios[Math.floor(Math.random()*scenarios.length)];
+      return{id:'sabotage',title:s.title,desc:s.desc,choices:s.opts};
+    }
+  }
+
   // 🏃 RIVAL PIDE PASO — tramo 20%-75%, 1 vez
   if(!G.midRaceEventTriggered.rival_pass&&pct>=0.2&&pct<0.75){
     if(Math.random()<0.13){
@@ -1041,21 +1276,6 @@ function checkMidRaceEvents(){
           {text:'Ceder limpiamente y dejarle pasar (+20 seg, +2 Mental, +fair play)',id:'give_way'},
           {text:'Aguantar el ritmo — que te pase si puede (sin pausa, rivalidad activada)',id:'hold_pace'},
           {text:'Dejarte llevar por su rueda — intentas seguirle (−8 energía, opción de adelantarle después)',id:'follow_wheel'},
-        ]
-      };
-    }
-  }
-
-  // 🌡 CAMBIO BRUSCO DE TEMPERATURA — altitud o otoño/invierno, 1 vez
-  if(!G.midRaceEventTriggered.temp_change&&(G.selectedRaces[G.currentRaceIdx]?.altitude||[10,11,3,4,12,1,2].includes(G.selectedRaces[G.currentRaceIdx]?.month||6))&&pct>=0.15&&pct<0.65){
-    if(Math.random()<0.14){
-      G.midRaceEventTriggered.temp_change=true;
-      return{id:'temp_change',
-        title:'🌡 El frío llega de golpe',
-        desc:`Al salir de la ladera protegida, el viento frío de cresta te da de pleno. En minutos, la temperatura ha bajado diez grados. Km ${Math.round(doneKm)}.`,
-        choices:[
-          {text:'Parar a ponerse el cortavientos (+1:30 min, protección térmica completa)',id:'put_jacket'},
-          {text:'Apretar el paso para entrar en calor (sin pausa, −5 hidratación por el esfuerzo extra)',id:'run_warm'},
         ]
       };
     }
@@ -1088,114 +1308,6 @@ function checkMidRaceEvents(){
           {text:'Esperar tu turno con calma (+1:30 min, energía conservada)',id:'wait_jam'},
           {text:'Buscar línea alternativa por roca (±45 seg, −5 piernas por el terreno)',id:'alt_line'},
           {text:'Pedir paso con educación — a veces funciona (+30 seg, posible hueco)',id:'ask_jam'},
-        ]
-      };
-    }
-  }
-
-  // 🍬 MINI CRISIS DE HAMBRE — tramo 35%-75%, 1 vez
-  if(!G.midRaceEventTriggered.hunger_crisis&&pct>=0.35&&pct<0.75){
-    if(Math.random()<0.13){
-      G.midRaceEventTriggered.hunger_crisis=true;
-      return{id:'hunger_crisis',
-        title:'🍬 Bajón de glucosa',
-        desc:`Sin aviso, las piernas se vuelven de plomo y la cabeza se nubla un momento. El reloj marca km ${Math.round(doneKm)} y reconoces la sensación: el cuerpo pide azúcar ahora.`,
-        choices:[
-          {text:'Usar un gel de emergencia ahora (+12 energía, gastas tu reserva)',id:'use_gel_now'},
-          {text:'Bajar el ritmo y aguantar hasta el avituallamiento (−10 energía extra, sin gastar gel)',id:'slow_hunger'},
-          {text:'Tomar una fecha o barrita que llevas (−8 energía, +5 sostenido)',id:'snack_bar'},
-        ]
-      };
-    }
-  }
-
-  // 🥶 MANOS CONGELADAS — invierno/cresta, 1 vez
-  if(!G.midRaceEventTriggered.frozen_hands&&(G.weather==='extremo'||[12,1,2].includes(G.selectedRaces[G.currentRaceIdx]?.month||6))&&pct>=0.15&&pct<0.7){
-    if(Math.random()<0.16){
-      G.midRaceEventTriggered.frozen_hands=true;
-      return{id:'frozen_hands',
-        title:'🥶 Las manos dejan de responder',
-        desc:`En la cresta el viento corta y las manos se te han quedado blancas. Los bastones se mueven solos y no sientes los dedos. Km ${Math.round(doneKm)}.`,
-        choices:[
-          {text:'Parar 2 min a calentar con el cuerpo (+2 min, agarre recuperado al 100%)',id:'warm_hands'},
-          {text:'Guardar los bastones y seguir sin ellos (+ritmo en llano, −piernas en subidas)',id:'no_poles'},
-          {text:'Aguantar — el frío es temporal (sin pausa, −8 piernas por mal apoyo de bastones)',id:'push_cold'},
-        ]
-      };
-    }
-  }
-
-  // 🥾 BARRO HASTA EL TOBILLO — bajada lluviosa, 1 vez
-  if(!G.midRaceEventTriggered.ankle_mud&&(G.terrainCondition?.id==='barro'||G.weather==='extremo')&&pct>=0.3&&pct<0.8){
-    if(Math.random()<0.15){
-      G.midRaceEventTriggered.ankle_mud=true;
-      return{id:'ankle_mud',
-        title:'🥾 Barro hasta el tobillo',
-        desc:`La bajada se ha convertido en un lodazal. Con cada paso las zapatillas se hunden y el esfuerzo de sacar el pie se multiplica. Km ${Math.round(doneKm)}.`,
-        choices:[
-          {text:'Cambiar a la trazada de roca lateral (+30 seg, piernas conservadas)',id:'rock_line'},
-          {text:'Atravesar directo — cada segundo cuenta (−10 piernas, sin pausa)',id:'mud_direct'},
-        ]
-      };
-    }
-  }
-
-  // 📐 FALSA LLANURA — tramo 15%-65%, 1 vez
-  if(!G.midRaceEventTriggered.false_flat&&pct>=0.15&&pct<0.65){
-    if(Math.random()<0.09){
-      G.midRaceEventTriggered.false_flat=true;
-      return{id:'false_flat',
-        title:'📐 Parece llano pero no lo es',
-        desc:`Llevas 10 minutos a un ritmo que debería ser cómodo pero el GPS no cuadra y la respiración se dispara. El perfil te estaba mintiendo — es un repecho sostenido del 4% que parece llano.`,
-        choices:[
-          {text:'Bajar el ritmo y leer bien el terreno (−0 tiempo extra, −6 energía)',id:'read_terrain'},
-          {text:'Mantener el esfuerzo creyendo que es llano (−14 energía, forzando el cuerpo)',id:'ignore_flat'},
-        ]
-      };
-    }
-  }
-
-  // 😬 RESBALÓN SIN CAÍDA — terreno técnico o húmedo, tramo 20%-75%, 1 vez
-  if(!G.midRaceEventTriggered.slip_nf&&(G.terrainCondition?.id==='barro'||G.terrainCondition?.id==='tecnico'||G.terrainCondition?.id==='nieve')&&pct>=0.2&&pct<0.75){
-    if(Math.random()<0.18){
-      G.midRaceEventTriggered.slip_nf=true;
-      return{id:'slip_nf',
-        title:'😬 El pie patina — no llegas a caer',
-        desc:`Un resbalón brusco en una raíz mojada. El cuerpo reacciona solo, recuperas el equilibrio, pero el esfuerzo de frenada lo notan los isquios. Km ${Math.round(doneKm)}.`,
-        choices:[
-          {text:'Bajar el ritmo un tramo — el cuerpo manda (−4 piernas, sin tiempo extra)',id:'ease_slip'},
-          {text:'Sacudir la cabeza y seguir igual (−6 piernas, riesgo si el terreno continúa así)',id:'push_slip'},
-        ]
-      };
-    }
-  }
-
-  // ⛰ MEDIA MONTAÑA TRAICIONERA — carreras con altitud, tramo 25%-65%, 1 vez
-  if(!G.midRaceEventTriggered.mid_trap&&G.selectedRaces[G.currentRaceIdx]?.altitude&&pct>=0.25&&pct<0.65){
-    if(Math.random()<0.11){
-      G.midRaceEventTriggered.mid_trap=true;
-      return{id:'mid_trap',
-        title:'⛰ La montaña te engaña',
-        desc:`Parece que llegas al collado pero hay otro detrás. Y otro más. El perfil miente en terreno de media montaña — las cumbres se ocultan entre sí. El cuerpo empieza a pedir explicaciones.`,
-        choices:[
-          {text:'Gestionar el esfuerzo — bajar la potencia y adaptarse (−5 energía controlada)',id:'manage_trap'},
-          {text:'Seguir empujando — ya llegará el plano (−15 energía, pero mantienes el ritmo)',id:'push_trap'},
-        ]
-      };
-    }
-  }
-
-  // 🧱 PIERNAS DE MADERA — bodyLoad alto o pct>40%, 1 vez
-  if(!G.midRaceEventTriggered.heavy_legs&&(G.bodyLoad||0)>=55&&pct>=0.35&&pct<0.75){
-    if(Math.random()<0.14){
-      G.midRaceEventTriggered.heavy_legs=true;
-      return{id:'heavy_legs',
-        title:'🧱 Piernas de piedra',
-        desc:`Sin aviso, las piernas pesan el doble. No es dolor — es un cansancio muscular profundo que sube desde las pantorrillas. Km ${Math.round(doneKm)}. El entrenamiento acumulado pasa factura.`,
-        choices:[
-          {text:'Parar 1 min a estirar y activar la circulación (+1 min, −3 piernas)',id:'stretch_legs'},
-          {text:'Cambiar la zancada — pasos cortos, mayor cadencia (sin pausa, −8 piernas)',id:'shuffle_legs'},
-          {text:'Aguantar y forzar — esto es trail (−15 piernas, riesgo calambre posterior)',id:'force_legs'},
         ]
       };
     }
@@ -1248,59 +1360,21 @@ function checkMidRaceEvents(){
     }
   }
 
-  // 💥 CAÍDA GRAVE — barro/nieve/técnico, tramo 30%-70%, 1 vez
-  if(!G.midRaceEventTriggered.bad_fall&&(G.terrainCondition?.id==='barro'||G.terrainCondition?.id==='nieve'||G.terrainCondition?.id==='tecnico')&&pct>=0.3&&pct<0.7){
-    if(Math.random()<0.08){
-      G.midRaceEventTriggered.bad_fall=true;
-      return{id:'bad_fall',
-        title:'💥 Caída de verdad',
-        desc:`El pie se va en una raíz y caes de rodillas sobre la roca. Un segundo de blanco. Te levantas — las manos y la rodilla sangran — pero todo parece moverse. Km ${Math.round(doneKm)}.`,
-        choices:[
-          {text:'Evaluarte 2 min antes de seguir (+2 min, evitas agravar lesión)',id:'check_fall'},
-          {text:'Levantarse y correr — si puedes caminar puedes correr (sin pausa, −14 piernas, −8 energía)',id:'run_fall'},
-        ]
-      };
-    }
-  }
+  return null;
+}
 
-  // 🏔 DESNIVEL INFINITO — carreras con mucho desnivel (>2000m), tramo 30%-65%, 1 vez
-  if(!G.midRaceEventTriggered.endless_climb&&(G.selectedRaces[G.currentRaceIdx]?.gain||0)>=2000&&pct>=0.3&&pct<0.65){
-    if(Math.random()<0.13){
-      G.midRaceEventTriggered.endless_climb=true;
-      return{id:'endless_climb',
-        title:'🏔 La subida no tiene fin',
-        desc:`Llevas 20 minutos subiendo y el collado no aparece. El mapa dice que ya debería estar aquí. Mentira. La montaña se burla del papel. Sientes las piernas llenarse de lava.`,
-        choices:[
-          {text:'Gestionar: marchar rápido y conservar energía para la cima (−8 energía, llegada estable)',id:'manage_climb'},
-          {text:'Empujar hasta arriba — la cima tiene que aparecer ya (−20 energía, ganas 2 min)',id:'push_climb'},
-        ]
-      };
-    }
-  }
-
-  // 🪨 PIERNAS LLENAS DE PIEDRA — segunda mitad de carrera, bodyLoad alto, 1 vez
-  if(!G.midRaceEventTriggered.stone_legs&&(G.bodyLoad||0)>=60&&pct>=0.55&&pct<0.85){
-    if(Math.random()<0.14){
-      G.midRaceEventTriggered.stone_legs=true;
-      return{id:'stone_legs',
-        title:'🪨 Los cuádriceps ya no responden',
-        desc:`Km ${Math.round(doneKm)}. La bajada que antes era tu punto fuerte ahora duele. Los cuádriceps están saturados — cada paso hacia abajo es un impacto. La meta parece muy lejos.`,
-        choices:[
-          {text:'Andar las bajadas — conservar lo que queda (sin tiempo extra, −5 piernas)',id:'walk_descents'},
-          {text:'Seguir corriendo bajadas con bastones de apoyo (−10 piernas, ganas 1:30 min)',id:'run_descents'},
-          {text:'Buscar la trazada más suave aunque sea más larga (+1 min, −6 piernas)',id:'soft_line'},
-        ]
-      };
-    }
-  }
-
-  // ⚡ EXPRESS EVENTS — solo en modo exprés, máx. 4 por carrera (2 timed + 2 narrative)
-  if(G.gameMode==='expres'){
-    const xpTimed=G.midRaceEventTriggered._xpTimedCount||0;
-    const xpNarr=G.midRaceEventTriggered._xpNarrCount||0;
-
-    // ── TIMED (máx 2) ──────────────────────────────────────────────
-    if(xpTimed<2){
+// SISTEMA 6: EXPRÉS — TIMED (solo modo exprés, máx. 2 por carrera)
+function checkExpressTimedEvents(){
+  if(G.gameMode!=='expres')return null;
+  const race=G.selectedRaces[G.currentRaceIdx];
+  if(!race)return null;
+  const r=G.runner;
+  const segs=curSegs();
+  const totalKm=race.km;
+  const doneKm=segs.slice(0,G.seg).reduce((a,s)=>a+s.km,0);
+  const pct=totalKm>0?doneKm/totalKm:0;
+  const xpTimed=G.midRaceEventTriggered._xpTimedCount||0;
+  if(xpTimed<2){
       // Último tramo: casi garantizado km 85%+
       if(!G.midRaceEventTriggered.xp_final&&pct>=0.85){
         if(Math.random()<0.82){
@@ -1401,32 +1475,52 @@ function checkMidRaceEvents(){
           return{...EXPRESS_TIMED_EVENTS.find(e=>e.id==='xp_fork')};
         }
       }
-    }
-
-    // ── NARRATIVE (máx 2) ──────────────────────────────────────────
-    if(xpNarr<2){
-      // Pool de narrativos no usados
-      const usedNarr=Object.keys(G.midRaceEventTriggered).filter(k=>k.startsWith('xn_'));
-      const availNarr=EXPRESS_NARRATIVE_EVENTS.filter(e=>!usedNarr.includes(e.id));
-      if(availNarr.length>0&&Math.random()<0.30){
-        // Filtrar por contexto
-        let candidates=availNarr;
-        // Calor solo en verano, niebla en montaña
-        if(![6,7,8].includes(G.selectedRaces[G.currentRaceIdx]?.month||6)){
-          candidates=candidates.filter(e=>e.id!=='xn_heat_wave');
-        }
-        if(!(G.selectedRaces[G.currentRaceIdx]?.altitude)){
-          candidates=candidates.filter(e=>e.id!=='xn_breathing'&&e.id!=='xn_fog');
-        }
-        if(candidates.length===0)candidates=availNarr;
-        const picked=candidates[Math.floor(Math.random()*candidates.length)];
-        G.midRaceEventTriggered[picked.id]=true;
-        G.midRaceEventTriggered._xpNarrCount=(xpNarr+1);
-        return{...picked};
-      }
-    }
   }
+  return null;
+}
 
+// SISTEMA 6: EXPRÉS — NARRATIVE (solo modo exprés, máx. 2 por carrera)
+function checkExpressNarrativeEvents(){
+  if(G.gameMode!=='expres')return null;
+  const xpNarr=G.midRaceEventTriggered._xpNarrCount||0;
+  if(xpNarr>=2)return null;
+
+  // Pool de narrativos no usados
+  const usedNarr=Object.keys(G.midRaceEventTriggered).filter(k=>k.startsWith('xn_'));
+  const availNarr=EXPRESS_NARRATIVE_EVENTS.filter(e=>!usedNarr.includes(e.id));
+  if(availNarr.length>0&&Math.random()<0.30){
+    // Filtrar por contexto
+    let candidates=availNarr;
+    // Calor solo en verano, niebla en montaña
+    if(![6,7,8].includes(G.selectedRaces[G.currentRaceIdx]?.month||6)){
+      candidates=candidates.filter(e=>e.id!=='xn_heat_wave');
+    }
+    if(!(G.selectedRaces[G.currentRaceIdx]?.altitude)){
+      candidates=candidates.filter(e=>e.id!=='xn_breathing'&&e.id!=='xn_fog');
+    }
+    if(candidates.length===0)candidates=availNarr;
+    const picked=candidates[Math.floor(Math.random()*candidates.length)];
+    G.midRaceEventTriggered[picked.id]=true;
+    G.midRaceEventTriggered._xpNarrCount=(xpNarr+1);
+    return{...picked};
+  }
+  return null;
+}
+
+// ── Organizadora: llama a las 7 subfunciones en orden, retorna el primer evento que dispare ──
+function checkMidRaceEvents(){
+  const race=G.selectedRaces[G.currentRaceIdx];
+  if(!race)return null;
+  if(!G.midRaceEventTriggered)G.midRaceEventTriggered={};
+
+  let ev=null;
+  ev=checkWeatherAndEnvironmentEvents(); if(ev)return ev;
+  ev=checkTerrainNavigationEvents(); if(ev)return ev;
+  ev=checkInjuryAndFallEvents(); if(ev)return ev;
+  ev=checkFatigueAndEnergyEvents(); if(ev)return ev;
+  ev=checkSocialAndRivalEvents(); if(ev)return ev;
+  ev=checkExpressTimedEvents(); if(ev)return ev;
+  ev=checkExpressNarrativeEvents(); if(ev)return ev;
   return null;
 }
 
@@ -1601,7 +1695,7 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
   }
   else if(evId==='xp_double_cramp'){
     if(choiceId==='stretch_double'){G.time+=25;r.legs=Math.min(100,r.legs+6);G.raceEvent='Estiras 25s. Los calambres ceden. +6 piernas.';}
-    else{const risk=(G.bodyLoad||0)>70;if(risk){r.legs=Math.max(0,r.legs-20);if(Math.random()<0.3)G.injuryType='tendinitis';G.raceEvent='Los dos cuádriceps explotan. -20 piernas'+(!G.injuryType?'':' y tendinitis')+'.';}else{G.raceEvent='Aguantas. Llegas al límite pero de pie.';}}}
+    else{const risk=(G.bodyLoad||0)>70;if(risk){r.legs=Math.max(0,r.legs-20);if(Math.random()<Math.min(0.95,0.3*modeCfg().injuryRiskMult))G.injuryType='tendinitis';G.raceEvent='Los dos cuádriceps explotan. -20 piernas'+(!G.injuryType?'':' y tendinitis')+'.';}else{G.raceEvent='Aguantas. Llegas al límite pero de pie.';}}}
   // ── 12 narrativos ───────────────────────────────────────────────
   else if(evId==='xn_public_final'){
     if(choiceId==='show_public'){r.stats.mental=Math.min(100,(r.stats.mental||50)+10);r.energy=Math.max(0,r.energy-5);G.raceEvent='¡La gente te enloquece! +10 Mental, -5 energía. Llegas con el puño en alto.';}
@@ -1669,7 +1763,7 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       r.legs=Math.max(0,r.legs-8);G.raceEvent='Zancada corta y cadencia alta. Las piernas pagan el cambio pero el ritmo no cae. −8 piernas.';
     } else {
       r.legs=Math.max(0,r.legs-15);
-      if((G.bodyLoad||0)>70&&Math.random()<0.35){G.injuryType=G.injuryType||'tendinitis';G.raceEvent='Las piernas explotan. −15 piernas. La tensión acumulada deriba en tendinitis.';}
+      if((G.bodyLoad||0)>70&&Math.random()<Math.min(0.95,0.35*modeCfg().injuryRiskMult)){G.injuryType=G.injuryType||'tendinitis';G.raceEvent='Las piernas explotan. −15 piernas. La tensión acumulada deriba en tendinitis.';}
       else{G.raceEvent='Aguantas a duras penas. −15 piernas. Llegas al avituallamiento arrastrando los pies.';}
     }
   }
@@ -1707,7 +1801,7 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       G.raceEvent='Dos minutos de evaluación. Nada roto, solo arañazos y orgullo herido. −8 piernas. Sigues con cabeza.';
     } else {
       r.legs=Math.max(0,r.legs-14);r.energy=Math.max(0,r.energy-8);
-      if(Math.random()<0.25){G.injuryType=G.injuryType||'tendinitis';G.raceEvent='Te levantas y corres. −14 piernas, −8 energía. El cuerpo lo pagará — y aparece tendinitis.';}
+      if(Math.random()<Math.min(0.95,0.25*modeCfg().injuryRiskMult)){G.injuryType=G.injuryType||'tendinitis';G.raceEvent='Te levantas y corres. −14 piernas, −8 energía. El cuerpo lo pagará — y aparece tendinitis.';}
       else{G.raceEvent='Te levantas y corres. La adrenalina tapa el dolor 2 km. −14 piernas, −8 energía. Sobrevives.';}
     }
   }
@@ -2177,6 +2271,20 @@ function applyPostRaceTracking(race,res){
     else setTimeout(()=>showToast('🏆 ¡Nuevo récord personal! '+fmt(G.time),'#c07a10'),600);
   }
   if(G.stormActive)G.stormSurvivedCount=(G.stormSurvivedCount||0)+1;
+
+  // Lesión post-carrera (calculada ANTES de checkAndUnlockAchievements para que
+  // logros como no_injury/hc_perfect/comeback lean G.injuryHistory ya actualizado)
+  const specificInjury=getSpecificInjury(G.paceLog||[],getBodyLoad());
+  if(specificInjury){
+    const injData=INJURY_TYPES[specificInjury];
+    G.injuryStatus='moderada';G.injuryType=specificInjury;
+    G.injuryRecoverySeasons=injData.recoverySeasons||1;
+    G.injuryRacesLeft=hasFisio()?Math.max(0,Math.round((injData.racesBlocked||0)*(injData.fisioDiscount||0.5))):injData.racesBlocked||0;
+    Object.entries(injData.statPenalty||{}).forEach(([k,v])=>{G.runner.stats[k]=Math.max(10,(G.runner.stats[k]||50)+v);});
+    if(!G.injuryHistory)G.injuryHistory=[];
+    G.injuryHistory.push({type:specificInjury,label:injData.label,race:race.name,year:G.year,km:race.km});
+  } else {G.injuryStatus=null;G.injuryType=null;}
+
   checkAndUnlockAchievements();
 
   // Circuitos
@@ -2191,18 +2299,6 @@ function applyPostRaceTracking(race,res){
   G.followers=(G.followers||0)+raceFollowers;
   if(raceFollowers>0)setTimeout(()=>showToast('+'+raceFollowers+' seguidores 📱','#4a90d9'),400);
   checkFollowerThresholds();
-
-  // Lesión post-carrera
-  const specificInjury=getSpecificInjury(G.paceLog||[],getBodyLoad());
-  if(specificInjury){
-    const injData=INJURY_TYPES[specificInjury];
-    G.injuryStatus='moderada';G.injuryType=specificInjury;
-    G.injuryRecoverySeasons=injData.recoverySeasons||1;
-    G.injuryRacesLeft=hasFisio()?Math.max(0,Math.round((injData.racesBlocked||0)*(injData.fisioDiscount||0.5))):injData.racesBlocked||0;
-    Object.entries(injData.statPenalty||{}).forEach(([k,v])=>{G.runner.stats[k]=Math.max(10,(G.runner.stats[k]||50)+v);});
-    if(!G.injuryHistory)G.injuryHistory=[];
-    G.injuryHistory.push({type:specificInjury,label:injData.label,race:race.name,year:G.year,km:race.km});
-  } else {G.injuryStatus=null;G.injuryType=null;}
 
   // Historial y carga
   if(!G.careerRaceHistory)G.careerRaceHistory={};

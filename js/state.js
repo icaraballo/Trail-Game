@@ -433,15 +433,62 @@ function getBodyLoad(){return Math.max(0,Math.min(100,Math.round(G.bodyLoad||0))
 function hasFisio(){return G.spending.fisio||G.club?.hasFisio;}
 function hasClubEntrenador(){return G.spending.entrenador||G.club?.hasEntrenador;}
 
+// Umbrales de carga corporal dinámicos por dificultad (más lesión-riesgo = umbrales más bajos)
+function getLoadThresholdsByMode(){
+  const mult=modeCfg().injuryRiskMult;
+  if(mult<=0.4)return {warningLevel1:70,warningLevel2:85,criticalLevel:95};   // Fácil
+  if(mult<=0.6)return {warningLevel1:65,warningLevel2:80,criticalLevel:90};   // Exprés
+  if(mult<=1.0)return {warningLevel1:55,warningLevel2:70,criticalLevel:85};   // Medio/Coach
+  if(mult<=1.6)return {warningLevel1:45,warningLevel2:60,criticalLevel:75};   // Difícil
+  return {warningLevel1:35,warningLevel2:50,criticalLevel:65};                // Hardcore
+}
+
+// Color de aviso según carga actual + dificultad
+function getLoadWarningColor(load){
+  const t=getLoadThresholdsByMode();
+  if(load<t.warningLevel1)return null;
+  const mode=G.gameMode||'medio';
+  const palette={
+    facil:    {n1:'#f0a000', n2:'#c07a10'},
+    expres:   {n1:'#f0a000', n2:'#c07a10'},
+    medio:    {n1:'#c07a10', n2:'#c0392b'},
+    coach:    {n1:'#c07a10', n2:'#c0392b'},
+    dificil:  {n1:'#d97a00', n2:'#a82525'},
+    hardcore: {n1:'#c0392b', n2:'#8b1a1a'},
+  };
+  const p=palette[mode]||palette.medio;
+  return load>=t.warningLevel2?p.n2:p.n1;
+}
+
+// Mensaje de aviso escalado por dificultad — {msg, color}
+function getLoadWarningMsg(load){
+  const t=getLoadThresholdsByMode();
+  if(load<t.warningLevel1)return {msg:'',color:null};
+  const mode=G.gameMode||'medio';
+  const color=getLoadWarningColor(load);
+  const messages={
+    facil:    {n1:'El cuerpo nota el esfuerzo. Considera bajar intensidad.', n2:'Cuerpo cargado — conviene un respiro pronto.', crit:'⚠ Cuerpo al límite — riesgo real de lesión.'},
+    expres:   {n1:'El cuerpo nota el esfuerzo. Considera bajar intensidad.', n2:'Cuerpo cargado — conviene un respiro pronto.', crit:'⚠ Cuerpo al límite — riesgo real de lesión.'},
+    medio:    {n1:'Acumulación de fatiga. Sin descanso, aumenta el riesgo de lesión.', n2:'⚠ Cuerpo muy cargado — riesgo de lesión notable.', crit:'⚠ Cuerpo al límite — riesgo alto de lesión.'},
+    coach:    {n1:'Acumulación de fatiga. Sin descanso, aumenta el riesgo de lesión.', n2:'⚠ Cuerpo muy cargado — riesgo de lesión notable.', crit:'⚠ Cuerpo al límite — riesgo alto de lesión.'},
+    dificil:  {n1:'⚠ Cuerpo cargado — el riesgo de lesión empieza a subir.', n2:'⚠ Cuerpo muy cargado — riesgo de lesión aumentado. Ten cuidado.', crit:'🚨 Cuerpo al límite — riesgo crítico de lesión.'},
+    hardcore: {n1:'⚠ CUERPO CARGADO — vigila cada tramo.', n2:'🚨 CUERPO MUY CARGADO — riesgo de lesión alto.', crit:'🚨 CUERPO AL LÍMITE — riesgo crítico de lesión. Abandona si es posible.'},
+  };
+  const m=messages[mode]||messages.medio;
+  const msg=load>=t.criticalLevel?m.crit:(load>=t.warningLevel2?m.n2:m.n1);
+  return {msg,color};
+}
+
 // Señales pasivas según nivel de carga
 function bodyLoadHint(){
   const load=getBodyLoad();
   const fisio=hasFisio();
-  if(load>=85)return {type:'danger',msg:'El cuerpo está muy al límite. Cualquier esfuerzo añadido tiene riesgo real de lesión.'};
-  if(load>=70&&!fisio)return {type:'warn',msg:'Llevas semanas muy cargado. El cuerpo pide un respiro — sin fisio el riesgo aumenta.'};
-  if(load>=70&&fisio)return {type:'warn',msg:'Acumulación de fatiga notable. El fisio ayuda, pero conviene bajar la intensidad.'};
-  if(load>=55)return {type:'hint',msg:'Te notas algo cargado últimamente. Nada preocupante, pero el cuerpo lo nota.'};
-  if(load>=40)return {type:'hint',msg:'Forma física normal. Llevas buen ritmo de trabajo.'};
+  const t=getLoadThresholdsByMode();
+  if(load>=t.criticalLevel)return {type:'danger',msg:'El cuerpo está muy al límite. Cualquier esfuerzo añadido tiene riesgo real de lesión.'};
+  if(load>=t.warningLevel2&&!fisio)return {type:'warn',msg:'Llevas semanas muy cargado. El cuerpo pide un respiro — sin fisio el riesgo aumenta.'};
+  if(load>=t.warningLevel2&&fisio)return {type:'warn',msg:'Acumulación de fatiga notable. El fisio ayuda, pero conviene bajar la intensidad.'};
+  if(load>=t.warningLevel1)return {type:'hint',msg:'Te notas algo cargado últimamente. Nada preocupante, pero el cuerpo lo nota.'};
+  if(load>=t.warningLevel1-15)return {type:'hint',msg:'Forma física normal. Llevas buen ritmo de trabajo.'};
   return null;
 }
 

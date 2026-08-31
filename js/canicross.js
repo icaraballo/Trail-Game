@@ -68,6 +68,15 @@ function cnInitDog(name,breed){
   };
 }
 
+function cnComputeDogStats(){
+  const results=G.cnRaceResults||[];
+  const finished=results.filter(r=>!r.dnf);
+  return{
+    victories:finished.filter(r=>r.pos===1).length,
+    podiums:finished.filter(r=>r.pos&&r.pos<=3).length,
+    bestTime:finished.length>0?Math.min(...finished.map(r=>r.time)):null,
+  };
+}
 function cnGetEquipMods(){
   const eq=G.equipment||{};
   const harness=(CANICROSS_EQUIPMENT.dogHarness||[]).find(e=>e.id===eq.dogHarness)||{};
@@ -467,7 +476,9 @@ window.cnMakeDecision=optIdx=>{
   if(opt.timeLoss)rs.timePenalty=(rs.timePenalty||0)+opt.timeLoss;
   if(opt.injuryRisk){
     const mods=cnGetEquipMods();
-    const riskChance=Math.max(0,0.4+(mods.injuryRisk/100));
+    let riskChance=Math.max(0,0.4+(mods.injuryRisk/100));
+    // jerkMod: hard_line (-5) reduce el riesgo de lesión en eventos un 5%
+    if(mods.jerkMod<0)riskChance=Math.max(0,riskChance-0.05);
     if(Math.random()<riskChance)rs.injuryPending=opt.injurySevere?'luxacion':'almohadillas';
   }
   if(opt.retire)rs.retired=true;
@@ -494,6 +505,11 @@ window.cnChoosePace=paceId=>{
   let dc=Math.round(pace.dogCost/staminaFactor);
   let bm=pace.bondMod;
 
+  // jerkMod: hard_line (-5) reduce el coste de salud del perro un 10% en ritmos altos
+  if(mods.jerkMod<0&&(paceId==='apretar'||paceId==='atope')){
+    dc=Math.round(dc*0.9);
+  }
+
   if(seg?.type==='climb'){tm=Math.round(tm*1.15);ec=Math.round(ec*1.3);dc=Math.round(dc*1.2);}
   if(seg?.type==='descent'){tm=Math.round(tm*0.88);ec=Math.round(ec*0.8);dc=Math.round(dc*0.85);}
 
@@ -511,12 +527,20 @@ window.cnChoosePace=paceId=>{
     setTimeout(()=>showToast(esc(d.name)+' mantiene el ritmo — "Aguanta" ✓','#4a8a2a'),50);
   }
   if(seg?.type==='descent'&&d?.commands?.left){
-    rs.time=Math.max(0,(rs.time||0)-6);
+    rs.time=Math.max(0,(rs.time||0)-8);
     rs.dogHealth=Math.min(100,(rs.dogHealth||100)+2);
-    setTimeout(()=>showToast(esc(d.name)+' toma las curvas — "Izquierda" ✓ −6s','#4a8a2a'),50);
+    setTimeout(()=>showToast(esc(d.name)+' toma las curvas — "Izquierda" ✓ −8s','#4a8a2a'),50);
   }
 
   const ev=cnPickEvent(rs.month||1);
+  // Evento 'dessinc': si el perro sabe "Izquierda", se convierte en decisión con opción de controlarlo
+  if(ev&&ev.id==='dessinc'&&d?.commands?.left){
+    ev.decision=true;
+    ev.options=[
+      {label:'Controlar con "Izquierda" (+2 vínculo, −100s)',bondMod:2,timeLoss:-100},
+      {label:'Ignorar y seguir (−5 vínculo)',bondMod:-5,timeLoss:0},
+    ];
+  }
   if(ev&&!ev.decision){
     cnApplyEventAuto(ev,rs);
     rs.eventLog.push({seg:rs.currentSeg,event:ev,resolved:true});
@@ -1030,7 +1054,12 @@ function renderCnPerroTab(){
         <div class="stat"><div class="stat-label">Carreras</div><div class="stat-val">${d.races||0}</div></div>
         <div class="stat"><div class="stat-label">Km juntos</div><div class="stat-val">${d.kmTogether||0}</div></div>
         <div class="stat"><div class="stat-label">Vínculo máx.</div><div class="stat-val">${d.peakBond||0}</div></div>
+        ${(()=>{const s=cnComputeDogStats();return`
+        <div class="stat"><div class="stat-label">Victorias</div><div class="stat-val" style="color:#c07a10">${s.victories}</div></div>
+        <div class="stat"><div class="stat-label">Podios</div><div class="stat-val">${s.podiums}</div></div>
+        <div class="stat"><div class="stat-label">Temporada</div><div class="stat-val">${G.cnSeason||1}</div></div>`;})()}
       </div>
+      ${(()=>{const s=cnComputeDogStats();return s.bestTime?`<div style="font-size:12px;color:#888;margin-top:8px;text-align:center">Mejor tiempo: ${fmt(s.bestTime)}</div>`:'';})()}
     </div>
 
     ${!d.retired?`
