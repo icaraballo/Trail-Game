@@ -2316,6 +2316,11 @@ function applyPostRaceTracking(race,res){
 }
 
 function finishRace(){
+  // Modo desarrollador — "modo dios": fuerza victoria en cualquier carrera Clásico.
+  // Ver js/devmode.js. No afecta a partidas normales (flag inexistente).
+  if(G._devGodMode&&G.rivals&&G.rivals.length){
+    G.time=Math.max(1,Math.min(...G.rivals.map(r=>r.time))-60);
+  }
   G.screen='raceResult';
   const race=G.selectedRaces[G.currentRaceIdx];
   const res=calcRaceResult(race);
