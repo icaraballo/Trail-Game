@@ -2151,6 +2151,16 @@ function renderClubHub(){
       </div>
     </div>
 
+    ${d._coachingHistory?`
+    <div class="card" style="margin-bottom:12px;background:#F5EFE3;border-left:3px solid #8B6F47">
+      <div style="font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:8px">Legado previo</div>
+      <div style="font-size:12px;color:#1a1a1a">
+        <strong>${d._coachingHistory.years}</strong> años entrenando ·
+        <strong>${d._coachingHistory.coachReputation}/100</strong> reputación acumulada
+      </div>
+    </div>
+    `:''}
+
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:12px">
       ${[['👥',d.socios,'Socios'],['⭐',`${d.reputacion}`,'Rep.'],['💶',`€${d.presupuesto}`,'Presup.'],['🤝',`${d.cohesion}/100`,'Cohesión']].map(([ic,v,l])=>`
         <div style="background:#fff;border:1px solid #e0dfd8;border-radius:8px;padding:8px;text-align:center">

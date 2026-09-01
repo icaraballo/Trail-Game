@@ -259,7 +259,9 @@ function render(){
     lifeAthleteOffer:renderLifeAthleteOffer,
     overlapHub:renderOverlapHub,
     lifeRetirement:renderLifeRetirement,
+    coachIntro:renderCoachIntro,
     clubOffer:renderClubOffer,
+    clubIntro:renderClubIntro,
     canicrossCreateDog:renderCnCreateDog,
     canicrossPreseason:renderCanicrossPreseason,
     canicrossTrainingSetup:renderCanicrossTrainingSetup,
@@ -3089,7 +3091,7 @@ window.acceptLifeAthlete=()=>{
   G.pendingLifeAthleteOffer=null;
   G.coachReputation=(G.coachReputation||0)+10;
   showToast(`${a.name.split(' ')[0]} confía en ti. Empieza el solapamiento.`,'#4a8a2a');
-  G.screen='workSetup';
+  G.screen='overlapHub';
   autoSave();render();
 };
 
@@ -3299,6 +3301,12 @@ window.confirmClubOffer=()=>{
   const spec=athlete?.spec||'mixto';
   const clubName=`Club Trail ${G.runner?.name?.split(' ').slice(-1)[0]||'Monte Perdido'}`;
   G.clubModeData=initClubModeData(clubName,spec,'montanero');
+  // Heredar trayectoria como entrenador como bonus de reputación de club (70% de coachReputation)
+  const coachingYears=(G.coachSeason||1);
+  const coachRep=(G.coachReputation||0);
+  const repSeeding=Math.floor(coachRep*0.7);
+  G.clubModeData.reputacion=Math.min(100,10+repSeeding);
+  G.clubModeData._coachingHistory={years:coachingYears,coachReputation:coachRep};
   // El atleta actual pasa a la plantilla del club
   if(athlete){
     const clubRunner={
@@ -3318,9 +3326,69 @@ window.confirmClubOffer=()=>{
     LS.set('unlocked',JSON.stringify(ul));
   }catch(e){}
   showToast('El club nace. Una nueva etapa empieza.','#1D9E75');
-  G.screen='clubHub';
+  G.screen='clubIntro';
   autoSave();render();
 };
+
+function renderClubIntro(){
+  const el=document.getElementById('main');
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
+
+  const d=G.clubModeData;
+  const clubName=d?d.name:'Tu Club';
+  const clubSpec=d?d.specialty:'mixto';
+  const clubFil=d?d.filosofia:'montanero';
+
+  // Historial de coaching
+  const coachingYears=(d&&d._coachingHistory?d._coachingHistory.years:G.coachSeason||1);
+  const coachRep=(d&&d._coachingHistory?d._coachingHistory.coachReputation:G.coachReputation||0);
+
+  const specLabel={montanero:'🏔️ Montaña',fondista:'🏃 Fondo',tecnico:'⚡ Técnico',mixto:'🌐 Mixto'}[clubSpec]||clubSpec;
+  const filData=d?CLUB_FILOSOFIAS[clubFil]:null;
+
+  el.innerHTML=`
+    <div style="text-align:center;padding:20px 0 10px">
+      <div style="font-size:36px;margin-bottom:8px">🏕️</div>
+      <h1 style="font-size:22px;margin-bottom:4px">Nace un club</h1>
+      <p style="font-size:14px;color:#888">Año ${G.year} · Una nueva era empieza</p>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;border-left:3px solid #8B6F47;padding-left:18px;background:#F5EFE3">
+      <div style="font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:12px">Tu historial como entrenador</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="background:#fff;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:12px;color:#888">Años entrenando</div>
+          <div style="font-size:18px;font-weight:700">${coachingYears}</div>
+        </div>
+        <div style="background:#fff;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:12px;color:#888">Reputación alcanzada</div>
+          <div style="font-size:18px;font-weight:700">${coachRep}/100</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;border-left:3px solid #1D9E75;padding-left:18px;background:#E1F5EE">
+      <div style="font-size:11px;font-weight:600;color:#085041;text-transform:uppercase;margin-bottom:12px">Tu club</div>
+      <div style="font-weight:600;font-size:15px;color:#085041;margin-bottom:6px">${esc(clubName)}</div>
+      <div style="font-size:12px;color:#1D9E75;margin-bottom:8px">
+        Especialidad: <strong>${specLabel}</strong><br>
+        ${filData?`Filosofía: <strong>${filData.label}</strong>`:''}
+      </div>
+      <div style="font-size:12px;background:#fff;border-radius:6px;padding:8px;color:#666">
+        ${filData?filData.desc:'Gestión flexible del club.'}
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;background:#f8f7f3">
+      <div style="font-size:14px;line-height:1.7;color:#1a1a1a">
+        <p><strong>Tu experiencia como entrenador te ha preparado para esto.</strong> Ahora gestionas un equipo completo. Plantilla, sponsors, instalaciones, objetivos. El monte te enseñó como corredor. Tus atletas te enseñaron como entrenador. Ahora el club es tuyo.</p>
+      </div>
+    </div>
+
+    <button class="main" style="border-color:#1D9E75;color:#085041;width:100%" onclick="G.screen='clubHub';G.activeTab='game';autoSave();render()">Fundar el club →</button>
+  `;
+}
 
 window.rejectClubOffer=()=>{
   G._clubOfferDelay=(G.coachSeason||1)+2;
@@ -3467,7 +3535,15 @@ window.confirmLifeCoachTransition=()=>{
   // Tiene atleta — transición directa a entrenador
   G.lifecyclePhase='coach';
   G.coachAthlete={...G.lifeAthlete};
-  G.coachReputation=G.coachReputation||0;
+
+  // Heredar logros de fame de Clásico como bonus de reputación inicial
+  let repBonus=0;
+  if((G.unlockedAchievements||[]).includes('fame_1k'))repBonus+=10;
+  if((G.unlockedAchievements||[]).includes('fame_10k'))repBonus+=15;
+  if((G.unlockedAchievements||[]).includes('followers_25k'))repBonus+=20;
+  if((G.unlockedAchievements||[]).includes('followers_50k'))repBonus+=25;
+
+  G.coachReputation=Math.min(100,(G.coachReputation||0)+repBonus);
   G.coachSeason=G.coachSeason||1;
   G.coachTrust=60;
   G.coachEmotionalState='fresco';
@@ -3482,9 +3558,76 @@ window.confirmLifeCoachTransition=()=>{
     LS.set('unlocked',JSON.stringify(ul));
   }catch(e){}
   showToast(`${G.lifeAthlete.name.split(' ')[0]} te espera. Empieza una nueva etapa.`,'#534AB7');
-  G.screen='coachHome';
+  G.screen='coachIntro';
   autoSave();render();
 };
+
+function renderCoachIntro(){
+  const el=document.getElementById('main');
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
+
+  const a=G.lifeAthlete;
+  const athleteName=a?esc(a.name.split(' ')[0]):'tu atleta';
+  const athleteAge=a?a.age:'joven';
+  const athleteSpec=a?a.spec:'todoterreno';
+
+  // Legado de Clásico
+  const totalRaces=(G.careerHistory||[]).length;
+  const totalWins=(G.careerHistory||[]).filter(r=>r.pos===1).length;
+  const topRanking=G.ranking||999;
+  const totalPrize=(G.careerHistory||[]).reduce((a,r)=>a+(r.prize||0),0);
+  const yearsActive=G.year-1;
+
+  el.innerHTML=`
+    <div style="text-align:center;padding:20px 0 10px">
+      <div style="font-size:36px;margin-bottom:8px">📋</div>
+      <h1 style="font-size:22px;margin-bottom:4px">Nuevo rol: Entrenador</h1>
+      <p style="font-size:14px;color:#888">Año ${G.year} · Tu próximo capítulo comienza</p>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;border-left:3px solid #8B6F47;padding-left:18px;background:#F5EFE3">
+      <div style="font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:12px">Tu legado como corredor</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="background:#fff;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:12px;color:#888">Temporadas</div>
+          <div style="font-size:18px;font-weight:700">${yearsActive}</div>
+        </div>
+        <div style="background:#fff;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:12px;color:#888">Victorias</div>
+          <div style="font-size:18px;font-weight:700">${totalWins}</div>
+        </div>
+        <div style="background:#fff;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:12px;color:#888">Ranking mejor</div>
+          <div style="font-size:18px;font-weight:700">#${topRanking}</div>
+        </div>
+        <div style="background:#fff;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:12px;color:#888">Premios ganados</div>
+          <div style="font-size:18px;font-weight:700">€${totalPrize.toLocaleString('es-ES')}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;border-left:3px solid #1D9E75;padding-left:18px;background:#E1F5EE">
+      <div style="font-size:11px;font-weight:600;color:#085041;text-transform:uppercase;margin-bottom:12px">Tu atleta</div>
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="font-size:28px">${a?a.flag:'🇪🇸'}</div>
+        <div>
+          <div style="font-size:14px;font-weight:600;color:#085041">${athleteName}</div>
+          <div style="font-size:12px;color:#1D9E75">${athleteAge} años · ${athleteSpec}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;background:#f8f7f3">
+      <div style="font-size:14px;line-height:1.7;color:#1a1a1a">
+        <p><strong>${athleteName} ha estado contigo en el solapamiento.</strong> Ahora empieza una nueva etapa: lo guiarás como su entrenador. Entrenamientos, carreras, su desarrollo. El monte te enseñó. Ahora es tu turno de enseñar.</p>
+      </div>
+    </div>
+
+    <button class="main" style="border-color:#534AB7;color:#3C3489;width:100%" onclick="G.screen='coachHome';G.activeTab='game';autoSave();render()">Comenzar como entrenador →</button>
+  `;
+}
 
 function renderRetirement(){
   const el=document.getElementById('main');
