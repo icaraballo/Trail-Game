@@ -170,6 +170,121 @@ window.switchTab=t=>{
 };
 
 // ══════════════════════════════════════
+//  MODO DESARROLLADOR — solo visible con ?dev=1 en la URL
+// ══════════════════════════════════════
+window.devJumpToCoach=()=>{
+  const pick=LIFE_ATHLETE_POOL[Math.floor(Math.random()*LIFE_ATHLETE_POOL.length)];
+  G.lifeAthlete={...pick,currentStats:{...pick.baseStats}};
+  G.coachAthlete={...G.lifeAthlete};
+  G.gameMode='coach';
+  G.carreraVida=true;G.lifecyclePhase='coach';
+  if(!Array.isArray(G.coachRoster))G.coachRoster=[];
+  if(!Array.isArray(G.coachSelectedRaces))G.coachSelectedRaces=[];
+  if(!Array.isArray(G.coachRaceResults))G.coachRaceResults=[];
+  G.coachRaceIdx=0;G.coachSeason=G.coachSeason||1;G.coachTrust=G.coachTrust||60;
+  G.screen='coachHome';G.activeTab='game';
+  showToast('DEV: saltado a Entrenador','#534AB7');
+  render();
+};
+window.devJumpToClub=()=>{
+  if(!G.clubModeData){
+    G.clubModeData=initClubModeData('Club de Pruebas','mixto','montanero');
+  }
+  G.gameMode='club';
+  G.carreraVida=true;G.lifecyclePhase='club';
+  G.screen='clubHub';G.activeTab='game';
+  showToast('DEV: saltado a Club','#1D9E75');
+  render();
+};
+window.devJumpToCanicross=()=>{
+  G.gameMode='canicross';
+  if(!G.dog)G.dog=cnInitDog('DevDog','mestizo');
+  G.screen='canicrossHub';G.activeTab='game';
+  showToast('DEV: saltado a Canicross','#4a8a2a');
+  render();
+};
+window.devForceAthleteOffer=()=>{
+  G.carreraVida=true;
+  const rejectedIds=(G.lifePendingAthletes||[]).map(a=>a.id);
+  const available=LIFE_ATHLETE_POOL.filter(a=>!rejectedIds.includes(a.id));
+  const pick=(available.length?available:LIFE_ATHLETE_POOL)[0];
+  G.pendingLifeAthleteOffer={...pick,currentStats:{...pick.baseStats}};
+  G.screen='lifeAthleteOffer';
+  showToast('DEV: oferta de atleta forzada','#534AB7');
+  render();
+};
+window.devApplyStats=()=>{
+  const val=id=>{const el=document.getElementById(id);return el&&el.value!==''?Number(el.value):null;};
+  const year=val('dev-year');if(year!=null)G.year=year;
+  const money=val('dev-money');if(money!=null)G.money=money;
+  const followers=val('dev-followers');if(followers!=null)G.followers=followers;
+  const ranking=val('dev-ranking');if(ranking!=null)G.ranking=ranking;
+  const coachRep=val('dev-coachrep');if(coachRep!=null)G.coachReputation=coachRep;
+  const coachSeason=val('dev-coachseason');if(coachSeason!=null)G.coachSeason=coachSeason;
+  const clubRep=val('dev-clubrep');if(clubRep!=null&&G.clubModeData)G.clubModeData.reputacion=clubRep;
+  const bodyLoad=val('dev-bodyload');if(bodyLoad!=null)G.bodyLoad=bodyLoad;
+  const carreraVidaEl=document.getElementById('dev-carreravida');
+  if(carreraVidaEl)G.carreraVida=carreraVidaEl.checked;
+  showToast('DEV: valores aplicados','#1a1a1a');
+  render();
+};
+window.devUnlockAllAchievements=()=>{
+  // Solo en memoria — NO toca localStorage['globalAchs'], así que no ensucia
+  // el historial de logros real de otras partidas guardadas.
+  if(!G.achievementMeta)G.achievementMeta={};
+  G.unlockedAchievements=ACHIEVEMENTS.map(a=>a.id);
+  ACHIEVEMENTS.forEach(a=>{if(!G.achievementMeta[a.id])G.achievementMeta[a.id]={difficulty:G.gameMode||'medio',year:G.year||1};});
+  showToast('DEV: todos los logros desbloqueados (solo esta partida)','#c07a10');
+  render();
+};
+window.devClose=()=>{
+  G.screen=G._devPrevScreen||'modeSelect';
+  render();
+};
+function renderDevPanel(){
+  const el=document.getElementById('main');
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
+  el.innerHTML=`
+    <h2>🛠 Modo Desarrollador</h2>
+    <p class="sub" style="margin-bottom:16px">Solo visible con <code>?dev=1</code> en la URL. No pensado para partidas reales.</p>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Saltos directos</div>
+      <button class="main" style="margin-top:6px" onclick="devJumpToCoach()">📋 Ir a Entrenador ahora</button>
+      <button class="main" style="margin-top:6px" onclick="devJumpToClub()">🏕 Ir a Club ahora</button>
+      <button class="main" style="margin-top:6px" onclick="devJumpToCanicross()">🐕 Ir a Canicross ahora</button>
+      <button class="main" style="margin-top:6px" onclick="devForceAthleteOffer()">🏔 Forzar oferta "hazte entrenador"</button>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Editor de estado</div>
+      <div style="font-size:12px;color:#888;margin-bottom:8px">Deja un campo vacío para no tocarlo. "Aplicar" no cambia de pantalla.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <label style="font-size:12px">Año (G.year)<input id="dev-year" type="number" placeholder="${G.year}" style="width:100%;padding:6px;border:1px solid #e0dfd8;border-radius:6px"></label>
+        <label style="font-size:12px">Dinero (G.money)<input id="dev-money" type="number" placeholder="${G.money}" style="width:100%;padding:6px;border:1px solid #e0dfd8;border-radius:6px"></label>
+        <label style="font-size:12px">Seguidores<input id="dev-followers" type="number" placeholder="${G.followers||0}" style="width:100%;padding:6px;border:1px solid #e0dfd8;border-radius:6px"></label>
+        <label style="font-size:12px">Ranking<input id="dev-ranking" type="number" placeholder="${G.ranking}" style="width:100%;padding:6px;border:1px solid #e0dfd8;border-radius:6px"></label>
+        <label style="font-size:12px">Rep. Entrenador<input id="dev-coachrep" type="number" placeholder="${G.coachReputation||0}" style="width:100%;padding:6px;border:1px solid #e0dfd8;border-radius:6px"></label>
+        <label style="font-size:12px">Temporada Coach<input id="dev-coachseason" type="number" placeholder="${G.coachSeason||1}" style="width:100%;padding:6px;border:1px solid #e0dfd8;border-radius:6px"></label>
+        <label style="font-size:12px">Rep. Club${G.clubModeData?'':' (sin club aún)'}<input id="dev-clubrep" type="number" ${G.clubModeData?'':'disabled'} placeholder="${G.clubModeData?G.clubModeData.reputacion:'—'}" style="width:100%;padding:6px;border:1px solid #e0dfd8;border-radius:6px"></label>
+        <label style="font-size:12px">Carga corporal<input id="dev-bodyload" type="number" placeholder="${G.bodyLoad||0}" style="width:100%;padding:6px;border:1px solid #e0dfd8;border-radius:6px"></label>
+      </div>
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;margin-bottom:10px"><input id="dev-carreravida" type="checkbox" ${G.carreraVida?'checked':''}> Carrera de Vida activa</label>
+      <button class="main" style="margin-top:0" onclick="devApplyStats()">Aplicar cambios</button>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Logros</div>
+      <div style="font-size:12px;color:#888;margin-bottom:8px">Solo afecta a esta partida en memoria — no toca el historial global de logros.</div>
+      <button class="main" style="margin-top:0" onclick="devUnlockAllAchievements()">Desbloquear todos los logros</button>
+    </div>
+
+    <button class="main" style="opacity:0.6" onclick="devClose()">← Cerrar panel</button>
+  `;
+}
+
+// ══════════════════════════════════════
 //  FEEDBACK VISUAL — TOAST
 // ══════════════════════════════════════
 function showToast(msg,color='#1a1a1a'){
@@ -275,6 +390,7 @@ function render(){
     canicrossDogDeath:renderCnDogDeath,
     canicrossDisplasia:renderCnDisplasia,
     achievements:renderAchievements,
+    devPanel:renderDevPanel,
   }[G.screen]||renderIntro)();
   triggerFade(el);
 }
