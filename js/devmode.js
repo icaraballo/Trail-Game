@@ -124,15 +124,17 @@ window.devApplyStats=()=>{
 };
 
 // ── Consola de código libre — poder real, sin límites de lo que yo haya previsto ──
+// Usa eval() DIRECTO (no new Function, no window.eval) a propósito: solo el eval
+// directo ve el scope léxico compartido entre <script> del documento (todas las
+// const/let de constants.js, race.js, etc. — SPONSORS_DB, RACES_DB, INJURY_TYPES...).
+// new Function() solo ve variables globales var/function, se queda corto para esto.
 window.devRunCode=()=>{
   const ta=document.getElementById('dev-console');
   if(!ta)return;
   const code=ta.value;
   if(!code.trim())return;
   try{
-    // eslint-disable-next-line no-new-func
-    const fn=new Function('G','render','showToast','ACHIEVEMENTS','CLUBS','LIFE_ATHLETE_POOL',code);
-    fn(G,render,showToast,ACHIEVEMENTS,CLUBS,LIFE_ATHLETE_POOL);
+    eval(code);
     showToast('DEV: código ejecutado','#1a1a1a');
     render();
   }catch(e){
@@ -225,7 +227,7 @@ function renderDevPanel(){
 
     <div class="card" style="margin-bottom:12px">
       <div class="sec-title-sm">Consola de código</div>
-      <div style="font-size:12px;color:#888;margin-bottom:8px">JS libre con <code>G</code> en el ámbito. Ej: <code>G.sponsors.zapatillas={...}</code>, <code>G.followers=50000</code>, o llamar a cualquier función del juego. Se ejecuta y se re-renderiza. Sin red de seguridad — puedes dejar el estado inconsistente si escribes algo raro.</div>
+      <div style="font-size:12px;color:#888;margin-bottom:8px">JS libre: ves <code>G</code> y también todas las constantes del juego (<code>SPONSORS_DB</code>, <code>ACHIEVEMENTS</code>, <code>INJURY_TYPES</code>...) y sus funciones (<code>checkAndUnlockAchievements()</code>, <code>checkFollowerThresholds()</code>...). Se ejecuta y se re-renderiza. Sin red de seguridad — puedes dejar el estado inconsistente si escribes algo raro.</div>
       <textarea id="dev-console" rows="4" style="width:100%;padding:8px;border:1px solid #e0dfd8;border-radius:6px;font-family:monospace;font-size:12px" placeholder="G.money = 99999;"></textarea>
       <button class="main" style="margin-top:8px" onclick="devRunCode()">▶ Ejecutar</button>
     </div>
