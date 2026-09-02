@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Juego Trail · v71</title>
+<title>Juego Trail · v72</title>
 <style>
 :root{--color-background-primary:#fff;--color-background-secondary:#f8f7f3;--color-background-tertiary:#f0ede8;--color-text-primary:#1a1a1a;--color-text-secondary:#888;--color-text-tertiary:#aaa;--color-border-tertiary:#e0dfd8;--border-radius-md:8px;--border-radius-lg:12px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -239,6 +239,10 @@ button.secondary:hover{background:#f0ede8}
 .tip-modal-body{font-size:13px;color:#555;line-height:1.7}
 .tip-modal-close{border:none;background:none;font-size:20px;color:#bbb;cursor:pointer;padding:0;line-height:1;flex-shrink:0}
 .tip-modal-close:hover{color:#888}
+/* ── DEV DRAWER (lateral, no tapa la pantalla de juego debajo) ── */
+#dev-drawer{display:none;position:fixed;top:0;right:0;bottom:0;width:400px;max-width:92vw;background:#fff;z-index:9990;box-shadow:-6px 0 28px rgba(0,0,0,.18);overflow-y:auto;padding:56px 16px 24px}
+#dev-drawer.open{display:block;animation:slideInRight 160ms ease-out both}
+@keyframes slideInRight{from{transform:translateX(28px);opacity:0}to{transform:translateX(0);opacity:1}}
 /* ── UTILITY CLASSES (D1) — patterns repeated 5+ times ── */
 .sec-title{font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
 .sec-title-sm{font-size:12px;font-weight:600;color:#888;margin-bottom:10px}
@@ -264,7 +268,8 @@ button.secondary:hover{background:#f0ede8}
 </style>
 </head>
 <body>
-<button id="dev-btn" style="display:none;position:fixed;top:8px;right:8px;z-index:9999;background:#1a1a1a;color:#fff;border:none;border-radius:20px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer" onclick="G._devPrevScreen=G.screen;G.screen='devPanel';render()">🛠 DEV</button>
+<button id="dev-btn" style="display:none;position:fixed;top:8px;right:8px;z-index:9999;background:#1a1a1a;color:#fff;border:none;border-radius:20px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer" onclick="devToggleDrawer()">🛠 DEV</button>
+<div id="dev-drawer"></div>
 <div id="app">
   <div id="toast-notif"></div>
 
@@ -326,14 +331,14 @@ button.secondary:hover{background:#f0ede8}
 </nav>
 
 
-<script src="js/constants.js?v=71"></script>
-<script src="js/state.js?v=71"></script>
-<script src="js/save.js?v=71"></script>
-<script src="js/race.js?v=71"></script>
-<script src="js/coach.js?v=71"></script>
-<script src="js/canicross.js?v=71"></script>
-<script src="js/render.js?v=71"></script>
-<script src="js/devmode.js?v=71"></script>
+<script src="js/constants.js?v=72"></script>
+<script src="js/state.js?v=72"></script>
+<script src="js/save.js?v=72"></script>
+<script src="js/race.js?v=72"></script>
+<script src="js/coach.js?v=72"></script>
+<script src="js/canicross.js?v=72"></script>
+<script src="js/render.js?v=72"></script>
+<script src="js/devmode.js?v=72"></script>
 <script>
 if(new URLSearchParams(location.search).get('dev')==='1'){
   G._devMode=true;

@@ -136,8 +136,17 @@ function cnCurrentMonth(){
 }
 
 function cnPickEvent(raceMonth){
-  if(Math.random()>0.60)return null;
   const d=G.dog;if(!d)return null;
+  // DEV: fuerza un evento concreto por id, consumido una sola vez, sin tocar
+  // las probabilidades reales del resto de jugadores.
+  if(G._devForceCnEvent){
+    const forcedId=G._devForceCnEvent;G._devForceCnEvent=null;
+    for(const[pool,eventType]of[[CN_EVENTS_RARE,'rare'],[CN_EVENTS_SPECIAL,'special'],[CN_EVENTS_POS,'pos'],[CN_EVENTS_NEG,'neg']]){
+      const found=pool.find(e=>e.id===forcedId);
+      if(found)return{...found,eventType};
+    }
+  }
+  if(Math.random()>0.60)return null;
   const isWinter=raceMonth===12||raceMonth===1||raceMonth===2;
   const r=Math.random();
   if(d.bond>=75&&r<0.15)return{...CN_EVENTS_RARE[Math.floor(Math.random()*CN_EVENTS_RARE.length)],eventType:'rare'};
@@ -224,6 +233,12 @@ function cnFinishRace(){
   const rs=G.cnRaceState;if(!rs)return;
   const d=G.dog;if(!d)return;
   const race=(G.cnSelectedRaces||[])[G.cnCurrentRaceIdx]||{};
+  // Modo desarrollador — "modo dios": fuerza victoria en cualquier carrera de
+  // Canicross. Ver js/devmode.js. No afecta a partidas normales.
+  if(G._devGodModeCn&&rs.rivals&&rs.rivals.length){
+    rs.timePenalty=0;
+    rs.time=Math.max(1,Math.min(...rs.rivals.map(r=>r.estimatedTime))-60);
+  }
 
   const totalBond=rs.bondDelta||0;
   const prevBond=d.bond||0;

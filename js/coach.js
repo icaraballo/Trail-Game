@@ -67,6 +67,13 @@ function clubLevelByRep(){
 }
 
 function simClubRace(runner,race,clubData){
+  // Modo desarrollador — "modo dios": fuerza 1er puesto en toda carrera de Club
+  // simulada mientras esté activo (Club resuelve la temporada entera de golpe,
+  // no hay "carrera en curso" única). Ver js/devmode.js.
+  if(G._devGodModeClub){
+    const rivals={local:18,regional:35,nacional:70,elite:110}[race.tier||'local']||25;
+    return{pos:1,perf:98,prize:race.prize,rivals,dnf:false};
+  }
   const d=clubData||G.clubModeData||{};
   const s=runner.stats;
   let base=(s.resistencia*0.35+s.velocidad*0.2+s.subida*0.25+s.bajada*0.2);
@@ -979,7 +986,14 @@ function coachBuildRaceData(race, extraEnergyBonus=0){
   const segs=[];let totalTime=0;let aidCount=0;
 
   // Pick one mid-race event to inject (Tanda 2)
-  const midEvt=COACH_MID_RACE_EVENTS[Math.floor(Math.random()*COACH_MID_RACE_EVENTS.length)];
+  // DEV: fuerza un evento concreto por id, consumido una sola vez. Ver js/devmode.js.
+  let midEvt;
+  if(G._devForceCoachMidEvent){
+    midEvt=COACH_MID_RACE_EVENTS.find(e=>e.id===G._devForceCoachMidEvent)||COACH_MID_RACE_EVENTS[Math.floor(Math.random()*COACH_MID_RACE_EVENTS.length)];
+    G._devForceCoachMidEvent=null;
+  } else {
+    midEvt=COACH_MID_RACE_EVENTS[Math.floor(Math.random()*COACH_MID_RACE_EVENTS.length)];
+  }
   const midSegTarget=Math.floor(race.segs.length*0.45);
 
   for(let i=0;i<race.segs.length;i++){
@@ -1385,6 +1399,9 @@ window.doCoachTacticInfo=aidNum=>{
 
 window.doCoachRaceFinish=()=>{
   const data=G.coachRaceData;if(!data)return;
+  // Modo desarrollador — "modo dios": fuerza 1er puesto en cualquier carrera de Entrenador.
+  // Ver js/devmode.js. No afecta a partidas normales (flag inexistente).
+  if(G._devGodModeCoach)data.finalPos=1;
   const race=data.race;const pos=data.finalPos;
   const pct2=PRIZE_TABLE[pos-1]||0;
   const prize=pos<=8?Math.round(race.prize*pct2):0;

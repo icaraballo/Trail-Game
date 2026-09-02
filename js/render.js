@@ -207,6 +207,10 @@ function render(){
   if(typeof _coachRaceTimer!=='undefined'&&_coachRaceTimer&&G.screen!=='coachRace'){clearInterval(_coachRaceTimer);_coachRaceTimer=null;}
   updateFinBar();
   updateTabNav();
+  // Refresca el panel dev si está abierto, para que sus datos (carrera en
+  // curso, placeholders del editor de estado...) sigan en vivo sin importar
+  // qué pantalla del juego se acabe de renderizar debajo.
+  if(G._devMode)renderDevOverlay();
   // Clear any pending Express timer if we've left the mid-race event screen
   if(G.screen!=='midRaceEvent')clearExpressTimer();
   const el=document.getElementById('main');
@@ -279,7 +283,6 @@ function render(){
     canicrossDogDeath:renderCnDogDeath,
     canicrossDisplasia:renderCnDisplasia,
     achievements:renderAchievements,
-    devPanel:renderDevPanel,
   }[G.screen]||renderIntro)();
   triggerFade(el);
 }
