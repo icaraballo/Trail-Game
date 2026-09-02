@@ -724,7 +724,8 @@ function checkSegInjury(p,seg,alloutStreak,sb,injuryRiskBase){
     else if(load>=55)fallRisk+=0.07;
     fallRisk=Math.min(0.95,fallRisk*modeCfg().injuryRiskMult);
     if(hasFisio())fallRisk*=0.45;
-    if(Math.random()<fallRisk)descentFall=true;
+    if(G._devForceDescentFall){descentFall=true;G._devForceDescentFall=false;}
+    else if(Math.random()<fallRisk)descentFall=true;
   }
   if(alloutStreak>=3&&load>=70&&!hasFisio()){
     let injRisk=injuryRiskBase;

@@ -20,7 +20,7 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
-const GAME_BUILD=70; // incrementar con cada versión del juego
+const GAME_BUILD=71; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
@@ -50,6 +50,11 @@ function serializableState(){
   for(const k in G){
     if(!k.startsWith('_')||PERSISTENT_UNDERSCORE_KEYS.includes(k)) clean[k]=G[k];
   }
+  // DEV: si devUnlockAllAchievements() está activo, el guardado usa el respaldo
+  // real en vez del desbloqueo de prueba — así el botón de dev sigue siendo
+  // "solo en memoria" de verdad, sin importar cuántos guardados ocurran mientras
+  // dure la sesión (unlockedAchievements no es una clave '_', se guarda siempre).
+  if(G._devAchievementsDirty) clean.unlockedAchievements=G._devAchievementsBackup||[];
   return JSON.parse(JSON.stringify(clean));
 }
 

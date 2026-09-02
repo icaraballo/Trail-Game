@@ -53,6 +53,27 @@ window.devForceAthleteOffer=()=>{
   render();
 };
 
+// ── Forzar eventos raros (CR-01, CR-07: demasiado improbables para salir jugando a mano) ──
+// Consumido una sola vez — no cambia el balance real del juego, solo garantiza
+// que el próximo tramo de bajada a ritmo "a tope" caiga, para poder verificar el fix.
+window.devForceDescentFall=()=>{
+  G._devForceDescentFall=true;
+  showToast('DEV: la próxima bajada a ritmo "A tope" forzará una caída','#c0392b');
+  render();
+};
+window.devForceClubPresidentEvent=()=>{
+  if(!G.club||G.club.id==='none'){
+    G.club=CLUBS.find(c=>c.id!=='none')||CLUBS[0];
+    showToast('DEV: unido a "'+G.club.name+'" para poder forzar el evento','#4a8a2a');
+  }
+  const ev=MONTHLY_EVENTS_POOL.find(e=>e.id==='club_president');
+  if(!ev){showToast('DEV: evento club_president no encontrado','#c0392b');return;}
+  G.monthlyEvents=[{...ev,resolved:false}];
+  G.screen='seasonBalance';
+  showToast('DEV: evento del presidente del club forzado','#c07a10');
+  render();
+};
+
 // ── Ganar / perder la carrera en curso (Clásico) ──
 // Trucos legítimos: calcRaceResult() solo mira G.time vs G.rivals[].time,
 // así que forzamos G.time y dejamos que finishRace() haga TODO lo demás
@@ -88,7 +109,14 @@ window.devSetInjury=(type)=>{
 // ── Logros ──
 window.devUnlockAllAchievements=()=>{
   // Solo en memoria — NO toca localStorage['globalAchs'], así que no ensucia
-  // el historial de logros real de otras partidas guardadas.
+  // el historial de logros real de otras partidas guardadas. Además respalda
+  // G.unlockedAchievements antes de forzarlo: serializableState() (save.js)
+  // usa ese respaldo mientras dure la sesión dev, así ningún guardado normal
+  // (cambiar de pantalla, terminar algo) persiste el desbloqueo de prueba.
+  if(!G._devAchievementsDirty){
+    G._devAchievementsBackup=[...(G.unlockedAchievements||[])];
+    G._devAchievementsDirty=true;
+  }
   if(!G.achievementMeta)G.achievementMeta={};
   G.unlockedAchievements=ACHIEVEMENTS.map(a=>a.id);
   ACHIEVEMENTS.forEach(a=>{if(!G.achievementMeta[a.id])G.achievementMeta[a.id]={difficulty:G.gameMode||'medio',year:G.year||1};});
@@ -173,6 +201,13 @@ function renderDevPanel(){
       <button class="main" style="margin-top:6px;border-color:#c0392b;color:#c0392b" ${inRace?'':'disabled'} onclick="devLoseRace()">🥴 Perder esta carrera ya (último)</button>
       <button class="main" style="margin-top:6px;${G._devGodMode?'background:#c0392b;color:#fff;border-color:#c0392b':''}" onclick="devToggleGodMode()">${G._devGodMode?'😇 Modo dios ACTIVO — pulsa para desactivar':'👑 Activar modo dios (ganas toda carrera de Clásico)'}</button>
       <div style="font-size:11px;color:#888;margin-top:6px">Modo dios: mientras esté activo, cualquier carrera de Clásico que termines normalmente (jugando los tramos) se resuelve en victoria. Solo Clásico por ahora — Coach/Club/Canicross tienen motores de carrera distintos, no cubiertos todavía.</div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Eventos raros (CR-01 / CR-07)</div>
+      <div style="font-size:11px;color:#888;margin-bottom:6px">Se consumen una sola vez, no cambian el balance real del juego.</div>
+      <button class="secondary" style="margin-top:0" onclick="devForceDescentFall()">🪨 Forzar caída en la próxima bajada "a tope"</button>
+      <button class="secondary" style="margin-top:6px" onclick="devForceClubPresidentEvent()">🏆 Forzar evento "presidente del club"</button>
     </div>
 
     <div class="card" style="margin-bottom:12px">
