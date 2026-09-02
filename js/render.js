@@ -496,6 +496,7 @@ function renderFinancesTab(){
 // ── RUNNER TAB ─────────────────────────
 function renderRunnerTab(){
   const el=document.getElementById('main');
+  const load=getBodyLoad();const lt=getLoadThresholdsByMode();
   const r=G.runner;
   const specLabel=SPEC_LABEL;
   const activeSponsorList=Object.entries(G.sponsors).filter(([,v])=>v);
@@ -520,13 +521,13 @@ function renderRunnerTab(){
     <div class="card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px">Carga corporal</span>
-        <span style="font-size:14px;font-weight:700;color:${getBodyLoad()>=70?'#c0392b':getBodyLoad()>=50?'#c07a10':'#4a8a2a'}">${getBodyLoad()}%</span>
+        <span style="font-size:14px;font-weight:700;color:${load>=lt.warningLevel2?'#c0392b':load>=lt.warningLevel1?'#c07a10':'#4a8a2a'}">${load}%</span>
       </div>
-      <div class="load-bar-track"><div class="bar-fill" style="width:${getBodyLoad()}%;background:${getBodyLoad()>=70?'#c0392b':getBodyLoad()>=50?'#c07a10':'#4a90d9'}"></div></div>
+      <div class="load-bar-track"><div class="bar-fill" style="width:${load}%;background:${load>=lt.warningLevel2?'#c0392b':load>=lt.warningLevel1?'#c07a10':'#4a90d9'}"></div></div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#bbb;margin-top:4px">
-        <span>0%</span><span style="color:#c07a10">70% riesgo</span><span style="color:#c0392b">100% lesión</span>
+        <span>0%</span><span style="color:#c07a10">${lt.warningLevel1}% riesgo</span><span style="color:#c0392b">100% lesión</span>
       </div>
-      ${(()=>{const w=getLoadWarningMsg(getBodyLoad());return w.msg?`<div style="font-size:12px;color:${w.color};margin-top:6px">${w.msg}</div>`:`<div style="font-size:12px;color:#4a8a2a;margin-top:6px">✓ Carga bajo control</div>`;})()}
+      ${(()=>{const w=getLoadWarningMsg(load);return w.msg?`<div style="font-size:12px;color:${w.color};margin-top:6px">${w.msg}</div>`:`<div style="font-size:12px;color:#4a8a2a;margin-top:6px">✓ Carga bajo control</div>`;})()}
     </div>
 
     <div class="card">
@@ -855,6 +856,7 @@ window.doImport=(slot)=>{
 
 function renderExpresSeasonStart(){
   const el=document.getElementById('main');
+  const load=getBodyLoad();const lt=getLoadThresholdsByMode();
   const showObjectives=!G.yearObjective||G._yearObjectiveRewardPaid;
   el.innerHTML=`
     <div style="background:#fef9ec;border:1.5px solid #f0d98a;border-radius:14px;padding:14px 16px;margin-bottom:16px">
@@ -870,7 +872,7 @@ function renderExpresSeasonStart(){
     <p class="sub">${G.runner.specialty} · ${G.runner.age||25} años · ${G.ranking<900?'Ranking #'+G.ranking:'Sin ranking'}</p>
     <div class="stat-grid" style="margin-bottom:14px">
       <div class="stat"><div class="stat-label">Ahorros</div><div class="stat-val">€${G.money}</div></div>
-      <div class="stat"><div class="stat-label">Carga corporal</div><div class="stat-val" style="color:${getBodyLoad()>=70?'#c0392b':getBodyLoad()>=50?'#c07a10':'#2d7a2d'}">${getBodyLoad()}%</div></div>
+      <div class="stat"><div class="stat-label">Carga corporal</div><div class="stat-val" style="color:${load>=lt.warningLevel2?'#c0392b':load>=lt.warningLevel1?'#c07a10':'#2d7a2d'}">${load}%</div></div>
       <div class="stat"><div class="stat-label">Carreras</div><div class="stat-val">${G.raceResults?.length||0} hechas</div></div>
     </div>
     <div class="card" style="margin-bottom:14px">
@@ -978,6 +980,7 @@ function renderExpresPrep(){
   const el=document.getElementById('main');
   const nextRace=G.selectedRaces[G.currentRaceIdx];
   const load=getBodyLoad();
+  const lt=getLoadThresholdsByMode();
   const hint=bodyLoadHint();
   const racesLeft=G.selectedRaces.length-G.currentRaceIdx;
 
@@ -990,9 +993,9 @@ function renderExpresPrep(){
     ${hint?`<div class="${hint.type}">${hint.msg}</div>`:''}
     <div style="margin-bottom:6px">
       <div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:4px">
-        <span>Carga corporal</span><span style="font-weight:600;color:${load>=70?'#c0392b':load>=50?'#c07a10':'#2d7a2d'}">${load}%</span>
+        <span>Carga corporal</span><span style="font-weight:600;color:${load>=lt.warningLevel2?'#c0392b':load>=lt.warningLevel1?'#c07a10':'#2d7a2d'}">${load}%</span>
       </div>
-      ${hbar(load,100,load>=70?'#c0392b':load>=50?'#c07a10':'#4a90d9')}
+      ${hbar(load,100,load>=lt.warningLevel2?'#c0392b':load>=lt.warningLevel1?'#c07a10':'#4a90d9')}
     </div>
     <div style="font-size:12px;color:#888;margin:14px 0 8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">¿Cómo preparas la carrera?</div>
     <div style="display:grid;gap:8px;margin-bottom:16px">
@@ -1002,7 +1005,7 @@ function renderExpresPrep(){
         <div class="card-sub">Subes el bloque al máximo. El cuerpo lo nota pero llegas más fuerte.</div>
         <div style="display:flex;gap:12px;font-size:12px;margin-top:6px">
           <span style="color:#4a8a2a">+6 stat principal</span>
-          <span style="color:#c0392b">Carga +${load>=70?'12 ⚠':'12'}</span>
+          <span style="color:#c0392b">Carga +${load>=lt.warningLevel2?'12 ⚠':'12'}</span>
         </div>
       </div>
       <div class="work-card" onclick="doExpresPrep('rest')">
@@ -1848,6 +1851,7 @@ function renderTraining(){
   const wo=curWorkOpt();
   const hint=bodyLoadHint();
   const load=getBodyLoad();
+  const lt=getLoadThresholdsByMode();
   const curMonth=nextRace?nextRace.month:(new Date().getMonth()+1);
   const se=getSeasonEffects(curMonth);
   const seEffPct=Math.round(effForWork()*(1+se.trainingMod)*100);
@@ -1860,9 +1864,9 @@ function renderTraining(){
     <div style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:4px">
         <span>Carga corporal acumulada <button class="tip-btn" onclick="showTip('Carga corporal','Refleja el desgaste acumulado de entrenar. Por encima del <strong>70%</strong> empieza la bajada de rendimiento. Al <strong>100%</strong> aparece una lesión.<br><br>La degradación es exponencial: cuanta más carga tienes, más difícil bajarla. Se reduce parcialmente entre temporadas, pero nunca vuelve a cero sola. Nunca vayas a tope todo el rato.')">ⓘ</button></span>
-        <span style="color:${load>=70?'#c0392b':load>=50?'#c07a10':'#888'}">${load}%</span>
+        <span style="color:${load>=lt.warningLevel2?'#c0392b':load>=lt.warningLevel1?'#c07a10':'#888'}">${load}%</span>
       </div>
-      <div class="load-bar-track"><div class="bar-fill" style="width:${load}%;background:${load>=70?'#c0392b':load>=50?'#c07a10':'#4a90d9'}"></div></div>
+      <div class="load-bar-track"><div class="bar-fill" style="width:${load}%;background:${load>=lt.warningLevel2?'#c0392b':load>=lt.warningLevel1?'#c07a10':'#4a90d9'}"></div></div>
     </div>
     <div style="margin-bottom:12px">
       <button class="secondary" id="btn-nr" onclick="toggleNR()">Ver próxima carrera ↓</button>
@@ -2295,6 +2299,7 @@ window.addRepInvitation=id=>{
 function renderBetweenManage(){
   const el=document.getElementById('main');
   const load=getBodyLoad();
+  const lt=getLoadThresholdsByMode();
   const nextRace=G.selectedRaces[G.currentRaceIdx];
   const hasFisioContract=G.spending.fisio||G.club?.hasFisio;
   const FISIO_OPTIONS=[
@@ -2311,11 +2316,11 @@ function renderBetweenManage(){
     <div style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:4px">
         <span>Carga corporal</span>
-        <span style="color:${load>=70?'#c0392b':load>=50?'#c07a10':'#888'}">${load}%</span>
+        <span style="color:${load>=lt.warningLevel2?'#c0392b':load>=lt.warningLevel1?'#c07a10':'#888'}">${load}%</span>
       </div>
-      <div class="load-bar-track"><div class="bar-fill" style="width:${load}%;background:${load>=70?'#c0392b':load>=50?'#c07a10':'#4a90d9'}"></div></div>
-      ${load>=70?`<div style="font-size:12px;color:#c0392b;margin-top:4px">Carga alta — considera recuperar antes de la próxima.</div>`:
-        load>=50?`<div style="font-size:12px;color:#c07a10;margin-top:4px">Carga moderada. Una sesión te vendrá bien.</div>`:''}
+      <div class="load-bar-track"><div class="bar-fill" style="width:${load}%;background:${load>=lt.warningLevel2?'#c0392b':load>=lt.warningLevel1?'#c07a10':'#4a90d9'}"></div></div>
+      ${load>=lt.warningLevel2?`<div style="font-size:12px;color:#c0392b;margin-top:4px">Carga alta — considera recuperar antes de la próxima.</div>`:
+        load>=lt.warningLevel1?`<div style="font-size:12px;color:#c07a10;margin-top:4px">Carga moderada. Una sesión te vendrá bien.</div>`:''}
     </div>
     <div class="section-label">Recuperación${G._recoveryUsed?' <span style="font-size:12px;color:#aaa;font-weight:400">(1 acción usada)</span>':''}</div>
     ${FISIO_OPTIONS.map(o=>{

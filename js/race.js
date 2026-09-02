@@ -1514,14 +1514,22 @@ function checkMidRaceEvents(){
   if(!race)return null;
   if(!G.midRaceEventTriggered)G.midRaceEventTriggered={};
 
-  let ev=null;
-  ev=checkWeatherAndEnvironmentEvents(); if(ev)return ev;
-  ev=checkTerrainNavigationEvents(); if(ev)return ev;
-  ev=checkInjuryAndFallEvents(); if(ev)return ev;
-  ev=checkFatigueAndEnergyEvents(); if(ev)return ev;
-  ev=checkSocialAndRivalEvents(); if(ev)return ev;
-  ev=checkExpressTimedEvents(); if(ev)return ev;
-  ev=checkExpressNarrativeEvents(); if(ev)return ev;
+  // Orden aleatorio en cada tick (Fisher-Yates) — con orden fijo, el primer
+  // sistema de la lista (clima) ganaba siempre los empates de elegibilidad
+  // frente al resto (CR-20). Barajar da a los 7 sistemas la misma oportunidad.
+  const sistemas=[
+    checkWeatherAndEnvironmentEvents,checkTerrainNavigationEvents,
+    checkInjuryAndFallEvents,checkFatigueAndEnergyEvents,
+    checkSocialAndRivalEvents,checkExpressTimedEvents,checkExpressNarrativeEvents,
+  ];
+  for(let i=sistemas.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [sistemas[i],sistemas[j]]=[sistemas[j],sistemas[i]];
+  }
+  for(const sistema of sistemas){
+    const ev=sistema();
+    if(ev)return ev;
+  }
   return null;
 }
 

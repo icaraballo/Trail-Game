@@ -8,16 +8,16 @@
 window.devJumpToCoach=()=>{
   const pick=LIFE_ATHLETE_POOL[Math.floor(Math.random()*LIFE_ATHLETE_POOL.length)];
   G.lifeAthlete={...pick,currentStats:{...pick.baseStats}};
-  G.coachAthlete={...G.lifeAthlete};
+  G.carreraVida=true;G.activeTab='game';
+  // El flujo real (confirmLifeCoachTransition) nunca toca G.gameMode — se
+  // fuerza aquí para que las pestañas funcionen bien en dev (hallazgo de
+  // CR-29 en Bugs-Activos, no relacionado con este fix).
   G.gameMode='coach';
-  G.carreraVida=true;G.lifecyclePhase='coach';
   if(!Array.isArray(G.coachRoster))G.coachRoster=[];
-  if(!Array.isArray(G.coachSelectedRaces))G.coachSelectedRaces=[];
-  if(!Array.isArray(G.coachRaceResults))G.coachRaceResults=[];
-  G.coachRaceIdx=0;G.coachSeason=G.coachSeason||1;G.coachTrust=G.coachTrust||60;
-  G.screen='coachHome';G.activeTab='game';
-  showToast('DEV: saltado a Entrenador','#534AB7');
-  render();
+  // Reutiliza el flujo real en vez de montar el estado a mano — así el salto
+  // de dev también aplica el bonus de fama a coachReputation (CR-24) y pasa
+  // por coachIntro, exactamente igual que le pasaría a un jugador real.
+  confirmLifeCoachTransition();
 };
 window.devJumpToClub=()=>{
   if(!G.clubModeData){
@@ -190,6 +190,7 @@ function renderDevPanel(){
       <div class="sec-title-sm">Saltos directos</div>
       <button class="main" style="margin-top:6px" onclick="devJumpToClassic()">🏃 Ir a Clásico ahora</button>
       <button class="main" style="margin-top:6px" onclick="devJumpToCoach()">📋 Ir a Entrenador ahora</button>
+      <div style="font-size:11px;color:#888;margin:2px 0 6px">Pasa por el flujo real de transición (bonus de fama + pantalla "coachIntro"), no es un atajo que se lo salte.</div>
       <button class="main" style="margin-top:6px" onclick="devJumpToClub()">🏕 Ir a Club ahora</button>
       <button class="main" style="margin-top:6px" onclick="devJumpToCanicross()">🐕 Ir a Canicross ahora</button>
       <button class="main" style="margin-top:6px" onclick="devForceAthleteOffer()">🏔 Forzar oferta "hazte entrenador"</button>
