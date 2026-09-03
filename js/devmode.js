@@ -95,6 +95,11 @@ function devEvtPool(mode,type){
   if(mode==='canicross')return [...CN_EVENTS_POS,...CN_EVENTS_NEG,...CN_EVENTS_RARE,...CN_EVENTS_SPECIAL].map(e=>({id:e.id,label:(e.text||e.id).replace('[DOG]','perro').replace('[KM]','X').slice(0,45)}));
   return [];
 }
+window.devBalanceModeChanged=()=>{
+  const sel=document.getElementById('dev-balance-mode');
+  G._devBalancePreviewMode=sel.value;
+  renderDevPanel();
+};
 window.devEvtModeChanged=()=>{
   const sel=document.getElementById('dev-evt-mode');
   G._devEvtMode=sel.value;
@@ -821,6 +826,41 @@ function renderDevPanel(){
         <button class="secondary" style="margin-top:0" onclick="devSnapshotState()">📌 Snapshot rápido</button>
         <button class="secondary" style="margin-top:0" onclick="devRestoreSnapshot()">↩ Restaurar snapshot</button>
       </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title-sm">Inspector de balance</div>
+      <div style="font-size:11px;color:#888;margin-bottom:6px">Multiplicadores efectivos de <code>modeCfg()</code> por modo — para comparar dificultades sin jugar carreras completas. Independiente del modo real de la partida.</div>
+      <label style="font-size:12px;display:block;margin-bottom:8px">Modo a inspeccionar
+        <select id="dev-balance-mode" onchange="devBalanceModeChanged()" style="width:100%;padding:6px;border:1px solid #e0dfd8;border-radius:6px">
+          ${['facil','medio','dificil','hardcore','expres','coach'].map(m=>`<option value="${m}" ${(G._devBalancePreviewMode||G.gameMode||'medio')===m?'selected':''}>${m}</option>`).join('')}
+        </select>
+      </label>
+      ${(()=>{
+        const bm=G._devBalancePreviewMode||G.gameMode||'medio';
+        const cfg=modeCfg(['facil','medio','dificil','hardcore','expres','coach'].includes(bm)?bm:'medio');
+        const injAt=(load)=>Math.min(95,Math.round((0.08+(load-70)*0.004)*cfg.injuryRiskMult*100));
+        const fatAt=(streak)=>((streak>=3?2.2:streak===2?1.6:1.0)*cfg.fatigueMult).toFixed(2);
+        return `
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          <tr><td style="padding:3px 0;color:#888">injuryRiskMult</td><td style="text-align:right;font-weight:600">${cfg.injuryRiskMult}</td></tr>
+          <tr><td style="padding:3px 0;color:#888">fatigueMult</td><td style="text-align:right;font-weight:600">${cfg.fatigueMult}</td></tr>
+          <tr><td style="padding:3px 0;color:#888">rivalMult</td><td style="text-align:right;font-weight:600">${cfg.rivalMult}</td></tr>
+          <tr><td style="padding:3px 0;color:#888">sponsorMult</td><td style="text-align:right;font-weight:600">${cfg.sponsorMult}</td></tr>
+          <tr><td style="padding:3px 0;color:#888">trainingMult</td><td style="text-align:right;font-weight:600">${cfg.trainingMult}</td></tr>
+          <tr><td style="padding:3px 0;color:#888">startMoney</td><td style="text-align:right;font-weight:600">€${cfg.startMoney}</td></tr>
+          <tr><td style="padding:3px 0;color:#888">maxYears</td><td style="text-align:right;font-weight:600">${cfg.maxYears}</td></tr>
+        </table>
+        <div style="font-size:12px;color:#888;margin:10px 0 4px">tierDiffMult (mayor = rivales más lentos)</div>
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          ${['local','regional','nacional','elite'].map(t=>`<tr><td style="padding:3px 0;color:#888">${t}</td><td style="text-align:right;font-weight:600">${cfg.tierDiffMult[t]}</td></tr>`).join('')}
+        </table>
+        <div style="font-size:12px;color:#888;margin:10px 0 4px">Ejemplos derivados</div>
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          <tr><td style="padding:3px 0;color:#888">Riesgo lesión/tramo (carga 90)</td><td style="text-align:right;font-weight:600">${injAt(90)}%</td></tr>
+          <tr><td style="padding:3px 0;color:#888">Fatiga efectiva (3 tramos a tope)</td><td style="text-align:right;font-weight:600">×${fatAt(3)}</td></tr>
+        </table>`;
+      })()}
     </div>
 
     <div class="card" style="margin-bottom:12px">

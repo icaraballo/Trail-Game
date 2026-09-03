@@ -267,9 +267,8 @@ function initRace(){
   const pool=[...RIVALS_POOL.filter(r=>r.tier<=maxTier&&r.tier>=minTier)];
   const shuffled=shuffle(pool).slice(0,14);
 
-  // Escalar dificultad por tier de carrera
-  const tierDiffMult={local:1.15,regional:1.08,nacional:1.02,elite:0.97};
-  const diffMult=tierDiffMult[race.tier]||1.0;
+  // Escalar dificultad por tier de carrera — proporcional al modo (CR-33, v73)
+  const diffMult=modeCfg().tierDiffMult[race.tier]||1.0;
   // Escalado de dificultad por año según modo:
   // fácil/medio: rivales algo más lentos al inicio (pequeño margen de aprendizaje)
   // difícil/hardcore: rivales cada año más rápidos (presión creciente)
