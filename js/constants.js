@@ -245,6 +245,38 @@ const ACHIEVEMENTS=[
   {id:'joke_cn_ignore_vet',     rarity:'joke',mode:'cn',label:'El vet puede esperar', desc:'Competir toda una temporada sin llevar al perro al veterinario',check:()=>!!(G._cnIgnoredVetSeason)},
   {id:'joke_cn_last',           rarity:'joke',mode:'cn',label:'Últimos pero juntos',  desc:'Terminar último en una carrera de canicross',               check:()=>(G._cnLastPlaceCount||0)>=1},
   {id:'joke_cn_preseason_nothing',rarity:'joke',mode:'cn',label:'Sin preparación',   desc:'Llegar a la primera carrera sin hacer ninguna actividad de pretemporada',check:()=>!!(G._cnPreseasonNothing)},
+  // ══ ENTRENADOR — FÁCIL (CR-38, v76) ═══════════════════════
+  {id:'coach_first_athlete',rarity:'easy',  mode:'coach',label:'Primer pupilo',         desc:'Aceptar tu primer atleta como entrenador',                 check:()=>!!G.coachAthlete||(G.coachAthleteHistory||[]).length>=1},
+  {id:'coach_season_3',  rarity:'easy',  mode:'coach',label:'Tres temporadas guiando',  desc:'Completar 3 temporadas con el mismo atleta',               check:()=>(G.coachSeason||1)>=3},
+  {id:'coach_trust_80',  rarity:'easy',  mode:'coach',label:'Confianza plena',          desc:'Alcanzar 80 de confianza con tu atleta',                   check:()=>(G.coachTrust||0)>=80},
+  // ══ ENTRENADOR — MEDIA ═════════════════════════════════════
+  {id:'coach_wins_10',   rarity:'medium',mode:'coach',label:'Diez victorias en el banquillo',desc:'Sumar 10 victorias entrenando (todos tus atletas)',   check:()=>(G.coachAthleteHistory||[]).reduce((s,h)=>s+(h.wins||0),0)>=10},
+  {id:'coach_multi_athlete',rarity:'medium',mode:'coach',label:'Cantera de talentos',   desc:'Entrenar a 3 atletas distintos a lo largo de la carrera',  check:()=>new Set((G.coachAthleteHistory||[]).map(h=>h.name)).size>=3},
+  {id:'coach_rep_60',    rarity:'medium',mode:'coach',label:'Entrenador de confianza',  desc:'Alcanzar reputación de entrenador 60',                     check:()=>(G.coachReputation||0)>=60},
+  // ══ ENTRENADOR — DIFÍCIL ═══════════════════════════════════
+  {id:'coach_rep_90',    rarity:'hard',  mode:'coach',label:'Entrenador de élite',      desc:'Alcanzar reputación de entrenador 90',                     check:()=>(G.coachReputation||0)>=90},
+  {id:'coach_club_offer',rarity:'hard',  mode:'coach',label:'Ojeado por un club',       desc:'Recibir la oferta de pasar a dirigir un club',             check:()=>!!G._coachClubOfferReceived},
+  {id:'coach_beat_nemesis',rarity:'hard',mode:'coach',label:'Ajuste de cuentas',        desc:'Superar a un rival que llevaba 2+ carreras ganándole a tu atleta',check:()=>!!G._coachBeatNemesis},
+  // ══ ENTRENADOR — LEGENDARIO ════════════════════════════════
+  {id:'coach_5_athletes',rarity:'legendary',mode:'coach',label:'Forjador de leyendas',  desc:'Entrenar a 5 atletas distintos a lo largo de la carrera',  check:()=>new Set((G.coachAthleteHistory||[]).map(h=>h.name)).size>=5},
+  {id:'coach_perfect_season',rarity:'legendary',mode:'coach',label:'Temporada perfecta como entrenador',desc:'Ganar todas las carreras de una temporada con tu atleta (mín. 3)',check:()=>!!G._coachPerfectSeason},
+  {id:'coach_trust_wins',rarity:'legendary',mode:'coach',label:'Vínculo inquebrantable',desc:'Terminar una temporada con confianza 100 y 3 o más victorias',check:()=>(G.coachAthleteHistory||[]).some(h=>h.trust===100&&(h.wins||0)>=3)},
+  // ══ CLUB — FÁCIL (CR-38, v76) ══════════════════════════════
+  {id:'cm_found',        rarity:'easy',  mode:'club', label:'Fundador',                 desc:'Fundar tu primer club',                                    check:()=>!!G.clubModeData},
+  {id:'cm_socios_20',    rarity:'easy',  mode:'club', label:'Club en crecimiento',       desc:'Alcanzar 20 socios',                                       check:()=>(G.clubModeData?.socios||0)>=20},
+  {id:'cm_season_3',     rarity:'easy',  mode:'club', label:'Tres temporadas al frente', desc:'Completar 3 temporadas dirigiendo el club',                check:()=>(G.clubModeData?.temporada||1)>=3},
+  // ══ CLUB — MEDIA ═══════════════════════════════════════════
+  {id:'cm_full_roster',  rarity:'medium',mode:'club', label:'Plantilla completa',        desc:'Llenar la plantilla al máximo',                            check:()=>{const d=G.clubModeData;if(!d)return false;const max=d.instalaciones?.residencia?8:6;return (d.plantilla||[]).length>=max;}},
+  {id:'cm_all_facilities',rarity:'medium',mode:'club',label:'Infraestructura completa',  desc:'Construir las 4 instalaciones del club',                   check:()=>{const i=G.clubModeData?.instalaciones;return !!i&&Object.values(i).every(Boolean);}},
+  {id:'cm_cohesion_80',  rarity:'medium',mode:'club', label:'Vestuario unido',           desc:'Alcanzar 80 de cohesión de grupo',                         check:()=>(G.clubModeData?.cohesion||0)>=80},
+  {id:'cm_cantera_promote',rarity:'medium',mode:'club',label:'Cantera que da frutos',    desc:'Promocionar un corredor de cantera a la plantilla titular',check:()=>!!G._clubCanteraPromoted},
+  // ══ CLUB — DIFÍCIL ═════════════════════════════════════════
+  {id:'cm_rep_75',       rarity:'hard',  mode:'club', label:'Superar a los grandes',     desc:'Superar en reputación al rival de nivel nacional',        check:()=>{const d=G.clubModeData;if(!d)return false;const nac=(d.rivalClubs||[]).find(r=>r.level==='nacional');return !!nac&&(d.reputacion||0)>nac.rep;}},
+  {id:'cm_rep_90',       rarity:'hard',  mode:'club', label:'Club de referencia',        desc:'Alcanzar 90 de reputación de club',                       check:()=>(G.clubModeData?.reputacion||0)>=90},
+  {id:'cm_objective_3',  rarity:'hard',  mode:'club', label:'Objetivos cumplidos',       desc:'Cumplir el objetivo de temporada 3 veces',                 check:()=>(G._clubObjectivesMet||0)>=3},
+  // ══ CLUB — LEGENDARIO ══════════════════════════════════════
+  {id:'cm_season_10',    rarity:'legendary',mode:'club',label:'Una década al frente',    desc:'Completar 10 temporadas dirigiendo el mismo club',         check:()=>(G.clubModeData?.temporada||1)>=10},
+  {id:'cm_all_rivals',   rarity:'legendary',mode:'club',label:'Rey del territorio',      desc:'Superar en reputación a los 3 clubes rivales a la vez',    check:()=>{const d=G.clubModeData;if(!d||!(d.rivalClubs||[]).length)return false;return d.rivalClubs.every(r=>(d.reputacion||0)>r.rep);}},
 ];
 
 function trainingEffFromH(h){

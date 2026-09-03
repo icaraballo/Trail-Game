@@ -514,7 +514,7 @@ window.devUnlockCategory=()=>{
   const cat=sel.value;
   const targets=ACHIEVEMENTS.filter(a=>{
     if(cat==='todos')return true;
-    if(cat==='general')return a.mode!=='cn'&&a.mode!=='expres';
+    if(cat==='general')return a.mode!=='cn'&&a.mode!=='expres'&&a.mode!=='coach'&&a.mode!=='club';
     return a.mode===cat;
   });
   if(!Array.isArray(G.unlockedAchievements))G.unlockedAchievements=[];
@@ -806,14 +806,16 @@ function renderDevPanel(){
       <div style="font-size:12px;color:#888;margin:10px 0 4px">Desbloquear por categoría (edición real, persiste)</div>
       <div style="display:flex;gap:6px">
         <select id="dev-achievement-category" style="flex:1;min-width:0;padding:6px;border:1px solid #e0dfd8;border-radius:6px">
-          <option value="general">General / Clásico (${ACHIEVEMENTS.filter(a=>a.mode!=='cn'&&a.mode!=='expres').length})</option>
+          <option value="general">General / Clásico (${ACHIEVEMENTS.filter(a=>a.mode!=='cn'&&a.mode!=='expres'&&a.mode!=='coach'&&a.mode!=='club').length})</option>
           <option value="cn">Canicross (${ACHIEVEMENTS.filter(a=>a.mode==='cn').length})</option>
           <option value="expres">Exprés (${ACHIEVEMENTS.filter(a=>a.mode==='expres').length})</option>
+          <option value="coach">Entrenador (${ACHIEVEMENTS.filter(a=>a.mode==='coach').length})</option>
+          <option value="club">Club (${ACHIEVEMENTS.filter(a=>a.mode==='club').length})</option>
           <option value="todos">Todos (${ACHIEVEMENTS.length})</option>
         </select>
         <button class="secondary" style="margin-top:0" onclick="devUnlockCategory()">Forzar</button>
       </div>
-      <div style="font-size:11px;color:#c07a10;margin-top:6px">⚠ No hay categoría de Entrenador ni de Club: el juego no tiene logros propios de esos dos modos. Los 7 "club_*" son sobre unirte a un club en Clásico, no sobre fundar uno — están dentro de "General".</div>
+      <div style="font-size:11px;color:#888;margin-top:6px">Los 7 "club_*" de la categoría General son sobre unirte a un club en Clásico, no sobre fundar el modo Club — por eso siguen contando ahí, separados de la categoría "Club" (CR-38, v76).</div>
     </div>
 
     <div class="card" style="margin-bottom:12px">

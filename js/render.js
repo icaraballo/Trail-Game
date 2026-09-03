@@ -3258,6 +3258,8 @@ function checkClubOffer(){
   if((G.coachReputation||0)<60)return;
   if((G.coachSeason||1)<3)return;
   if(G._clubOfferDelay&&(G.coachSeason||1)<G._clubOfferDelay)return;
+  G._coachClubOfferReceived=true; // CR-38 (v76): logro coach_club_offer
+  checkAndUnlockAchievements();
   G.screen='clubOffer';
 }
 
@@ -3339,6 +3341,7 @@ window.confirmClubOffer=()=>{
     LS.set('unlocked',JSON.stringify(ul));
   }catch(e){}
   showToast('El club nace. Una nueva etapa empieza.','#1D9E75');
+  checkAndUnlockAchievements(); // CR-38 (v76): logro cm_found
   G.screen='clubIntro';
   autoSave();render();
 };

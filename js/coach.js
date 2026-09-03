@@ -1426,6 +1426,10 @@ window.doCoachRaceFinish=()=>{
   if(pos>5){
     if(!G.coachNemesis)G.coachNemesis={name:rival,wins:1};
     else G.coachNemesis.wins=(G.coachNemesis.wins||0)+1;
+  } else if(pos<=3&&G.coachNemesis&&(G.coachNemesis.wins||0)>=2){
+    // CR-38 (v76): el marcador se salda — logro coach_beat_nemesis
+    G._coachBeatNemesis=true;
+    G.coachNemesis.wins=0;
   }
 
   G.coachRaceResults.push({pos,dnf:false,prize,coachCut,raceName:race.name,tier:race.tier||'local'});
@@ -1488,6 +1492,8 @@ window.doCoachRaceFinish=()=>{
 
   // Guardar datos de la carrera acabada para usarlos en postRace
   G._lastRaceResult={pos,isDnf:false,raceName:race.name,prize,coachCut,dialogue:G.coachLastDialogue};
+  // CR-38 (v76): logros de Entrenador — antes no se comprobaban nunca en este modo
+  checkAndUnlockAchievements();
   autoSave();
   G.screen='coachPostRace';render();
 };
@@ -1801,6 +1807,9 @@ window.doCoachRenewEnthusiastic=()=>{
 };
 
 window.doCoachNextSeason=()=>{
+  // CR-38 (v76): capturar temporada perfecta antes de vaciar coachRaceResults — logro coach_perfect_season
+  const _crr=G.coachRaceResults||[];
+  if(_crr.length>=3&&_crr.every(r=>r.pos===1&&!r.dnf))G._coachPerfectSeason=true;
   if(!G.coachAthleteHistory)G.coachAthleteHistory=[];
   G.coachAthleteHistory.push({name:G.coachAthlete.name,season:G.coachSeason,
     wins:(G.coachRaceResults||[]).filter(r=>r.pos===1&&!r.dnf).length,
@@ -1822,6 +1831,7 @@ window.doCoachNextSeason=()=>{
   Object.keys(a.currentStats).forEach(k=>{
     a.currentStats[k]=Math.min(95,a.currentStats[k]+Math.floor(Math.random()*3));
   });
+  checkAndUnlockAchievements(); // CR-38 (v76)
   G.screen='coachHome';G.activeTab='game';saveCoachSlot();autoSave();render();
 };
 
@@ -2567,6 +2577,7 @@ window.doClubSimulateSeason=()=>{
   // Ingresos de sponsors de club
   (d.clubSponsors||[]).forEach(sp=>{d.presupuesto+=sp.monthlyIncome*12;});
 
+  checkAndUnlockAchievements(); // CR-38 (v76)
   autoSave();
   G.screen='clubSimulate';
   G._clubSimIdx=0;
@@ -2953,6 +2964,8 @@ function renderClubSeasonEnd(){
 
 window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
   const d=G.clubModeData;if(!d)return;
+  // CR-38 (v76): contador acumulado de objetivos cumplidos — logro cm_objective_3
+  if(d.seasonObjectiveMet===true)G._clubObjectivesMet=(G._clubObjectivesMet||0)+1;
   d.historial.push({
     temporada:d.temporada,socios:d.socios,
     reputacion:d.reputacion,presupuesto:d.presupuesto,
@@ -3003,6 +3016,7 @@ window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
       if(avgStat>=55){
         d.plantilla.push({...r,role:'normal'});
         d.cantera=d.cantera.filter(c=>c.id!==r.id);
+        G._clubCanteraPromoted=true; // CR-38 (v76): logro cm_cantera_promote
         showToast(`🎓 ${r.name} sube a la plantilla principal`,'#2d7a2d');
       }
     }
@@ -3050,6 +3064,7 @@ window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
   }
   if(!d.pendingEvent)generateClubEvent();
   generateClubObjective();
+  checkAndUnlockAchievements(); // CR-38 (v76): logros de Club — antes no se comprobaban nunca en este modo
   G.screen='clubHub';autoSave();render();
 };
 
