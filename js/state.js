@@ -381,13 +381,15 @@ function _tierDiffMultFor(mode){
   for(const tier in _TDM_BASE)out[tier]=Math.round((1+_TDM_BASE[tier]*scale)*100)/100;
   return out;
 }
+// trainingMult (facil/dificil/hardcore) espeja la progresión ya validada de
+// sponsorMult en esta misma tabla — antes solo Exprés lo usaba (CR-37, v75).
 function modeCfg(mode){
   const m=mode||G.gameMode||'medio';
   return {
-    facil:    {injuryRiskMult:0.4, fatigueMult:0.7, rivalMult:1.12, startMoney:550, sponsorMult:1.2, trainingMult:1.0, maxYears:99, tierDiffMult:_tierDiffMultFor('facil')},
+    facil:    {injuryRiskMult:0.4, fatigueMult:0.7, rivalMult:1.12, startMoney:550, sponsorMult:1.2, trainingMult:1.2, maxYears:99, tierDiffMult:_tierDiffMultFor('facil')},
     medio:    {injuryRiskMult:1.0, fatigueMult:1.0, rivalMult:1.00, startMoney:300, sponsorMult:1.0, trainingMult:1.0, maxYears:99, tierDiffMult:_tierDiffMultFor('medio')},
-    dificil:  {injuryRiskMult:1.6, fatigueMult:1.3, rivalMult:0.90, startMoney:180, sponsorMult:0.85,trainingMult:1.0, maxYears:99, tierDiffMult:_tierDiffMultFor('dificil')},
-    hardcore: {injuryRiskMult:2.2, fatigueMult:1.6, rivalMult:0.85, startMoney:150, sponsorMult:0.7, trainingMult:1.0, maxYears:99, tierDiffMult:_tierDiffMultFor('hardcore')},
+    dificil:  {injuryRiskMult:1.6, fatigueMult:1.3, rivalMult:0.90, startMoney:180, sponsorMult:0.85,trainingMult:0.85, maxYears:99, tierDiffMult:_tierDiffMultFor('dificil')},
+    hardcore: {injuryRiskMult:2.2, fatigueMult:1.6, rivalMult:0.85, startMoney:150, sponsorMult:0.7, trainingMult:0.7, maxYears:99, tierDiffMult:_tierDiffMultFor('hardcore')},
     expres:   {injuryRiskMult:0.6, fatigueMult:0.8, rivalMult:0.98, startMoney:500, sponsorMult:1.1, trainingMult:1.5, maxYears:3, tierDiffMult:_tierDiffMultFor('expres')},
     coach:    {injuryRiskMult:1.0, fatigueMult:1.0, rivalMult:1.00, startMoney:500, sponsorMult:1.0, trainingMult:1.0, maxYears:99, tierDiffMult:_tierDiffMultFor('coach')},
   }[m]||{injuryRiskMult:1.0,fatigueMult:1.0,rivalMult:1.00,startMoney:300,sponsorMult:1.0,trainingMult:1.0,maxYears:99,tierDiffMult:_tierDiffMultFor('medio')};
