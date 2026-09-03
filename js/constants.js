@@ -1872,6 +1872,6 @@ const CANICROSS_TRAINING_BLOCKS=[
   {id:'conjunto',     label:'Entrenamiento conjunto',  hours:5, runnerMod:{resistencia:2,velocidad:1},       dogMod:{speed:2,stamina:2},    bondMod:5,  desc:'Entrenas juntos. Sube vínculo.'},
   {id:'adiestramiento',label:'Adiestramiento',         hours:3, runnerMod:{},                                dogMod:{},                     bondMod:3,  desc:'Enseña comandos al perro (2 sesiones/comando). +3 vínculo.', teachCommand:true},
   {id:'tecnica',      label:'Técnica conjunta',        hours:4, runnerMod:{bajada:2,velocidad:1},            dogMod:{speed:1,stamina:1},    bondMod:4,  desc:'Sincronía en tramos técnicos.'},
-  {id:'solo',         label:'Entreno corredor solo',   hours:4, runnerMod:{resistencia:3,velocidad:2,subida:2}, dogMod:{},                  bondMod:-2, desc:'Entrenas sin el perro. -2 vínculo (Malinois: -5 extra).'},
+  {id:'solo',         label:'Entreno corredor solo',   hours:4, runnerMod:{resistencia:3,velocidad:2,subida:2}, dogMod:{},                  bondMod:-2, desc:'Entrenas sin el perro. -2 vínculo (Malinois: -5 en total).'},
   {id:'descanso',     label:'Descanso activo juntos',  hours:2, runnerMod:{mental:2},                        dogMod:{health:3},             bondMod:3,  desc:'Paseo tranquilo. Descarga física y vínculo.'},
 ];

@@ -261,7 +261,10 @@ function cnFinishRace(){
   if(rs.injuryPending){
     d.injury=rs.injuryPending;
     d.injuryRaces=rs.injuryPending==='luxacion'?2:1;
-    d.health=Math.max(20,(d.health||100)-20);
+    // CR-35 (v74): era Math.max(20,...) — con salud ya por debajo de 20
+    // (perro descuidado) esto SUBÍA la salud en vez de bajarla. Floor a 0,
+    // igual que el resto de restas de salud del archivo.
+    d.health=Math.max(0,(d.health||100)-20);
   }
   if(!rs.retired){
     d.races=(d.races||0)+1;
@@ -398,8 +401,13 @@ function cnApplyOneWeekTraining(){
   const block=(CANICROSS_TRAINING_BLOCKS||[]).find(b=>b.id===G.cnTrainingBlock);
   if(!block)return;
   const d=G.dog;
+  // statCapMult: mismo techo blando por dificultad que Clásico/Entrenador — el
+  // corredor también entrena de verdad en Canicross (CR-34, v74).
   Object.entries(block.runnerMod||{}).forEach(([k,v])=>{
-    if(G.runner.stats[k]!==undefined)G.runner.stats[k]=Math.min(100,G.runner.stats[k]+(v||0));
+    if(G.runner.stats[k]!==undefined){
+      const capM=statCapMult(G.runner.stats[k]);
+      G.runner.stats[k]=Math.max(10,Math.min(100,Math.round(G.runner.stats[k]+(v||0)*capM)));
+    }
   });
   if(d){
     if(block.dogMod?.speed)d.speed=Math.min(100,(d.speed||50)+(block.dogMod.speed||0));
