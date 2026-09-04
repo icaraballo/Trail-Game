@@ -1051,7 +1051,7 @@ window.doExpresPrep=choice=>{
   // Go to simplified pre-race prep
   G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;
   G._raceInitialized=false;G._warmupApplied=false;G._recoveryUsed=false;
-  G.redZoneStreak=0;G.redZoneMax=0;
+  G.redZoneStreak=0;G.redZoneMax=0;G.redZoneZeroHits={energy:false,hydration:false,legs:false};
   G.dayConditionGenerated=false;G.dayCondition=null;
   G.gelsCarried=0;G.gelsUsed=0;G.warmedUp=false;G.startStrategy=null;
   G.screen='expresPreRacePrep';render();
@@ -2731,7 +2731,7 @@ window.toggleNR=()=>{const p=document.getElementById('nr-panel'),b=document.getE
 window.doStartRaces=()=>{
   if(!G.trainingBlock)return;
   G.raceResults=[];G.currentRaceIdx=0;
-  G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;
+  G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;G.redZoneZeroHits={energy:false,hydration:false,legs:false};
   G._raceInitialized=false;G._warmupApplied=false;G._recoveryUsed=false;
   if(G.selectedRaces.length===0){
     applyTraining();
@@ -3857,7 +3857,7 @@ window.afterRace=()=>{
   } else if(G.injuryType&&INJURY_TYPES[G.injuryType]?.canRace===true){
     applyInjuryToRaceStart();
   }
-  G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;
+  G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;G.redZoneZeroHits={energy:false,hydration:false,legs:false};
   G._raceInitialized=false;G._warmupApplied=false;G._recoveryUsed=false;
   if(isExpres){G.pendingEvent=null;G.screen='expresPrep';render();return;}
   const hasFisioVal=G.spending.fisio||G.club?.hasFisio;

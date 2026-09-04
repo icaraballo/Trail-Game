@@ -764,6 +764,12 @@ window.doPace=p=>{
   } else {
     G.redZoneStreak=0;
   }
+  // CR-40: registra si cada stat llegó a tocar 0 en algún tramo, no solo al final
+  // (energía/hidratación/piernas se pueden recuperar con geles/avituallamientos antes de meta)
+  if(!G.redZoneZeroHits)G.redZoneZeroHits={energy:false,hydration:false,legs:false};
+  if(r.energy===0)G.redZoneZeroHits.energy=true;
+  if(r.hydration===0)G.redZoneZeroHits.hydration=true;
+  if(r.legs===0)G.redZoneZeroHits.legs=true;
 
   // ── EVENTOS POST-TRAMO ───────────────
   if(midRaceInjury){
@@ -2187,12 +2193,13 @@ function applyPostRaceTracking(race,res){
   statGains.forEach(({k,v})=>{G.runner.stats[k]=Math.min(100,G.runner.stats[k]+v);});
   G.lastRaceGains=statGains;
 
-  const zeroCount=[G.runner.energy,G.runner.hydration,G.runner.legs].filter(v=>v===0).length;
+  // CR-40: cuenta stats que tocaron 0 en cualquier tramo, no solo al final (pueden recuperarse antes de meta)
+  const zeroCount=Object.values(G.redZoneZeroHits||{}).filter(Boolean).length;
   const zeroedOut=zeroCount>=1;
   if(zeroedOut)G.zeroedOutThisRace=true;
   const consequence=resolveRedZoneConsequence(zeroCount,G.redZoneMax||0,G.stormActive||false);
   if(consequence){G.postRaceConsequence=consequence;consequence.apply(G);}
-  G.redZoneStreak=0;G.redZoneMax=0;
+  G.redZoneStreak=0;G.redZoneMax=0;G.redZoneZeroHits={energy:false,hydration:false,legs:false};
 
   // Revertir modificaciones temporales de carrera (warmup + mental momentum)
   endRaceCleanup();
@@ -2313,7 +2320,7 @@ function applyPostRaceTracking(race,res){
   if(!G.careerRaceHistory[race.id])G.careerRaceHistory[race.id]={finished:0,abandoned:0};
   G.careerRaceHistory[race.id].finished++;
   G.bodyLoad=bodyLoadAfterRace(race.km);
-  G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;
+  G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;G.redZoneZeroHits={energy:false,hydration:false,legs:false};
   // Reputación de club: sube si top10, baja si posición mala
   if(G.club&&G.club.id!=='none'){
     if(pos===1)changeClubRep(10);
@@ -2406,7 +2413,7 @@ function finishRace(){
   autoSave();
 }
 function goNextRace(){
-  G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;
+  G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;G.redZoneZeroHits={energy:false,hydration:false,legs:false};
   G.dayConditionGenerated=false;G.dayCondition=null;
   G.gelsCarried=0;G.gelsUsed=0;G.warmedUp=false;G.startStrategy=null;
   G._raceInitialized=false;G._warmupApplied=false;G._recoveryUsed=false;

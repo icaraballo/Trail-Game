@@ -46,6 +46,7 @@ function freshState(){
     stormProtected:false,
     redZoneStreak:0,
     redZoneMax:0,
+    redZoneZeroHits:{energy:false,hydration:false,legs:false},
     postRaceConsequence:null,
     totalCareerKm:0,
     seasonKm:0,
