@@ -2973,6 +2973,7 @@ window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
     wins:(d.seasonResults||[]).filter(r=>r.pos===1).length,
     podiums:(d.seasonResults||[]).filter(r=>r.pos<=3&&!r.dnf).length,
   });
+  const seasonRes=d.seasonResults||[];
   d.socios=Math.max(3,d.socios+socioGain-socioLoss);
   // Bonus socios por instalación marketingHQ
   if(d.instalaciones&&d.instalaciones.marketingHQ)d.socios=Math.min(999,d.socios+60);
@@ -2985,7 +2986,6 @@ window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
   const hasEntrenador=d.staff&&d.staff.entrenador;
   const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;
   // C1: actualizar historial de corredor
-  const seasonRes=d.seasonResults||[];
   const growAll=[...d.plantilla,...(d.cantera||[])];
   growAll.forEach(r=>{
     r.age=(r.age||20)+1;
