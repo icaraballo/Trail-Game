@@ -375,7 +375,7 @@ function vacTrainingHBonus(q){return (G.vacByQuarter?.[q]||0)*1.5;}
 // injuryRiskMult/fatigueMult/rivalMult, para que elegir una carrera de tier
 // alto pese más cuanto más difícil es el modo (CR-33, v73).
 const _TDM_BASE={local:0.15, regional:0.08, nacional:0.02, elite:-0.03}; // desviación desde 1.0 en medio
-const _TDM_SCALE={facil:0.7, medio:1.0, dificil:1.3, hardcore:1.6, expres:0.85, coach:1.0};
+const _TDM_SCALE={facil:0.7, medio:1.0, dificil:1.3, hardcore:1.6, expres:0.85};
 function _tierDiffMultFor(mode){
   const scale=_TDM_SCALE[mode]??1.0;
   const out={};
@@ -392,7 +392,6 @@ function modeCfg(mode){
     dificil:  {injuryRiskMult:1.6, fatigueMult:1.3, rivalMult:0.90, startMoney:180, sponsorMult:0.85,trainingMult:0.85, maxYears:99, tierDiffMult:_tierDiffMultFor('dificil')},
     hardcore: {injuryRiskMult:2.2, fatigueMult:1.6, rivalMult:0.85, startMoney:150, sponsorMult:0.7, trainingMult:0.7, maxYears:99, tierDiffMult:_tierDiffMultFor('hardcore')},
     expres:   {injuryRiskMult:0.6, fatigueMult:0.8, rivalMult:0.98, startMoney:500, sponsorMult:1.1, trainingMult:1.5, maxYears:3, tierDiffMult:_tierDiffMultFor('expres')},
-    coach:    {injuryRiskMult:1.0, fatigueMult:1.0, rivalMult:1.00, startMoney:500, sponsorMult:1.0, trainingMult:1.0, maxYears:99, tierDiffMult:_tierDiffMultFor('coach')},
   }[m]||{injuryRiskMult:1.0,fatigueMult:1.0,rivalMult:1.00,startMoney:300,sponsorMult:1.0,trainingMult:1.0,maxYears:99,tierDiffMult:_tierDiffMultFor('medio')};
 }
 function availableFameHours(){

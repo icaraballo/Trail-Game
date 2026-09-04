@@ -128,6 +128,85 @@ function raceStats(){const r=G.runner;return `<div class="card">${[['Energía',r
 function progBar(){const segs=curSegs();const done=segs.slice(0,G.seg).reduce((a,s)=>a+s.km,0);const total=segs.reduce((a,s)=>a+s.km,0);const pct=total>0?Math.round(done/total*100):0;return `<div class="prog-wrap"><div class="prog-meta"><span>${done}km hechos</span><span>${total-done}km restantes</span></div><div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div></div>`;}
 function topBar(){const race=G.selectedRaces[G.currentRaceIdx];return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-size:12px;color:#999">${race?.name||''} · ${G.seg+1}/${curSegs().length}</span><span style="font-size:13px;font-weight:600">${fmt(G.time)}</span></div>`;}
 function getEffStat(k){let b=0;Object.values(G.sponsors).forEach(sp=>{if(sp?.statBonus[k])b+=sp.statBonus[k];});if(G.club?.statBonus[k])b+=G.club.statBonus[k];if(G.spending.suplementos&&k==='nutricion')b+=3;return Math.min(100,G.runner.stats[k]+b);}
+
+// ── Club de Clásico (bonus de entrenamiento) — no confundir con G.clubModeData ──
+// Movido aquí desde js/coach.js el 2026-09-04 (split club.js/coach.js); usa clubRepLabel()/changeClubRep()/assignClubCompanion() de este mismo archivo/state.js.
+function renderClubSetup(){
+  const el=document.getElementById('main');
+  const currentClub=G.club||CLUBS[0];
+  const rep=G.clubReputation||0;
+  const repInfo=clubRepLabel();
+  const companion=G.clubCompanion;
+  const fromBetween=G._clubFromBetween||false;
+
+  el.innerHTML=`
+    <h2>Elige tu club</h2>
+    <p class="sub">El club define tu entorno de entrenamiento y red de apoyo.</p>
+
+    ${currentClub.id!=='none'?`
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Club actual — ${currentClub.name}</div>
+      ${companion?`<div style="font-size:13px;color:#555;margin-bottom:8px">Tu compañero: <strong>${companion}</strong></div>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:12px;color:#888">Reputación</span>
+        <span style="font-size:13px;font-weight:700;color:${repInfo.color}">${repInfo.text}</span>
+      </div>
+      <div class="load-bar-track"><div class="bar-fill" style="width:${rep}%;background:${rep>=60?'#c07a10':rep>=30?'#4a90d9':'#bbb'}"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#bbb;margin-top:3px">
+        <span>0</span><span style="color:#4a8a2a">75 → Copa de Clubes</span><span>100</span>
+      </div>
+      ${rep>=75?`<div style="font-size:12px;color:#4a8a2a;margin-top:6px">✓ Reputación suficiente para la Copa de Clubes</div>`:''}
+    </div>`:''}
+
+    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Opciones disponibles</div>
+    ${CLUBS.filter(c=>c.id==='none'||(c.minYear||1)<=G.year).map(c=>{
+      const isActive=currentClub.id===c.id;
+      const monthCost=c.cost;
+      const annualCost=monthCost*12;
+      const bonuses=Object.entries(c.statBonus).map(([k,v])=>`+${v} ${k.charAt(0).toUpperCase()+k.slice(1)}`).join(', ');
+      const perks=[];
+      if(c.hasFisio)perks.push('Fisio incluido');
+      if(c.hasEntrenador)perks.push('Entrenador incluido');
+      return `<div class="work-card ${isActive?'':''}${isActive?'border: 2px solid #4a90d9;':''}" style="margin-bottom:10px;${isActive?'border:2px solid #4a90d9;':''}" onclick="${isActive?'':'selectClub(\''+c.id+'\')'}">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span class="card-title">${c.name}</span>
+            ${isActive?`<span style="font-size:11px;background:#e8eef8;color:#2d4fa0;border-radius:4px;padding:1px 6px;font-weight:600">Actual</span>`:''}
+          </div>
+          <div class="card-sub">${c.desc}</div>
+          ${bonuses?`<div style="font-size:12px;color:#4a8a2a;margin-top:4px">${bonuses}</div>`:''}
+          ${perks.length?`<div style="font-size:12px;color:#4a90d9;margin-top:2px">${perks.join(' · ')}</div>`:''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:12px">
+          ${monthCost>0?`<div style="font-size:14px;font-weight:700;color:#c0392b">-€${monthCost}/mes</div>
+          <div style="font-size:11px;color:#aaa">€${annualCost}/año</div>`
+          :`<div style="font-size:13px;font-weight:600;color:#888">Gratis</div>`}
+        </div>
+      </div>`;
+    }).join('')}
+
+    <div style="margin-top:4px">
+      <button class="main" onclick="${fromBetween?`G._clubFromBetween=false;G.screen='betweenManage'`:`G.screen='seasonStart'`};render()">← Volver</button>
+    </div>`;
+}
+
+window.selectClub=id=>{
+  const club=CLUBS.find(c=>c.id===id);
+  if(!club)return;
+  if((club.minYear||1)>G.year){showToast('Disponible a partir del año '+club.minYear,'#c07a10');return;}
+  const prev=G.club||CLUBS[0];
+  if(prev.id!=='none'&&prev.id!==id&&id!=='none'){
+    G.clubReputation=Math.max(0,(G.clubReputation||0)-20);
+  } else if(id==='none'){
+    G.clubReputation=0;
+  }
+  G.club=club;
+  G.clubCompanion=assignClubCompanion(club);
+  const msg=id==='none'?'Sin club — independiente':
+    G.clubCompanion?`Te unes a ${club.name}. Tu compañero: ${G.clubCompanion}`:`Te unes a ${club.name}`;
+  showToast(msg,'#4a8a2a');
+  render();
+};
 function hbar(val,max,col){const p=Math.round(val/max*100);return `<div class="bar-track" style="height:8px"><div class="bar-fill" style="width:${p}%;background:${col}"></div></div>`;}
 function updateTabNav(){
   const nav=document.getElementById('tab-nav');
@@ -1155,7 +1234,6 @@ function renderModeSelect(){
   const otherModes=[
     {id:'expres',        icon:'⚡',  label:'Carrera Exprés',  desc:'3 temporadas · sin jornada laboral · ganancias ×1.5', available:true,  lockable:false},
     {id:'infinite_prog', icon:'📈',  label:'Modo infinito',   desc:'Dificultad progresiva · sin techo · próximamente',   available:false, lockable:false},
-    {id:'ultratrail',    icon:'🏔️',  label:'Modo Ultratrail', desc:'80K mínimo · mochila · cutoffs reales · Backyard · MdS · UTMB', available:false, lockable:false},
     {id:'coach',         icon:'📋',  label:'Entrenador',      desc:'Lleva un atleta ajeno · honorarios + bonus',          available:true,  lockable:true},
     {id:'club',          icon:'🏕️', label:'Club',            desc:'Gestiona un club · plantilla · presupuesto',          available:true,  lockable:true},
     {id:'canicross',     icon:'🐕',  label:'Canicross',       desc:'Corres con tu perro · vínculo · carreras reales españolas', available:true, lockable:false},

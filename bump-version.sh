@@ -2,7 +2,7 @@
 # Sube el build del juego en los 3 sitios donde vive el número:
 #   - js/save.js        → const GAME_BUILD=NN
 #   - index.html         → <title>Juego Trail · vNN</title>
-#   - index.html         → las 8 query strings ?v=NN de cache-busting de los <script>
+#   - index.html         → las 9 query strings ?v=NN de cache-busting de los <script>
 #
 # Uso: ./bump-version.sh <nuevo-build>
 # Ejemplo: ./bump-version.sh 65
@@ -59,7 +59,7 @@ sed -i.bak -E "s/const GAME_BUILD=[0-9]+/const GAME_BUILD=$NEW/" "$SAVE_JS"
 # 2) index.html — <title>
 sed -i.bak -E "s/(<title>Juego Trail · v)[0-9]+(<\/title>)/\1$NEW\2/" "$INDEX_HTML"
 
-# 3) index.html — 8 query strings ?v=NN de los scripts js/*.js
+# 3) index.html — 9 query strings ?v=NN de los scripts js/*.js
 sed -i.bak -E "s/(js\/[a-zA-Z]+\.js\?v=)[0-9]+/\1$NEW/g" "$INDEX_HTML"
 
 rm -f "$SAVE_JS.bak" "$INDEX_HTML.bak"
@@ -69,6 +69,6 @@ echo
 echo "Sitios modificados:"
 echo "  - js/save.js            (GAME_BUILD)"
 echo "  - index.html <title>"
-echo "  - index.html (8 query strings ?v= de los <script>)"
+echo "  - index.html (9 query strings ?v= de los <script>)"
 echo
 echo "Verifica con: ./check-version.sh"
