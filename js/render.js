@@ -290,6 +290,7 @@ function render(){
   // curso, placeholders del editor de estado...) sigan en vivo sin importar
   // qué pantalla del juego se acabe de renderizar debajo.
   if(G._devMode)renderDevOverlay();
+  renderModeSwitcher();
   // Clear any pending Express timer if we've left the mid-race event screen
   if(G.screen!=='midRaceEvent')clearExpressTimer();
   const el=document.getElementById('main');
@@ -3235,6 +3236,55 @@ window.goToCoachFromOverlap=()=>{
   if(G.coachRaceIdx==null)G.coachRaceIdx=0;
   if(G.coachSeason==null)G.coachSeason=1;
   G.screen='coachHome';render();
+};
+
+// Pestaña lateral para saltar entre Corredor y Entrenador en caliente, sin
+// pasar por overlapHub ni recargar la partida (ver Tareas/Instrucciones.md
+// § Tanda — Transición Clásico → Entrenador → Club). El modo que no se está
+// jugando no avanza nada por sí solo (el juego nunca simula en segundo plano,
+// solo con acciones explícitas del jugador), así que "pausarlo" no requiere
+// ninguna lógica extra — basta con no tocar sus pantallas.
+function renderModeSwitcher(){
+  const el=document.getElementById('mode-switch-tab');
+  if(!el)return;
+  const show=!!(G.carreraVida&&G.lifecyclePhase==='overlap'&&G.lifeAthlete);
+  el.style.display=show?'block':'none';
+  if(!show)return;
+  // Alineado en vivo con el centro vertical del fin-bar (cuando está visible)
+  // en vez de un offset fijo — así sigue encajando aunque cambie su alto.
+  const bar=document.getElementById('fin-bar');
+  const barVisible=bar&&bar.style.display!=='none'&&bar.offsetHeight>0;
+  el.style.top=barVisible?(bar.getBoundingClientRect().top+bar.offsetHeight/2-23)+'px':'16px';
+  const onCoachSide=G.screen.startsWith('coach');
+  el.innerHTML=`<div class="msw-btn" title="${onCoachSide?'Volver a Corredor':'Ir a Entrenador'}"><span class="msw-icon">${onCoachSide?'🏃':'📋'}</span><span>${onCoachSide?'Corredor':'Entrenador'}</span></div>`;
+}
+
+function forceAbandonCoachRace(){
+  const data=G.coachRaceData;
+  if(data){
+    if(!Array.isArray(G.coachRaceResults))G.coachRaceResults=[];
+    G.coachRaceResults.push({pos:999,dnf:true,prize:0,coachCut:0,raceName:data.race?.name||''});
+    G.coachTrust=Math.max(0,Math.min(100,(G.coachTrust||50)-5));
+    G.coachBodyLoad=Math.max(0,(G.coachBodyLoad||0)-8);
+    G.coachRaceIdx=(G.coachRaceIdx||0)+1;
+  }
+  clearCoachRaceTimer();clearCoachRadioPause();G.coachRadioWindowOpen=false;
+}
+
+window.switchOverlapMode=()=>{
+  if(!(G.carreraVida&&G.lifecyclePhase==='overlap'&&G.lifeAthlete))return;
+  const onCoachSide=G.screen.startsWith('coach');
+  const midRace=onCoachSide
+    ?['coachRace','coachEvent'].includes(G.screen)
+    :['segment','aid','midRaceEvent'].includes(G.screen);
+  if(midRace){
+    if(!confirm('Vas a abandonar esta carrera y quedarás último (DNF). ¿Seguro que quieres cambiar de modo ahora?'))return;
+    if(onCoachSide)forceAbandonCoachRace();
+    else{doAbandonConfirmed();afterRace();}
+  }
+  if(onCoachSide){G.screen='workSetup';autoSave();render();return;}
+  goToCoachFromOverlap();
+  autoSave();
 };
 
 function generateDiaryEntry(yearNet){
