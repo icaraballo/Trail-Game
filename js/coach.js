@@ -140,7 +140,7 @@ function renderCoachSelect(){
           <div style="width:44px;height:44px;border-radius:50%;background:#f0ede8;border:2px solid #e0dfd8;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${a.flag}</div>
           <div style="flex:1">
             <div style="font-size:15px;font-weight:700">${a.name}</div>
-            <div style="font-size:12px;color:#888">${a.age} años · ${SPEC_LABEL[a.spec]||a.spec}</div>
+            <div style="font-size:12px;color:#888">${a.age} años${a.age>=33?` <span style="color:#c07a10">· en declive</span>`:a.age<23?` <span style="color:#2d7a2d">· en formación</span>`:''} · ${SPEC_LABEL[a.spec]||a.spec}</div>
           </div>
           <div style="text-align:right;flex-shrink:0">
             <div style="font-size:11px;color:#aaa">Honorarios</div>
@@ -1583,13 +1583,40 @@ function renderCoachSeasonEnd(){
 // Renovación entusiasta: el atleta propone mejoras de condiciones
 window.doCoachRenewEnthusiastic=()=>{
   const a=G.coachAthlete;
+  // T114: +1..3 en vez de +2..5, y se marca para que doCoachNextSeason NO sume
+  // además el bono de madurez. Antes se apilaban los dos: hasta +42 puntos.
   Object.keys(a.currentStats).forEach(k=>{
-    a.currentStats[k]=Math.min(98,a.currentStats[k]+Math.floor(Math.random()*4)+2);
+    a.currentStats[k]=Math.min(98,a.currentStats[k]+1+Math.floor(Math.random()*3));
   });
+  G._skipMaturityThisSeason=true;
   a.monthlyFee=Math.round((a.monthlyFee||250)*1.10);
   showToast(`🤝 Renovación entusiasta — honorarios +10%`,'#2d7a2d');
   doCoachNextSeason();
 };
+
+// T114 (v83): madurez y declive. Antes, cerrar temporada daba +0..2 en los seis
+// stats pasara lo que pasara, y la renovación entusiasta apilaba otro +2..5
+// encima: hasta +42 puntos sin entrenar. Ahora el progreso gratis es pequeño,
+// depende de la edad y se apaga; a partir de 33 empieza el declive.
+// El grueso del progreso debe venir de los bloques de entrenamiento.
+function applyAthleteMaturity(a){
+  if(!a||!a.currentStats)return;
+  const keys=Object.keys(a.currentStats);
+  const bump=(n,lo,hi)=>{
+    shuffle([...keys]).slice(0,n).forEach(k=>{
+      a.currentStats[k]=Math.min(98,a.currentStats[k]+lo+Math.floor(Math.random()*(hi-lo+1)));
+    });
+  };
+  const age=a.age||24;
+  if(age<23)       bump(2,1,2);          // joven: crece solo por competir
+  else if(age<30)  bump(1,0,1);          // madurez: casi nada
+  else if(age>=33){                      // declive: velocidad y bajada se van primero
+    ['velocidad','bajada'].forEach(k=>{
+      if(a.currentStats[k]!==undefined)
+        a.currentStats[k]=Math.max(10,a.currentStats[k]-(1+Math.floor(Math.random()*2)));
+    });
+  }
+}
 
 window.doCoachNextSeason=()=>{
   // CR-38 (v76): capturar temporada perfecta antes de vaciar coachRaceResults — logro coach_perfect_season
@@ -1613,9 +1640,9 @@ window.doCoachNextSeason=()=>{
   generateCoachSeasonObjective();
   generateCoachSponsorPool();
   const a=G.coachAthlete;
-  Object.keys(a.currentStats).forEach(k=>{
-    a.currentStats[k]=Math.min(95,a.currentStats[k]+Math.floor(Math.random()*3));
-  });
+  a.age=(a.age||24)+1;                   // T114: antes la edad nunca subía
+  if(!G._skipMaturityThisSeason)applyAthleteMaturity(a);
+  G._skipMaturityThisSeason=false;
   checkAndUnlockAchievements(); // CR-38 (v76)
   G.screen='coachHome';G.activeTab='game';saveCoachSlot();autoSave();render();
 };

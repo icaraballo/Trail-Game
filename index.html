@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Juego Trail · v82</title>
+<title>Juego Trail · v87</title>
 <style>
 :root{--color-background-primary:#fff;--color-background-secondary:#f8f7f3;--color-background-tertiary:#f0ede8;--color-text-primary:#1a1a1a;--color-text-secondary:#888;--color-text-tertiary:#aaa;--color-border-tertiary:#e0dfd8;--border-radius-md:8px;--border-radius-lg:12px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -187,6 +187,7 @@ button.secondary:hover{background:#f0ede8}
 /* ── CLASIFICACIÓN EN VIVO ── */
 .live-class{background:#fff;border:1px solid #e0dfd8;border-radius:10px;padding:10px 14px;margin-bottom:10px}
 .live-class-title{font-size:12px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.race-radio{font-size:12px;color:#8a8a8a;font-style:italic;padding:6px 2px 8px;line-height:1.4}
 .live-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px}
 .live-row.me{font-weight:700;background:#f5f4f0;border-radius:6px;padding:5px 6px;margin:2px -6px}
 .live-pos{width:22px;text-align:center;font-size:12px;flex-shrink:0}
@@ -300,6 +301,8 @@ button.secondary:hover{background:#f0ede8}
     <div class="fin-inner">
       <div class="fin-cell"><div class="fin-top">Dinero</div><div class="fin-val neutral" id="fb-money">€0</div></div>
       <div class="fin-cell"><div class="fin-top">Neto/mes</div><div class="fin-val" id="fb-net">€0</div></div>
+      <!-- T29 (v86): solo visible con deuda pendiente -->
+      <div class="fin-cell" id="fb-debt-cell" style="display:none"><div class="fin-top">Deuda</div><div class="fin-val red" id="fb-debt">€0</div></div>
       <div class="fin-cell"><div class="fin-top">Año · Mes</div><div class="fin-val neutral" id="fb-year">1</div></div>
       <div class="fin-cell"><div class="fin-top">Global</div><div class="fin-val neutral" id="fb-rank">—</div></div>
       <div class="fin-cell"><div class="fin-top">Espec.</div><div class="fin-val neutral" id="fb-specrank">—</div></div>
@@ -340,15 +343,15 @@ button.secondary:hover{background:#f0ede8}
 </nav>
 
 
-<script src="js/constants.js?v=82"></script>
-<script src="js/state.js?v=82"></script>
-<script src="js/save.js?v=82"></script>
-<script src="js/race.js?v=82"></script>
-<script src="js/coach.js?v=82"></script>
-<script src="js/club.js?v=82"></script>
-<script src="js/canicross.js?v=82"></script>
-<script src="js/render.js?v=82"></script>
-<script src="js/devmode.js?v=82"></script>
+<script src="js/constants.js?v=87"></script>
+<script src="js/state.js?v=87"></script>
+<script src="js/save.js?v=87"></script>
+<script src="js/race.js?v=87"></script>
+<script src="js/coach.js?v=87"></script>
+<script src="js/club.js?v=87"></script>
+<script src="js/canicross.js?v=87"></script>
+<script src="js/render.js?v=87"></script>
+<script src="js/devmode.js?v=87"></script>
 <script>
 if(new URLSearchParams(location.search).get('dev')==='1'){
   G._devMode=true;

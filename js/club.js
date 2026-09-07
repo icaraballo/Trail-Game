@@ -15,7 +15,7 @@ function simClubRace(runner,race,clubData){
   // simulada mientras esté activo (Club resuelve la temporada entera de golpe,
   // no hay "carrera en curso" única). Ver js/devmode.js.
   if(G._devGodModeClub){
-    const rivals={local:18,regional:35,nacional:70,elite:110}[race.tier||'local']||25;
+    const rivals=(CLUB_TIER_FIELD[race.tier||'local']||CLUB_TIER_FIELD.local).rivals;
     return{pos:1,perf:98,prize:race.prize,rivals,dnf:false};
   }
   const d=clubData||G.clubModeData||{};
@@ -49,8 +49,15 @@ function simClubRace(runner,race,clubData){
 
   const rng=(Math.random()*16)-8;
   const perf=Math.max(10,Math.min(98,base+rng));
-  const rivals={local:18,regional:35,nacional:70,elite:110}[race.tier||'local']||25;
-  const pos=Math.max(1,Math.round((1-perf/100)*rivals*0.85)+1+Math.floor(Math.random()*3));
+  // T21 (v83): modelo de campo. La posición sale de contar cuántos rivales te
+  // superan, no de una penalización lineal por número de participantes. Con la
+  // fórmula anterior el primer puesto en élite era imposible con perf ≤ 98.
+  const field=CLUB_TIER_FIELD[race.tier||'local']||CLUB_TIER_FIELD.local;
+  const rivals=field.rivals;
+  const pBeat=1/(1+Math.exp((perf-field.mean)/field.k));
+  let beaten=0;
+  for(let i=0;i<rivals;i++) if(Math.random()<pBeat) beaten++;
+  const pos=1+beaten;
   const prize=pos===1?race.prize:pos===2?Math.round(race.prize*0.6):pos===3?Math.round(race.prize*0.4):0;
 
   // C11 Staff fisio reduce DNF
@@ -62,17 +69,35 @@ function simClubRace(runner,race,clubData){
   return{pos:isDnf?99:pos, perf:Math.round(perf), prize:isDnf?0:prize, rivals, dnf:isDnf};
 }
 
-function initClubModeData(name,specialty,filosofia){
+function initClubModeData(name,specialty,filosofia,archetype){
   const fil=filosofia||'montanero';
-  const startRunners=CLUB_RUNNER_POOL.filter(r=>r.spec===specialty||specialty==='mixto').slice(0,3);
-  const fill=startRunners.length<3?CLUB_RUNNER_POOL.filter(r=>!startRunners.includes(r)).slice(0,3-startRunners.length):[];
-  const plantilla=[...startRunners,...fill].map(r=>({...r,stats:{...r.stats},currentSalary:r.salary,role:'normal'}));
+  // T115 (v84): el arquetipo filtra el pool por edad y potencial, y el sorteo
+  // aleatorio evita que dos partidas con la misma especialidad sean idénticas
+  // (antes: slice(0,3), siempre los mismos tres corredores).
+  const arqId=CLUB_ARCHETYPES[archetype]?archetype:'equilibrado';
+  const arq=CLUB_ARCHETYPES[arqId];
+  const pick=(pool,n)=>shuffle([...pool]).slice(0,n);
+  const fitsArq=r=>
+    (arq.ageMax==null   || r.age<=arq.ageMax)&&
+    (arq.ageMin==null   || r.age>=arq.ageMin)&&
+    (arq.potential==null|| arq.potential.includes(r.potential));
+  let sel=pick(CLUB_RUNNER_POOL.filter(r=>(specialty==='mixto'||r.spec===specialty)&&fitsArq(r)),3);
+  // Si no hay tres, se relaja primero la especialidad y solo después el arquetipo
+  if(sel.length<3){
+    const relax=CLUB_RUNNER_POOL.filter(r=>!sel.includes(r)&&fitsArq(r));
+    sel=[...sel,...pick(relax,3-sel.length)];
+  }
+  if(sel.length<3){
+    const rest=CLUB_RUNNER_POOL.filter(r=>!sel.includes(r));
+    sel=[...sel,...pick(rest,3-sel.length)];
+  }
+  const plantilla=sel.map(r=>({...r,stats:{...r.stats},currentSalary:r.salary,role:'normal'}));
   // Asignar capitán al primero por defecto
   if(plantilla.length>0)plantilla[0].role='capitan';
   return{
-    name, specialty, filosofia:fil,
-    socios:8, reputacion:10, presupuesto:800, temporada:1,
-    cohesion:50,                    // C6 moral grupal
+    name, specialty, filosofia:fil, archetype:arqId,
+    socios:arq.socios, reputacion:10, presupuesto:arq.presupuesto, temporada:1,
+    cohesion:arq.cohesion,          // C6 moral grupal
     plantilla,
     calAssignments:{},              // C5+C10: {raceId:[runnerId,...]}
     seasonResults:[], pendingEvent:null,
@@ -150,6 +175,7 @@ function renderClubCreate(){
   const name=G._clubNameDraft||'';
   const spec=G._clubSpecDraft||'mixto';
   const fil=G._clubFilDraft||'montanero';
+  const arq=G._clubArqDraft||'equilibrado';
   const specs=[
     {id:'montanero', label:'🏔️ Montaña',   desc:'Mejor en subidas y ultras de montaña'},
     {id:'fondista',  label:'🏃 Fondo',      desc:'Resistencia larga. Ultras y maratones'},
@@ -182,7 +208,18 @@ function renderClubCreate(){
           </div>
         </div>
       </div>`).join('')}
-    <div class="hint" style="margin-top:10px;margin-bottom:14px">Empiezas con 3 corredores, 8 socios, €800 de presupuesto y cohesión 50/100.</div>
+    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 10px">Arquetipo de plantilla</div>
+    ${Object.entries(CLUB_ARCHETYPES).map(([id,a])=>`
+      <div class="work-card${arq===id?' sel':''}" onclick="G._clubArqDraft='${id}';render()" style="margin-bottom:6px${arq===id?`;border-color:${a.color};background:${a.color}11`:''};cursor:pointer">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:18px">${a.emoji}</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:${arq===id?a.color:'#1a1a1a'}">${a.label}</div>
+            <div style="font-size:12px;color:#888">${a.desc}</div>
+          </div>
+        </div>
+      </div>`).join('')}
+    <div class="hint" style="margin-top:10px;margin-bottom:14px">Empiezas con 3 corredores, ${CLUB_ARCHETYPES[arq].socios} socios, €${CLUB_ARCHETYPES[arq].presupuesto} de presupuesto y cohesión ${CLUB_ARCHETYPES[arq].cohesion}/100.</div>
     <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doClubCreate()">Fundar el club →</button>
     <button class="main" style="margin-top:6px;opacity:0.5" onclick="G.screen='modeSelect';render()">← Volver</button>`;
 }
@@ -192,14 +229,15 @@ window.doClubCreate=()=>{
   const name=(nameEl?nameEl.value:G._clubNameDraft||'').trim()||'Mi Club Trail';
   const spec=G._clubSpecDraft||'mixto';
   const fil=G._clubFilDraft||'montanero';
-  G.clubModeData=initClubModeData(name,spec,fil);
+  const arqSel=G._clubArqDraft||'equilibrado';
+  G.clubModeData=initClubModeData(name,spec,fil,arqSel);
   // Guiño narrativo si el modo está desbloqueado: presupuesto +15% y reputación inicial +3
   if(G._clubUnlockedHint){
     G.clubModeData.presupuesto=Math.round(G.clubModeData.presupuesto*1.15);
     G.clubModeData.reputacion=Math.min(100,(G.clubModeData.reputacion||10)+3);
     G._clubUnlockedHint=false;
   }
-  G._clubNameDraft=null;G._clubSpecDraft=null;G._clubFilDraft=null;
+  G._clubNameDraft=null;G._clubSpecDraft=null;G._clubFilDraft=null;G._clubArqDraft=null;
   generateClubEvent();
   generateClubObjective();
   G.screen='clubHub';autoSave();render();

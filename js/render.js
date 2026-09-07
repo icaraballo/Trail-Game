@@ -105,6 +105,21 @@ function updateFinBar(){
   const nb=document.getElementById('fb-net');
   nb.textContent=(net>=0?'+':'')+'€'+net+'/mes';
   nb.className='fin-val '+(net>0?'green':net<0?'red':'neutral');
+  // T29 (v86): la deuda a la vista en todo momento — señal pasiva, sin interrumpir.
+  const dc=document.getElementById('fb-debt-cell');
+  const dv=document.getElementById('fb-debt');
+  if(dc&&dv){
+    const debt=G.debt||0;
+    dc.style.display=debt>0?'':'none';
+    if(debt>0){
+      dv.textContent='−€'+debt;
+      const cfg=modeCfg().bankruptcy||{soft:500,hard:null};
+      dc.title=G.forcedFullTime
+        ?(cfg.hard!=null?`Jornada completa forzosa hasta saldar. Si la deuda llega a €${cfg.hard} se acaba la carrera deportiva.`
+                        :'Jornada completa forzosa hasta saldar la deuda.')
+        :`Números rojos: −3 mental por temporada. A partir de €${cfg.soft} vuelves a jornada completa y se cancela el staff.`;
+    }
+  }
   // Año + mes derivado de carrera actual o trimestre
   const curRace=G.selectedRaces&&G.selectedRaces[G.currentRaceIdx||0];
   const MONTH_SHORT=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -312,6 +327,11 @@ function render(){
   if(G.screen!=='midRaceEvent')clearExpressTimer();
   const el=document.getElementById('main');
   if(!el)return;
+  // T29 (v86): una partida terminada por quiebra se puede cargar, pero no
+  // seguir jugando. Cualquier pantalla vuelve al resumen de fin de carrera.
+  if(G.careerEnded&&G.screen!=='careerEnd'&&G.screen!=='saveScreen'&&G.screen!=='modeSelect'){
+    G.screen='careerEnd';
+  }
   // Canicross — tab routing propio
   if(G.gameMode==='canicross'&&SCREENS_WITH_TABS.includes(G.screen)){
     if(G.activeTab==='game'){renderCnCorredorTab();triggerFade(el);return;}
@@ -380,6 +400,7 @@ function render(){
     canicrossDogDeath:renderCnDogDeath,
     canicrossDisplasia:renderCnDisplasia,
     achievements:renderAchievements,
+    debtCrisis:renderDebtCrisis,careerEnd:renderCareerEnd,   // T29 (v86)
   }[G.screen]||renderIntro)();
   triggerFade(el);
 }
@@ -543,7 +564,7 @@ function renderFinancesTab(){
   el.innerHTML=`
     <h2>Finanzas</h2>
     <p class="sub">Temporada ${G.year} · ${esc(G.runner.name||'Corredor')}</p>
-
+    ${debtPanel()}
     <div class="fin-section">
       <div class="fin-title">Mensual</div>
       ${workM>0?`<div class="fin-row"><span>Trabajo (${wo.label})</span><span class="plus">+€${workM}</span></div>`:''}
@@ -864,7 +885,7 @@ function renderSaveScreen(){
       return `<div class="save-slot">
         <div class="flex-between">
           <div class="save-slot-info">
-            <div class="save-slot-name">${lbl.runName?`"${esc(lbl.runName)}"`:lbl.name}</div>
+            <div class="save-slot-name">${lbl.runName?`"${esc(lbl.runName)}"`:lbl.name}${lbl.ended?` <span style="font-size:11px;padding:1px 7px;border-radius:4px;background:#fef0f0;color:#7a1010;font-weight:600">📉 Carrera terminada</span>`:''}</div>
             <div class="save-slot-meta">${lbl.runName?esc(lbl.name)+' · ':''}Año ${lbl.year} · Global ${lbl.ranking} · ${lbl.spec} ${lbl.specRanking}</div>
             <div class="save-slot-meta" style="margin-top:2px">${lbl.mode}${lbl.phase?` · <span style="color:#534AB7;font-weight:500">${lbl.phase}</span>`:''}${lbl.totalKm?' · '+lbl.totalKm+'km':''} · ${lbl.date}</div>
             <div class="save-slot-meta" style="margin-top:2px">🏆 ${achNormal} · 🐕 ${achCn} · ⚡ ${achExpres}</div>
@@ -1548,7 +1569,9 @@ function renderWorkSetup(){
     ${WORK_OPTIONS.map(wo2=>{
       const net=wo2.income+sponsorM-FIXED_COSTS.total-(G.club?.cost||0);
       const eff=Math.round(trainingEffFromH(wo2.trainingH+vacBonus)*100);
-      const isLocked=wo2.pct===0&&!canQuit;
+      // T29 (v86): en el escalón 2 solo queda disponible la jornada completa
+      const debtLocked=!!G.forcedFullTime&&wo2.pct!==100;
+      const isLocked=(wo2.pct===0&&!canQuit)||debtLocked;
       const sel=curPct===wo2.pct;
       return `<div class="work-card ${sel?'sel':''} ${isLocked?'locked-work':''}" onclick="${isLocked?'':'setWorkQ('+q+','+wo2.pct+')'}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
@@ -1556,7 +1579,8 @@ function renderWorkSetup(){
             <div class="card-title">${wo2.label}</div>
             <div class="card-sub">${wo2.desc}</div>
           </div>
-          ${isLocked?`<span style="font-size:12px;color:#c0392b;flex-shrink:0;margin-left:8px">Necesitas €${FIXED_COSTS.total+(G.club?.cost||0)}/mes en sponsors (tienes €${sponsorM})</span>`:''}
+          ${debtLocked?`<span style="font-size:12px;color:#c0392b;flex-shrink:0;margin-left:8px">Bloqueado hasta saldar la deuda (€${G.debt||0})</span>`
+            :isLocked?`<span style="font-size:12px;color:#c0392b;flex-shrink:0;margin-left:8px">Necesitas €${FIXED_COSTS.total+(G.club?.cost||0)}/mes en sponsors (tienes €${sponsorM})</span>`:''}
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:12px">
           <div><div style="color:#aaa;margin-bottom:2px">Trabajo</div>
@@ -2433,6 +2457,7 @@ function renderBetweenManage(){
       ${load>=lt.warningLevel2?`<div style="font-size:12px;color:#c0392b;margin-top:4px">Carga alta — considera recuperar antes de la próxima.</div>`:
         load>=lt.warningLevel1?`<div style="font-size:12px;color:#c07a10;margin-top:4px">Carga moderada. Una sesión te vendrá bien.</div>`:''}
     </div>
+    ${debtPanel()}
     <div class="section-label">Recuperación${G._recoveryUsed?' <span style="font-size:12px;color:#aaa;font-weight:400">(1 acción usada)</span>':''}</div>
     ${FISIO_OPTIONS.map(o=>{
       const cantAfford=o.cost>0&&o.cost>G.money;
@@ -2454,7 +2479,13 @@ function renderBetweenManage(){
           </div>
         </div>
       </div>`;}).join('')}
-    ${hasFisioContract?`<div class="note">Fisio contratado — ya estás cubierto. Las sesiones puntuales son extra.</div>`:''}
+    ${hasFisioContract?(()=>{
+      const cov=Math.round((1-fisioInjuryMult(load))*100);
+      const saturado=load>=lt.warningLevel1;
+      return `<div class="note" style="${saturado?'background:#FBF0E4;border-color:#E3C39A;color:#7a4d10':''}">🧑‍⚕️ Fisio contratado — hoy te cubre un <strong>${cov}%</strong> del riesgo de lesión. ${saturado
+        ?'Con la carga a este nivel ya no da abasto. Una sesión puntual la baja y vuelve a protegerte.'
+        :'Las sesiones puntuales son extra.'}</div>`;
+    })():''}
     <div class="divider"></div>
     <div class="section-label">Otras opciones</div>
     <div class="work-card" onclick="G.screen='midSeasonCalendar';render()" style="margin-bottom:14px">
@@ -3006,7 +3037,9 @@ window.doNextYear=yearNet=>{
       G.money+=c.reward.money;
     }
   });
-  G.money=Math.max(0,G.money+yearNet);
+  // T29 (v86): el saldo nunca se pinta en negativo; el déficit va a G.debt.
+  // Cualquier saldo positivo paga deuda antes de acumularse.
+  applyYearBalance(yearNet);
 
   // ── Recompensa de objetivo de temporada (pago único) ─────────────
   if(G.yearObjective&&!G._yearObjectiveRewardPaid){
@@ -3025,7 +3058,7 @@ window.doNextYear=yearNet=>{
   const _vencidas=(G.sponsorPenalties||[]).filter(p=>p.year<G.year);
   if(_vencidas.length){
     const _totalVenc=_vencidas.reduce((a,p)=>a+p.amount,0);
-    G.money=Math.max(0,G.money-_totalVenc);
+    applyYearBalance(-_totalVenc);
     G.sponsorPenalties=G.sponsorPenalties.filter(p=>p.year>=G.year);
     setTimeout(()=>showToast(`Penalizaciones vencidas cobradas: -€${_totalVenc}`,'#c0392b'),600);
   }
@@ -3108,6 +3141,10 @@ window.doNextYear=yearNet=>{
     // Oferta del club (solo si no se ha cambiado ya la pantalla)
     if(G.screen!=='lifeAthleteOffer')checkClubOffer();
   }
+  settleDebtSeason();   // T29b: pago mínimo + intereses, una sola vez por temporada
+  // T29 (v86): la quiebra manda sobre cualquier pantalla de cierre de temporada.
+  if(G.careerEnded)G.screen='careerEnd';
+  else if(G._debtCrisisPending){G._debtCrisisPending=false;G.screen='debtCrisis';}
   autoSave();render();
 };
 
@@ -3472,7 +3509,7 @@ window.confirmClubOffer=()=>{
   const athlete=G.coachAthlete;
   const spec=athlete?.spec||'mixto';
   const clubName=`Club Trail ${G.runner?.name?.split(' ').slice(-1)[0]||'Monte Perdido'}`;
-  G.clubModeData=initClubModeData(clubName,spec,'montanero');
+  G.clubModeData=initClubModeData(clubName,spec,'montanero','equilibrado');
   // Heredar trayectoria como entrenador como bonus de reputación de club (70% de coachReputation)
   const coachingYears=(G.coachSeason||1);
   const coachRep=(G.coachReputation||0);
@@ -3802,6 +3839,93 @@ function renderCoachIntro(){
   `;
 }
 
+// T29b (v87): panel de deuda con amortización voluntaria. Se pinta en «Entre
+// carreras» y en Finanzas para que la deuda sea una decisión recurrente.
+function debtPanel(){
+  if((G.debt||0)<=0)return '';
+  const cfg=modeCfg().bankruptcy||{interest:0.12,minPay:0.25};
+  const frozen=!!G.forcedFullTime;
+  const nextInt=frozen?0:Math.round(G.debt*(cfg.interest||0.12));
+  const btn=(lbl,val,dis)=>`<button class="main" style="margin-top:0;${dis?'opacity:.4;pointer-events:none':''}" onclick="doPayDebt(${val})">${lbl}</button>`;
+  return `
+    <div class="danger" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <strong>Deuda pendiente</strong><strong>€${G.debt}</strong>
+      </div>
+      <div style="font-size:12px;margin-top:4px">
+        ${frozen
+          ?'Intereses congelados mientras estés a jornada completa. Todo lo que ganes va aquí.'
+          :`Al cerrar la temporada se amortiza el ${Math.round((cfg.minPay??0.25)*100)}% de tu saldo y el resto genera <strong>€${nextInt}</strong> de intereses (${Math.round((cfg.interest||0.12)*100)}%).`}
+      </div>
+    </div>
+    ${frozen?'':`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:14px">
+      ${btn('−€100',100,(G.money||0)<100)}
+      ${btn('−€500',500,(G.money||0)<500)}
+      ${btn('Todo',"'all'",(G.money||0)<=0)}
+    </div>`}`;
+}
+
+// T29 (v86) — escalón 2: vuelta forzosa a jornada completa.
+function renderDebtCrisis(){
+  const el=document.getElementById('main');
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const cfg=modeCfg().bankruptcy||{soft:500,hard:null};
+  el.innerHTML=`
+    <div style="text-align:center;padding:18px 0 14px">
+      <div style="font-size:32px;margin-bottom:6px">📉</div>
+      <h2>No llegas</h2>
+      <p class="sub">Temporada ${G.year}</p>
+    </div>
+    <div class="danger" style="margin-bottom:14px">
+      Debes <strong>€${G.debt}</strong>. Has tenido que volver a jornada completa
+      y cancelar el staff que tenías contratado.
+    </div>
+    <p style="font-size:14px;line-height:1.55;margin-bottom:14px">
+      El alquiler no espera. Vuelves al turno de siempre y entrenas con lo que
+      sobra, que es poco. Cada euro que entre irá a la deuda antes que a tu
+      bolsillo. Cuando esté saldada, volverás a elegir tu jornada.
+    </p>
+    ${cfg.hard!=null?`<div class="note" style="margin-bottom:14px">Si la deuda llega a <strong>€${cfg.hard}</strong> estando ya a jornada completa, la carrera deportiva se acaba.</div>`:''}
+    <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="G.screen='calendar';render()">Seguir adelante →</button>`;
+}
+
+// T29 (v86) — escalón 3: la partida queda visitable pero no jugable.
+function renderCareerEnd(){
+  const el=document.getElementById('main');
+  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
+  const hist=G.careerHistory||[];
+  const totalWins=hist.filter(r=>r.pos===1).length;
+  const totalPodiums=hist.filter(r=>r.pos<=3).length;
+  const modeLabel={facil:'Fácil',medio:'Medio',dificil:'Difícil',hardcore:'Hardcore',expres:'⚡ Exprés'}[G.gameMode||'medio'];
+  const motivo=G.careerEnded==='bankruptcy'
+    ?'Las deudas pudieron con el proyecto. Trabajando a jornada completa y sin margen para entrenar, no había forma de remontar.'
+    :'La carrera deportiva ha terminado.';
+  el.innerHTML=`
+    <div style="text-align:center;padding:20px 0 10px">
+      <div style="font-size:36px;margin-bottom:8px">📉</div>
+      <h1 style="font-size:22px;margin-bottom:4px">Se acabó</h1>
+      <p style="font-size:14px;color:#888">${esc(G.runner.name||'El corredor')} · ${G.runner.age||25} años · ${modeLabel}</p>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="sec-title">Trayectoria</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${[['Temporadas',Math.max(0,G.year-1)],['Ranking final',G.ranking<900?'#'+G.ranking:'—'],
+           ['Carreras',hist.length],['Victorias',totalWins],['Podios',totalPodiums],
+           ['Km totales',Math.round(G.totalCareerKm||0)+' km']].map(([l,v])=>`
+          <div style="background:#f5f4f0;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:12px;color:#aaa;margin-bottom:3px">${l}</div>
+            <div style="font-size:17px;font-weight:700">${v}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="danger" style="margin-bottom:14px">
+      <strong>Deuda final: €${G.debt||0}</strong><br>${motivo}
+      ${G.debtInterestTotal>0?`<div style="font-size:12px;margin-top:6px">Intereses pagados a lo largo de la carrera: <strong>€${G.debtInterestTotal}</strong>.</div>`:''}
+    </div>
+    <button class="main" style="margin-top:6px" onclick="G=freshState();render()">← Menú principal</button>`;
+}
+
 function renderRetirement(){
   const el=document.getElementById('main');
   // hide persistent UI
@@ -4020,7 +4144,12 @@ window.afterRace=()=>{
   const hasFisioVal=G.spending.fisio||G.club?.hasFisio;
   if(Math.random()<0.65){
     const ev={...BETWEEN_EVENTS[Math.floor(Math.random()*BETWEEN_EVENTS.length)]};
-    if(ev.id==='injury'&&hasFisioVal){ev.desc='Sientes algo en la rodilla pero el fisio te trata a tiempo.';ev.choices=[{text:'Perfecto, a por la siguiente',effect:'nothing'}];}
+    // T18: el fisio solo neutraliza el susto si el cuerpo está por debajo del
+    // umbral en el que deja de cubrir. Cargado, el evento se resuelve normal.
+    if(ev.id==='injury'&&hasFisioVal&&getBodyLoad()<(modeCfg().fisio?.onset??65)){
+      ev.desc='Sientes algo en la rodilla pero el fisio te trata a tiempo.';
+      ev.choices=[{text:'Perfecto, a por la siguiente',effect:'nothing'}];
+    }
     G.pendingEvent=ev;G.screen='betweenRace';
   }else{G.pendingEvent=null;G.screen='preRacePrep';}
   render();

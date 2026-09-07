@@ -204,7 +204,7 @@ function getSpecificInjury(paceLog,load){
   if(allout>=3)risk+=0.15;
   if(allout>=2)risk+=0.08;
   risk=Math.min(0.95,risk*modeCfg().injuryRiskMult);
-  if(hasFisio())risk*=0.35;
+  risk*=fisioInjuryMult(load);
   if(Math.random()>risk)return null;
   // Type depends on what dominated
   const descents=(G.selectedRaces[G.currentRaceIdx]?.segs||[]).filter(s=>s.type==='descent').length;
@@ -301,6 +301,12 @@ function initRace(){
       ranking,recentWins,age:rivalAge
     };
   });
+  // T32 (v85): presupuesto de incidentes del pelotón cercano. El total de
+  // segundos que pierden los rivales debe parecerse al que te cuestan a ti tus
+  // propios eventos (~60-180s por carrera), o la carrera se vuelve más fácil
+  // sin querer. Empezar en 3-5 y medir en playtest antes de tocar nada.
+  G.rivalIncidents=planRivalIncidents();
+  G.rivalRadio=null;G._lastRadioSeg=-99;
   G.aidSelected=[];
   G.terrainCondition=getTerrainCondition(race);
   G.paceLog=[];
@@ -436,6 +442,43 @@ function renderPreRace(){
 // xp_climb_attack y xp_rival llevaban 80 builds escritos sin dispararse nunca.
 // Ahora el cálculo vive aquí y lo usan tanto el panel como los eventos, sin que
 // una función de render tenga que escribir estado ni persistir nada.
+function planRivalIncidents(){
+  const segs=curSegs().length;
+  if(!segs||!G.rivals||!G.rivals.length)return [];
+  const n=3+Math.floor(Math.random()*3);   // 3-5 incidentes por carrera
+  const out=[];
+  for(let i=0;i<n;i++){
+    const def=RIVAL_INCIDENTS[Math.floor(Math.random()*RIVAL_INCIDENTS.length)];
+    out.push({seg:1+Math.floor(Math.random()*Math.max(1,segs-1)),type:def.id,done:false});
+  }
+  return out.sort((a,b)=>a.seg-b.seg);
+}
+
+function applyRivalIncidents(){
+  const due=(G.rivalIncidents||[]).filter(i=>i.seg===G.seg&&!i.done);
+  if(!due.length)return;
+  const cls=computeLiveClass();
+  const myPos=cls.findIndex(x=>x.me);
+  if(myPos<0)return;
+  due.forEach(inc=>{
+    inc.done=true;
+    // Solo rivales a ±3 posiciones: lo que pasa 40 puestos más atrás no es noticia
+    const near=cls.map((c,idx)=>({c,idx})).filter(o=>!o.c.me&&Math.abs(o.idx-myPos)<=3);
+    if(!near.length)return;
+    const pick=near[Math.floor(Math.random()*near.length)];
+    const rv=G.rivals.find(r=>esc(r.name)===pick.c.name);
+    if(!rv)return;
+    const def=RIVAL_INCIDENTS.find(d=>d.id===inc.type);
+    if(!def)return;
+    const d=Math.round(def.delta[0]+Math.random()*(def.delta[1]-def.delta[0]));
+    rv.time=Math.max(0,rv.time+d);
+    if(G.seg-(G._lastRadioSeg??-99)>=2){
+      G.rivalRadio={txt:def.txt(rv.name),delta:d};
+      G._lastRadioSeg=G.seg;
+    }
+  });
+}
+
 function computeLiveClass(){
   if(!G.rivals||G.rivals.length===0)return [];
   return [{name:esc(G.runner.name||'Tú'),time:G.time,me:true},
@@ -515,6 +558,7 @@ function renderSegment(){
   el.innerHTML=`
     ${topBar()}${progBar()}${raceStats()}
     ${liveClassPanel()}
+    ${G.rivalRadio?`<div class="race-radio">📻 ${G.rivalRadio.txt} <span style="color:${G.rivalRadio.delta>0?'#4a8a2a':'#c0392b'}">${G.rivalRadio.delta>0?'+':'−'}${fmt(Math.abs(G.rivalRadio.delta))}</span></div>`:''}
     ${race?`<div style="margin-bottom:10px">
       <div id="prof-wrap-race">${profSvg(race,G.seg,'race',G.seg)}</div>
       <div id="prof-info-race" data-sel="${G.seg}">${profSegInfo(race,G.seg,'race',G.seg)}</div>
@@ -633,6 +677,7 @@ function renderAid(){
   el.innerHTML=`
     ${topBar()}${progBar()}${raceStats()}
     ${liveClassPanel()}
+    ${G.rivalRadio?`<div class="race-radio">📻 ${G.rivalRadio.txt} <span style="color:${G.rivalRadio.delta>0?'#4a8a2a':'#c0392b'}">${G.rivalRadio.delta>0?'+':'−'}${fmt(Math.abs(G.rivalRadio.delta))}</span></div>`:''}
     <p style="font-size:15px;font-weight:600;margin-bottom:2px">Avituallamiento</p>
     <p style="font-size:13px;color:#888;margin-bottom:12px">Hasta 2 cosas · ${remaining} restante${remaining!==1?'s':''}${nutBadge}</p>
     <div id="nut-tooltip" style="display:none;background:#eaf4ea;border:1px solid #b8ddb8;border-radius:8px;padding:9px 13px;font-size:13px;color:#2d5a2d;margin-bottom:12px">
@@ -734,18 +779,19 @@ function checkSegInjury(p,seg,alloutStreak,sb,injuryRiskBase){
     else if(load>=70)fallRisk+=0.18;
     else if(load>=55)fallRisk+=0.07;
     fallRisk=Math.min(0.95,fallRisk*modeCfg().injuryRiskMult);
-    if(hasFisio())fallRisk*=0.45;
+    fallRisk*=fisioInjuryMult(load);
     if(G._devForceDescentFall){descentFall=true;G._devForceDescentFall=false;}
     else if(Math.random()<fallRisk)descentFall=true;
   }
-  if(alloutStreak>=3&&load>=70&&!hasFisio()){
+  if(alloutStreak>=3&&load>=70){
     let injRisk=injuryRiskBase;
     injRisk+=(0.08+(load-70)*0.004);
     injRisk=Math.min(0.95,injRisk*modeCfg().injuryRiskMult);
     injRisk*=(1+agingDeg()*0.8);
+    injRisk*=fisioInjuryMult(load);   // T18: antes esta rama era inalcanzable con fisio
     if(Math.random()<injRisk)midRaceInjury=load>=85?'fractura':'rotura';
-  } else if(alloutStreak>=2&&load>=80&&!hasFisio()){
-    if(Math.random()<0.06*modeCfg().injuryRiskMult*(1+agingDeg()*0.8))midRaceInjury='tendinitis';
+  } else if(alloutStreak>=2&&load>=80){
+    if(Math.random()<0.06*modeCfg().injuryRiskMult*(1+agingDeg()*0.8)*fisioInjuryMult(load))midRaceInjury='tendinitis';
   }
   return {descentFall,midRaceInjury};
 }
@@ -765,8 +811,12 @@ window.doPace=p=>{
   r.energy=Math.max(0,r.energy-ec);
   r.hydration=Math.max(0,r.hydration-hc);
   r.legs=Math.max(0,r.legs-lc);
-  G.rivals.forEach(rv=>rv.time+=Math.round(s.base*rv.mult*(0.96+Math.random()*0.08)));
+  // T32: jitter reducido de ±4% a ±2%. La varianza total no sube, solo cambia
+  // de sitio: pasa de ruido invisible a incidentes narrados.
+  G.rivals.forEach(rv=>rv.time+=Math.round(s.base*rv.mult*(0.98+Math.random()*0.04)));
   G.seg++;
+  if(G.seg-(G._lastRadioSeg??-99)>=2)G.rivalRadio=null;
+  applyRivalIncidents();
 
   // ── TRACKING ZONA ROJA ───────────────
   const inRedZone=r.energy<10||r.hydration<10||r.legs<10;
@@ -2202,6 +2252,7 @@ function endRaceCleanup(){
     G._warmupVelDelta=0;
     G._warmupSubDelta=0;
   }
+  G.rivalIncidents=[];G.rivalRadio=null;G._lastRadioSeg=-99;   // T32
 }
 
 // ── Aplica tracking, nemesis, km, PBs, lesiones, circuitos ──

@@ -1,11 +1,11 @@
 const WORK_OPTIONS=[
-  {pct:100,label:'Jornada completa',hours:40,income:150,trainingH:5,
+  {pct:100,label:'Jornada completa',hours:40,income:190,trainingH:5,
    desc:'Máximo dinero. Casi sin tiempo para entrenar.'},
-  {pct:80, label:'Jornada reducida (80%)',hours:32,income:120,trainingH:10,
+  {pct:80, label:'Jornada reducida (80%)',hours:32,income:150,trainingH:10,
    desc:'Buen equilibrio los primeros años.'},
-  {pct:60, label:'Media jornada (60%)',hours:24,income:90,trainingH:16,
+  {pct:60, label:'Media jornada (60%)',hours:24,income:110,trainingH:16,
    desc:'Justo cubres gastos. Más tiempo de entreno.'},
-  {pct:40, label:'Jornada parcial (40%)',hours:16,income:60,trainingH:22,
+  {pct:40, label:'Jornada parcial (40%)',hours:16,income:70,trainingH:22,
    desc:'Pierdes dinero cada mes. Necesitas sponsors.'},
   {pct:0,  label:'Profesional (sin trabajo)',hours:0,income:0,trainingH:32,
    desc:'Solo viable si sponsors + premios cubren tus gastos.'},
@@ -1397,6 +1397,29 @@ const CLUB_RUNNER_POOL=[
   {id:'cr10',name:'Ane Goikoetxea',  flag:'🇪🇸', spec:'fondista',   age:23, stats:{resistencia:50,velocidad:52,subida:46,bajada:50}, salary:120, potential:'alto',   bio:'Recién llegada al trail. Viene del atletismo de pista.'},
   {id:'cr11',name:'Txomin Elosegi',  flag:'🇪🇸', spec:'tecnico',    age:36, stats:{resistencia:60,velocidad:55,subida:50,bajada:68}, salary:160, potential:'bajo',   bio:'Alma del club. Nunca abandona. Liderazgo natural.'},
   {id:'cr12',name:'Itziar Mendiburu',flag:'🇪🇸', spec:'todoterreno',age:25, stats:{resistencia:55,velocidad:58,subida:62,bajada:60}, salary:155, potential:'alto',   bio:'Talento sin pulir. Necesita disciplina de entreno.'},
+  // ── Ampliación T115 (v84): de 12 a 30 corredores ─────────────────────────
+  // El pool de 12 dejaba sin candidatos el cruce especialidad × arquetipo.
+  // Reparto buscado: por cada especialidad, al menos 3 jóvenes de potencial
+  // alto (arquetipo Cantera) y 3 de 30+ con potencial bajo/medio (Veteranos).
+  // cr1–cr12 se conservan intactos: hay saves con esos ids en plantilla/cantera.
+  {id:'cr13',name:'Haritz Zabaleta',   flag:'🇪🇸', spec:'montanero',  age:33, stats:{resistencia:64,velocidad:48,subida:68,bajada:54}, salary:210, potential:'bajo',   bio:'Quince años de vertical en las piernas. Ya no sube igual, pero sabe cuándo apretar.'},
+  {id:'cr14',name:'Maialen Otxoa',     flag:'🇪🇸', spec:'montanero',  age:31, stats:{resistencia:61,velocidad:52,subida:64,bajada:57}, salary:185, potential:'medio',  bio:'Llegó tarde al trail desde el esquí de montaña. Nunca pasa frío.'},
+  {id:'cr15',name:'Beñat Sarasola',    flag:'🇪🇸', spec:'montanero',  age:35, stats:{resistencia:66,velocidad:45,subida:66,bajada:50}, salary:165, potential:'bajo',   bio:'El más veterano del valle. Conoce cada senda de memoria.'},
+  {id:'cr16',name:'Oihana Barandiaran',flag:'🇪🇸', spec:'montanero',  age:22, stats:{resistencia:46,velocidad:47,subida:63,bajada:49}, salary:105, potential:'alto',   bio:'Sub-23. Ligera como el aire en las rampas, verde en todo lo demás.'},
+  {id:'cr17',name:'Julen Zubizarreta', flag:'🇪🇸', spec:'montanero',  age:28, stats:{resistencia:59,velocidad:53,subida:62,bajada:56}, salary:180, potential:'medio',  bio:'Sólido, sin alardes. El corredor que siempre está donde tiene que estar.'},
+  {id:'cr18',name:'Lide Arruabarrena', flag:'🇪🇸', spec:'fondista',   age:24, stats:{resistencia:57,velocidad:49,subida:47,bajada:48}, salary:130, potential:'alto',   bio:'Motor diésel. Cuanto más larga la carrera, mejor le va.'},
+  {id:'cr19',name:'Ekaitz Loiola',     flag:'🇪🇸', spec:'fondista',   age:22, stats:{resistencia:53,velocidad:51,subida:45,bajada:47}, salary:115, potential:'alto',   bio:'Viene del cross escolar. Aún no sabe lo que es una ultra.'},
+  {id:'cr20',name:'Garbiñe Alkorta',   flag:'🇪🇸', spec:'fondista',   age:33, stats:{resistencia:72,velocidad:48,subida:50,bajada:47}, salary:200, potential:'bajo',   bio:'Cuatro ultras al año durante una década. El cuerpo empieza a pasar factura.'},
+  {id:'cr21',name:'Asier Mendizabal',  flag:'🇪🇸', spec:'fondista',   age:30, stats:{resistencia:69,velocidad:51,subida:52,bajada:49}, salary:195, potential:'medio',  bio:'Estratega de carrera larga. Nunca sale rápido, nunca se hunde.'},
+  {id:'cr22',name:'Nahia Erauskin',    flag:'🇪🇸', spec:'fondista',   age:37, stats:{resistencia:71,velocidad:44,subida:48,bajada:45}, salary:150, potential:'bajo',   bio:'Referente del club en distancias imposibles. Última temporada, dice.'},
+  {id:'cr23',name:'Xabier Larrañaga',  flag:'🇪🇸', spec:'tecnico',    age:23, stats:{resistencia:50,velocidad:58,subida:48,bajada:64}, salary:135, potential:'alto',   bio:'Baja sin frenos y sin miedo. Habrá que enseñarle lo segundo.'},
+  {id:'cr24',name:'Irati Goñi',        flag:'🇪🇸', spec:'tecnico',    age:25, stats:{resistencia:54,velocidad:60,subida:50,bajada:63}, salary:150, potential:'alto',   bio:'Trialera reconvertida. Lee el terreno antes de pisarlo.'},
+  {id:'cr25',name:'Ander Uribarri',    flag:'🇪🇸', spec:'tecnico',    age:21, stats:{resistencia:45,velocidad:56,subida:46,bajada:60}, salary:100, potential:'alto',   bio:'Diecinueve años en bici de montaña. Dos corriendo.'},
+  {id:'cr26',name:'Saioa Zelaia',      flag:'🇪🇸', spec:'tecnico',    age:34, stats:{resistencia:58,velocidad:57,subida:51,bajada:69}, salary:190, potential:'bajo',   bio:'Descensos de otra época. Las rodillas ya avisan.'},
+  {id:'cr27',name:'Peru Etxaniz',      flag:'🇪🇸', spec:'todoterreno',age:22, stats:{resistencia:49,velocidad:52,subida:53,bajada:54}, salary:110, potential:'alto',   bio:'Sirve para todo y no destaca en nada. Todavía.'},
+  {id:'cr28',name:'Amets Larrea',      flag:'🇪🇸', spec:'todoterreno',age:24, stats:{resistencia:54,velocidad:55,subida:56,bajada:55}, salary:145, potential:'alto',   bio:'Cabeza fría, piernas obedientes. El perfil que todo club busca.'},
+  {id:'cr29',name:'Ainhoa Berasategi', flag:'🇪🇸', spec:'todoterreno',age:32, stats:{resistencia:63,velocidad:56,subida:59,bajada:59}, salary:205, potential:'medio',  bio:'Diez temporadas sin una sola retirada. Fiabilidad pura.'},
+  {id:'cr30',name:'Iñaki Olabarria',   flag:'🇪🇸', spec:'todoterreno',age:36, stats:{resistencia:61,velocidad:52,subida:57,bajada:56}, salary:170, potential:'bajo',   bio:'Fue capitán en tres clubes distintos. Hace mejor a quien corre a su lado.'},
 ];
 
 // ── Roles de plantilla (C8) ────────────────────────────────────────────────
@@ -1436,6 +1459,22 @@ const CLUB_FILOSOFIAS={
     desc:'Más patrocinadores disponibles. Ingresos de socios +20%.',
     specBonus:null, raceBonus:[], sponsorBonus:'local',
     socioBonus:1.2, cohesionBonus:0},
+};
+
+// ── Arquetipos de club (T115, v84) ─────────────────────────────────────────
+// Antes todos los clubes arrancaban con la misma plantilla, presupuesto y
+// cohesión: elegir club no cambiaba nada. Cada arquetipo filtra el pool y fija
+// las condiciones de salida.
+const CLUB_ARCHETYPES={
+  cantera:{     label:'Cantera',     emoji:'🌱', color:'#2d7a2d',
+    desc:'Tres jóvenes con poco rodaje y mucho techo. Salarios bajos y presupuesto holgado, pero los resultados tardan.',
+    ageMax:26, potential:['alto'],           presupuesto:1100, socios:8,  cohesion:45},
+  veteranos:{   label:'Veteranos',   emoji:'🧓', color:'#c07a10',
+    desc:'Tres corredores hechos. Compiten desde el primer día, pero cobran más y se te caen en tres o cuatro temporadas.',
+    ageMin:30, potential:['bajo','medio'],   presupuesto:600,  socios:12, cohesion:60},
+  equilibrado:{ label:'Equilibrado', emoji:'⚖️', color:'#4a90d9',
+    desc:'Una plantilla mezclada, sin extremos. La opción neutra.',
+    potential:null,                          presupuesto:800,  socios:8,  cohesion:50},
 };
 
 // ── Staff técnico (C11) ────────────────────────────────────────────────────
@@ -1517,6 +1556,34 @@ const CLUB_LEVELS=[
   {id:'nacional', label:'Club Nacional', icon:'🏅', sociosMin:101, sociosMax:300, presupuestoBase:5000, color:'#2d7a2d', repReq:70},
   {id:'elite',    label:'Club Élite',    icon:'🌟', sociosMin:301, sociosMax:999, presupuestoBase:12000,color:'#c07a10', repReq:90},
 ];
+
+// ── Incidentes de rivales (T32, v85) ───────────────────────────────────────
+// Los rivales no resuelven eventos como el jugador: sufren incidentes con un
+// delta de tiempo y una línea de narración. Deltas positivos = pierden tiempo.
+// Los negativos existen para que el pelotón no sea solo un saco de penalización.
+const RIVAL_INCIDENTS=[
+  {id:'lost',   delta:[90,240], txt:n=>`${n} se ha despistado en una bifurcación`},
+  {id:'fall',   delta:[60,150], txt:n=>`${n} se ha caído en la bajada`},
+  {id:'cramp',  delta:[45,120], txt:n=>`${n} se para con calambres`},
+  {id:'aid',    delta:[30,80],  txt:n=>`${n} pierde tiempo en el avituallamiento`},
+  {id:'gear',   delta:[25,70],  txt:n=>`${n} se para a recolocarse el material`},
+  {id:'help',   delta:[60,120], txt:n=>`${n} se para a ayudar a un corredor`},
+  {id:'attack', delta:[-70,-25],txt:n=>`${n} ataca y abre hueco`},
+  {id:'surge',  delta:[-50,-20],txt:n=>`${n} aprieta en la subida`},
+];
+
+// ── Fuerza del campo por tier de carrera de club (T21, v83) ────────────────
+// Sustituye a la fórmula lineal antigua, en la que ganar en élite era
+// aritméticamente imposible con el tope de perf en 98.
+// mean = rendimiento del rival medio de ese tier.
+// k    = dispersión del campo. Cuanto más bajo, más apretado está el nivel y
+//        más hay que destacar para ganar.
+const CLUB_TIER_FIELD={
+  local:    {rivals:18,  mean:52, k:9},
+  regional: {rivals:35,  mean:62, k:7},
+  nacional: {rivals:70,  mean:70, k:5.5},
+  elite:    {rivals:110, mean:78, k:4},
+};
 
 const CLUB_RACES=[
   // Locales — siempre disponibles

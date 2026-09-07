@@ -27,7 +27,7 @@ window.devJumpToCoach=()=>{
 };
 window.devJumpToClub=()=>{
   if(!G.clubModeData){
-    G.clubModeData=initClubModeData('Club de Pruebas','mixto','montanero');
+    G.clubModeData=initClubModeData('Club de Pruebas','mixto','montanero','equilibrado');
   }
   G.gameMode='club';
   G.carreraVida=true;G.lifecyclePhase='club';

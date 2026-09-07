@@ -20,7 +20,7 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
-const GAME_BUILD=82; // incrementar con cada versión del juego
+const GAME_BUILD=87; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
@@ -99,7 +99,7 @@ function migrateState(saved){
    'dropbagItems','workPromotionsUsed','repInvitations',
    'coachSelectedRaces','coachRaceResults','coachAthleteHistory','coachDecisionLog',
    'coachEventLog','coachRoster','coachSponsors','unlockedAchievements',
-   'cnVetHistory','cnRaceResults','cnSelectedRaces']
+   'cnVetHistory','cnRaceResults','cnSelectedRaces','rivalIncidents']
     .forEach(k=>{if(!Array.isArray(merged[k]))merged[k]=Array.isArray(base[k])?[...base[k]]:[];});
   // Deep-merge de objetos anidados adicionales
   if(saved.dog)          merged.dog={...base.dog,...saved.dog};
@@ -111,6 +111,8 @@ function migrateState(saved){
   if(saved.lifeAthlete)  merged.lifeAthlete={...base.lifeAthlete,...saved.lifeAthlete};
   if(saved.trainingMomentum) merged.trainingMomentum={...base.trainingMomentum,...saved.trainingMomentum};
   if(saved.trainingBlock)merged.trainingBlock={...base.trainingBlock,...saved.trainingBlock};
+  // T115 (v84): saves anteriores al arquetipo
+  if(merged.clubModeData&&!merged.clubModeData.archetype)merged.clubModeData.archetype='equilibrado';
   return merged;
 }
 
@@ -129,6 +131,12 @@ function sanitizeState(raw){
   s.runName=String(s.runName||'').slice(0,40);
   s.year=clampI(s.year,1,50,1);
   s.money=clampI(s.money,0,9999999,0);
+  // T29 (v86)
+  s.debt=clampI(s.debt,0,9999999,0);
+  s.debtSeasons=clampI(s.debtSeasons,0,99,0);
+  s.forcedFullTime=!!s.forcedFullTime;
+  s.careerEnded=(typeof s.careerEnded==='string')?s.careerEnded.slice(0,20):null;
+  s.debtInterestTotal=clampI(s.debtInterestTotal,0,9999999,0);   // T29b (v87)
   s.runner.age=clampI(s.runner.age,14,80,25);
   s.runner.energy=clampI(s.runner.energy,0,100,100);
   s.runner.hydration=clampI(s.runner.hydration,0,100,100);
@@ -278,5 +286,6 @@ function slotLabel(data){
     coach:   '📋 Entrenador',
     club:    '🏕 Club',
   }[s.lifecyclePhase||'runner']:null;
-  return {name,runName,year,ranking,specRanking,spec,mode,totalKm,date,phase};
+  return {name,runName,year,ranking,specRanking,spec,mode,totalKm,date,phase,
+          ended:s.careerEnded||null};   // T29 (v86)
 }

@@ -19,6 +19,9 @@ function freshState(){
     currentRaceIdx:0,raceResults:[],careerHistory:[],
     time:0,seg:0,raceEvent:'',
     rivals:[],weather:'soleado', // T14 (v82): liveClass eliminado — siempre vacío y se serializaba en cada guardado; ahora se calcula al vuelo con computeLiveClass()
+    rivalIncidents:[],rivalRadio:null,   // T32
+    debt:0,debtSeasons:0,forcedFullTime:false,careerEnded:null,   // T29
+    debtInterestTotal:0,   // T29b — total de intereses pagados en la carrera
     pendingEvent:null,skipNext:false,legsPenalty:false,aidSelected:[],
     activeTab:'game',
     lastRaceGains:[],
@@ -391,13 +394,134 @@ function _tierDiffMultFor(mode){
 function modeCfg(mode){
   const m=mode||G.gameMode||'medio';
   return {
-    facil:    {injuryRiskMult:0.4, fatigueMult:0.7, rivalMult:1.12, startMoney:550, sponsorMult:1.2, trainingMult:1.2, maxYears:99, tierDiffMult:_tierDiffMultFor('facil')},
-    medio:    {injuryRiskMult:1.0, fatigueMult:1.0, rivalMult:1.00, startMoney:300, sponsorMult:1.0, trainingMult:1.0, maxYears:99, tierDiffMult:_tierDiffMultFor('medio')},
-    dificil:  {injuryRiskMult:1.6, fatigueMult:1.3, rivalMult:0.90, startMoney:180, sponsorMult:0.85,trainingMult:0.85, maxYears:99, tierDiffMult:_tierDiffMultFor('dificil')},
-    hardcore: {injuryRiskMult:2.2, fatigueMult:1.6, rivalMult:0.85, startMoney:150, sponsorMult:0.7, trainingMult:0.7, maxYears:99, tierDiffMult:_tierDiffMultFor('hardcore')},
-    expres:   {injuryRiskMult:0.6, fatigueMult:0.8, rivalMult:0.98, startMoney:500, sponsorMult:1.1, trainingMult:1.5, maxYears:3, tierDiffMult:_tierDiffMultFor('expres')},
-  }[m]||{injuryRiskMult:1.0,fatigueMult:1.0,rivalMult:1.00,startMoney:300,sponsorMult:1.0,trainingMult:1.0,maxYears:99,tierDiffMult:_tierDiffMultFor('medio')};
+    facil:    {injuryRiskMult:0.4, fatigueMult:0.7, rivalMult:1.12, startMoney:550, sponsorMult:1.2, trainingMult:1.2, maxYears:99, tierDiffMult:_tierDiffMultFor('facil'),
+               fisio:{floor:0.35, onset:75, decay:0.008, cap:0.85}, bankruptcy:{soft:700, hard:null, interest:0.08, minPay:0.25}},
+    medio:    {injuryRiskMult:1.0, fatigueMult:1.0, rivalMult:1.00, startMoney:300, sponsorMult:1.0, trainingMult:1.0, maxYears:99, tierDiffMult:_tierDiffMultFor('medio'),
+               fisio:{floor:0.45, onset:65, decay:0.012, cap:0.90}, bankruptcy:{soft:500, hard:null, interest:0.12, minPay:0.25}},
+    dificil:  {injuryRiskMult:1.6, fatigueMult:1.3, rivalMult:0.90, startMoney:180, sponsorMult:0.85,trainingMult:0.85, maxYears:99, tierDiffMult:_tierDiffMultFor('dificil'),
+               fisio:{floor:0.55, onset:55, decay:0.016, cap:0.95}, bankruptcy:{soft:400, hard:2500,interest:0.18, minPay:0.25}},
+    hardcore: {injuryRiskMult:2.2, fatigueMult:1.6, rivalMult:0.85, startMoney:150, sponsorMult:0.7, trainingMult:0.7, maxYears:99, tierDiffMult:_tierDiffMultFor('hardcore'),
+               fisio:{floor:0.62, onset:50, decay:0.014, cap:1.00}, bankruptcy:{soft:300, hard:1800,interest:0.25, minPay:0.25}},
+    expres:   {injuryRiskMult:0.6, fatigueMult:0.8, rivalMult:0.98, startMoney:500, sponsorMult:1.1, trainingMult:1.5, maxYears:3, tierDiffMult:_tierDiffMultFor('expres'),
+               fisio:{floor:0.40, onset:70, decay:0.010, cap:0.88}, bankruptcy:{soft:600, hard:null, interest:0.10, minPay:0.25}},
+  }[m]||{injuryRiskMult:1.0,fatigueMult:1.0,rivalMult:1.00,startMoney:300,sponsorMult:1.0,trainingMult:1.0,maxYears:99,tierDiffMult:_tierDiffMultFor('medio'),
+         fisio:{floor:0.45,onset:65,decay:0.012,cap:0.90}, bankruptcy:{soft:500,hard:null,interest:0.12,minPay:0.25}};
 }
+// T29 (v86): única puerta de entrada de dinero involuntario (cierre de
+// temporada y penalizaciones vencidas). Las compras voluntarias siguen
+// clampadas con Math.max(0,…) en sus propios sitios: no puedes endeudarte
+// comprando, solo por no llegar a fin de temporada.
+// T29b (v87): applyYearBalance solo reparte entre saldo y deuda. La amortización
+// y los intereses se resuelven una sola vez por temporada en settleDebtSeason(),
+// porque doNextYear() llama aquí dos veces (balance anual y penalizaciones
+// vencidas) y los intereses no pueden cobrarse dos veces.
+function applyYearBalance(delta){
+  const net=(G.money||0)+delta;
+  if(net<0){ G.debt=Math.min(9999999,(G.debt||0)+Math.abs(net)); G.money=0; }
+  else G.money=net;
+}
+
+// T29b (v87): se llama UNA vez por temporada, al final de doNextYear(), después
+// de que applyYearBalance() haya repartido todo lo que entra y sale.
+//   · En escalón 2 (forcedFullTime): todo el saldo a la deuda y SIN intereses.
+//     Es el trato: pierdes la libertad de elegir jornada, pero deja de crecer.
+//   · Fuera del escalón 2: pago mínimo del 25% del saldo, e interés sobre lo
+//     que quede pendiente. Lo que no amortices voluntariamente durante la
+//     temporada, lo pagas más caro al cerrarla.
+function settleDebtSeason(){
+  const cfg=modeCfg().bankruptcy||{soft:500,hard:null,interest:0.12,minPay:0.25};
+  if((G.debt||0)<=0){ checkDebtEscalation(); return; }
+
+  if(G.forcedFullTime){
+    const pay=Math.min(G.debt,G.money||0);
+    G.debt-=pay; G.money-=pay;
+    if(pay>0&&typeof showToast==='function')
+      setTimeout(()=>showToast(`Deuda amortizada: −€${pay}`,'#c07a10'),800);
+    checkDebtEscalation();
+    return;
+  }
+
+  // Pago mínimo obligatorio
+  const minPay=Math.min(G.debt,Math.floor((G.money||0)*(cfg.minPay??0.25)));
+  if(minPay>0){ G.debt-=minPay; G.money-=minPay; }
+
+  // Interés sobre el pendiente
+  let interest=0;
+  if(G.debt>0){
+    interest=Math.round(G.debt*(cfg.interest??0.12));
+    G.debt=Math.min(9999999,G.debt+interest);
+    G.debtInterestTotal=(G.debtInterestTotal||0)+interest;
+  }
+
+  if((minPay>0||interest>0)&&typeof showToast==='function'){
+    setTimeout(()=>showToast(
+      `Deuda: −€${minPay} amortizado · +€${interest} de intereses`,
+      interest>minPay?'#c0392b':'#c07a10'),800);
+  }
+  checkDebtEscalation();
+}
+
+// T29b: amortización voluntaria. Disponible en Finanzas y entre carreras, para
+// que la deuda sea una decisión recurrente y no un descuento automático.
+window.doPayDebt=(amount)=>{
+  if((G.debt||0)<=0){showToast('No tienes deuda pendiente','#888');return;}
+  const want=(amount==='all')?Math.min(G.debt,G.money||0):Math.min(Number(amount)||0,G.debt,G.money||0);
+  if(want<=0){showToast('Sin saldo para amortizar','#c0392b');return;}
+  G.debt-=want; G.money-=want;
+  if(G.debt<=0){
+    G.debt=0;
+    showToast('✓ Deuda saldada','#4a8a2a');
+    checkDebtEscalation();   // libera forcedFullTime si estaba activo
+  } else {
+    showToast(`−€${want} · quedan €${G.debt}`,'#c07a10');
+  }
+  autoSave();render();
+};
+
+// T29 (v86): tres escalones. Nadie debería perder una partida sin haber
+// ignorado antes dos avisos claros.
+//   1 · Números rojos  — deuda visible y −3 mental por temporada (estrés).
+//   2 · Vuelta forzosa — jornada al 100% y staff cancelado hasta saldar.
+//   3 · Retiro forzoso — solo Difícil/Hardcore, y solo si YA estás en el
+//       escalón 2: si trabajas a tope y sigues hundiéndote, no hay salida.
+function checkDebtEscalation(){
+  const cfg=modeCfg().bankruptcy||{soft:500,hard:null};
+
+  if((G.debt||0)>0){
+    G.debtSeasons=(G.debtSeasons||0)+1;
+    G.runner.stats.mental=Math.max(25,(G.runner.stats.mental||50)-3);
+  } else {
+    G.debtSeasons=0;
+    if(G.forcedFullTime){
+      G.forcedFullTime=false;
+      if(typeof showToast==='function')showToast('✓ Deuda saldada — vuelves a elegir jornada','#4a8a2a');
+    }
+    return;
+  }
+
+  // Escalón 3 antes que el 2: si ya estabas forzado y has superado el techo,
+  // se acabó, y no tiene sentido volver a lanzar la pantalla del escalón 2.
+  if(cfg.hard!=null && G.forcedFullTime && G.debt>=cfg.hard){
+    G.careerEnded='bankruptcy';
+    G.screen='careerEnd';
+    return;
+  }
+
+  if(G.debt>=cfg.soft && !G.forcedFullTime){
+    G.forcedFullTime=true;
+    G.workPct=100;
+    G.workByQuarter={1:100,2:100,3:100,4:100};
+    // Si no puedes pagar al fisio, el fisio se va. Sin esto la deuda no tiene
+    // suelo: seguirías pagando €550/mes de staff mientras te hundes.
+    G.spending={fisio:false,entrenador:false,suplementos:false};
+    // doNextYear() sigue ejecutándose tras esta llamada y fija G.screen='workSetup'
+    // al final, así que además de la pantalla se deja una marca transitoria que
+    // ese cierre de temporada consume. No va en PERSISTENT_UNDERSCORE_KEYS.
+    G.screen='debtCrisis';
+    G._debtCrisisPending=true;
+  }
+}
+
 function availableFameHours(){
   const wo=curWorkOpt();
   const blockH=G.trainingBlockHours||8;
@@ -449,6 +573,18 @@ function clearExpressTimer(){
 }
 function getBodyLoad(){return Math.max(0,Math.min(100,Math.round(G.bodyLoad||0)));}
 function hasFisio(){return G.spending.fisio||G.club?.hasFisio;}
+// T18 (v83): el fisio ya no da inmunidad. Protege bien con el cuerpo fresco y
+// pierde efecto conforme sube la carga corporal, hasta dejar de cubrirte en los
+// modos duros. Los cuatro puntos de riesgo de lesión de race.js usan esta única
+// función: antes había tres tratamientos distintos (×0,35, ×0,45 e inmunidad).
+// Enlaza con las sesiones puntuales de «Entre carreras»: bajar carga recupera
+// cobertura sin tocar el contrato.
+function fisioInjuryMult(load){
+  if(!hasFisio())return 1;
+  const f=modeCfg().fisio||{floor:0.45,onset:65,decay:0.012,cap:0.90};
+  const L=Number.isFinite(load)?load:getBodyLoad();
+  return Math.min(f.cap, f.floor + Math.max(0, L - f.onset) * f.decay);
+}
 function hasClubEntrenador(){return G.spending.entrenador||G.club?.hasEntrenador;}
 
 // Umbrales de carga corporal dinámicos por dificultad (más lesión-riesgo = umbrales más bajos)
