@@ -114,6 +114,23 @@ function updateFinBar(){
   document.getElementById('fb-rank').textContent=G.ranking<900?'#'+G.ranking:'—';
   const sr=document.getElementById('fb-specrank');
   if(sr)sr.textContent=G.specRanking<900?'#'+G.specRanking:'—';
+  // T06 (v82): aviso permanente si el guardado está fallando. Un toast se pisa
+  // con los otros cinco que se encolan al terminar una carrera; esto se queda.
+  const sv=document.getElementById('fb-save');
+  const svc=document.getElementById('fb-save-cell');
+  if(sv&&svc){
+    const failed=!!G._saveFailed;
+    sv.textContent=failed?'⚠':'💾';
+    sv.className='fin-val '+(failed?'red':'neutral');
+    svc.title=failed?'No se pudo guardar: el almacenamiento del navegador está lleno. Exporta la partida a texto para no perderla.'
+                    :'Guardar partida';
+    const lbl=svc.querySelector('.fin-top');
+    if(lbl)lbl.textContent=failed?'Sin guardar':'Guardar';
+  }
+  // T10 (v82): durante la carrera la celda 💾 se oculta. Guardar ya estaba
+  // bloqueado en saveCurrentToSlot(), pero el onclick cambiaba G.screen igual y
+  // la pantalla de guardado solo vuelve a modeSelect: se perdía la carrera.
+  if(svc)svc.style.display=RACE_SCREENS.includes(G.screen)?'none':'';
 }
 
 // ══════════════════════════════════════
@@ -145,8 +162,8 @@ function renderClubSetup(){
 
     ${currentClub.id!=='none'?`
     <div class="card" style="margin-bottom:12px">
-      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Club actual — ${currentClub.name}</div>
-      ${companion?`<div style="font-size:13px;color:#555;margin-bottom:8px">Tu compañero: <strong>${companion}</strong></div>`:''}
+      <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Club actual — ${esc(currentClub.name)}</div>
+      ${companion?`<div style="font-size:13px;color:#555;margin-bottom:8px">Tu compañero: <strong>${esc(companion)}</strong></div>`:''}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
         <span style="font-size:12px;color:#888">Reputación</span>
         <span style="font-size:13px;font-weight:700;color:${repInfo.color}">${repInfo.text}</span>
@@ -881,7 +898,7 @@ function renderSaveScreen(){
       </div>
     </div>
 
-    <button class="main" style="margin-top:20px" onclick="G.screen='modeSelect';render()">← Volver</button>`;
+    <button class="main" style="margin-top:20px" onclick="closeSaveScreen()">← Volver${G._prevScreen&&G._prevScreen!=='modeSelect'?' a la partida':''}</button>`;
 }
 
 window.loadSlot=slot=>{
@@ -904,6 +921,18 @@ window.loadSlot=slot=>{
     console.error('[loadSlot] Error al cargar ranura',slot,err);
     alert('Error inesperado al cargar la partida. Prueba a importar desde texto.');
   }
+};
+// T10 (v82): entrar y salir de la pantalla de guardado sin perder dónde estabas.
+window.openSaveScreen=()=>{
+  if(RACE_SCREENS.includes(G.screen))return; // la celda ya está oculta; doble red
+  if(G.screen!=='saveScreen')G._prevScreen=G.screen;
+  G.screen='saveScreen';render();
+};
+window.closeSaveScreen=()=>{
+  const back=G._prevScreen;
+  G._prevScreen=null;
+  G.screen=(back&&back!=='saveScreen')?back:'modeSelect';
+  render();
 };
 window.saveCurrentToSlot=slot=>{
   if(RACE_SCREENS.includes(G.screen)){alert('No puedes guardar durante una carrera. Termina o abandona primero.');return;}
@@ -3035,7 +3064,7 @@ window.doNextYear=yearNet=>{
   // Traspasar clasificación Zegama
   G.zegamaQual=G.zegamaQualNext;G.zegamaQualNext=false;
   G.selectedRaces=[];G.trainingBlock=null;G.raceResults=[];G.currentRaceIdx=0;G.trainingEff=1.0;
-  G.activeTab='game';G.liveClass=[];G.lastRaceGains=[];
+  G.activeTab='game';G.lastRaceGains=[];
   G.workByQuarter={1:G.workPct,2:G.workPct,3:G.workPct,4:G.workPct};
   G.currentQuarter=1;G.fameActionsThisSeason={};G.fameHoursUsed=0;
   // Calcular invitaciones por reputación para la nueva temporada (tras resetear selectedRaces)
@@ -3997,12 +4026,15 @@ window.afterRace=()=>{
   render();
 };
 
-window.skipInjuredRace=()=>{
-  G.currentRaceIdx++;
-  const isExpres=G.gameMode==='expres';
-  if(G.currentRaceIdx>=G.selectedRaces.length){applyTraining();G.screen=isExpres?'expresSeasonBalance':'seasonBalance';render();return;}
-  afterRace();
-};
+// T04 (v82): aquí había un G.currentRaceIdx++ propio ANTES de llamar a
+// afterRace(), que incrementa por su cuenta. Con el incremento que afterRace()
+// ya había hecho al registrar la baja, cada lesión avanzaba el índice tres
+// veces en lugar de dos y una carrera del calendario se evaporaba: no se corría,
+// no se registraba y no aparecía en ningún sitio, con la inscripción ya pagada.
+// Traza con [A,B,C,D] y lesión de 2 carreras al terminar A: se marcaba B de baja,
+// luego D, y C desaparecía. afterRace() se basta para todo — avanza el índice,
+// comprueba fin de temporada y decide la pantalla siguiente.
+window.skipInjuredRace=()=>{ afterRace(); };
 
 window.handleEv=(evId,choiceIdx)=>{
   const ev=G.pendingEvent;if(!ev)return goNextRace();

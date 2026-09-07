@@ -18,7 +18,7 @@ function freshState(){
     spending:{fisio:false,entrenador:false,suplementos:false},
     currentRaceIdx:0,raceResults:[],careerHistory:[],
     time:0,seg:0,raceEvent:'',
-    rivals:[],liveClass:[],weather:'soleado',
+    rivals:[],weather:'soleado', // T14 (v82): liveClass eliminado — siempre vacío y se serializaba en cada guardado; ahora se calcula al vuelo con computeLiveClass()
     pendingEvent:null,skipNext:false,legsPenalty:false,aidSelected:[],
     activeTab:'game',
     lastRaceGains:[],
@@ -74,6 +74,10 @@ function freshState(){
     paceLog:[],                  // registro de pace por segmento
     workChangePenalties:{},      // penalizaciones por cambio de jornada por trimestre
     yearObjective:null,          // objetivo de temporada activo
+    _yearObjectiveRewardPaid:false, // T03 (v81): ya estaba en PERSISTENT_UNDERSCORE_KEYS
+                                 // pero sin declarar aquí. Sin valor por defecto tras
+                                 // migrateState, un save antiguo lo deja undefined y
+                                 // render.js:2983 vuelve a pagar el objetivo del año.
     _expressSponsorPool:null,    // pool de sponsors generado para esta temporada Express
     // ── Modo Entrenador ──────────────────
     coachPool:null,           // 3 atletas presentados al inicio

@@ -301,7 +301,6 @@ function initRace(){
       ranking,recentWins,age:rivalAge
     };
   });
-  G.liveClass=[];
   G.aidSelected=[];
   G.terrainCondition=getTerrainCondition(race);
   G.paceLog=[];
@@ -430,9 +429,22 @@ function renderPreRace(){
   attachProfHandlers(race, race.id+'preview', 'preview', 0);
 }
 
+// T14 (v82): la clasificación en vivo se construía como variable local del panel
+// y nunca se escribía en ningún sitio. G.liveClass, que dos eventos temporizados
+// de Exprés consultaban para saber si vas en top 5, solo recibía [] en tres
+// puntos del proyecto — así que findIndex daba -1, myPos era siempre 0 y
+// xp_climb_attack y xp_rival llevaban 80 builds escritos sin dispararse nunca.
+// Ahora el cálculo vive aquí y lo usan tanto el panel como los eventos, sin que
+// una función de render tenga que escribir estado ni persistir nada.
+function computeLiveClass(){
+  if(!G.rivals||G.rivals.length===0)return [];
+  return [{name:esc(G.runner.name||'Tú'),time:G.time,me:true},
+          ...G.rivals.map(r=>({name:esc(r.name),time:r.time,me:false,flag:r.flag||'',country:r.country||''}))]
+         .sort((a,b)=>a.time-b.time);
+}
 function liveClassPanel(){
   if(!G.rivals||G.rivals.length===0||G.seg===0)return '';
-  const all=[{name:esc(G.runner.name||'Tú'),time:G.time,me:true},...G.rivals.map(r=>({name:esc(r.name),time:r.time,me:false,flag:r.flag||'',country:r.country||''}))].sort((a,b)=>a.time-b.time);
+  const all=computeLiveClass();
   const myPos=all.findIndex(x=>x.me);
   const start=Math.max(0,myPos-2);
   const end=Math.min(all.length,start+5);
@@ -1026,7 +1038,13 @@ function checkTerrainNavigationEvents(){
   }
 
   // 🏔 DESNIVEL INFINITO — carreras con mucho desnivel (>2000m), tramo 30%-65%, 1 vez
-  if(!G.midRaceEventTriggered.endless_climb&&(G.selectedRaces[G.currentRaceIdx]?.gain||0)>=2000&&pct>=0.3&&pct<0.65){
+  // T12 (v82): la condición leía race.gain, una propiedad que NINGUNA carrera
+  // tiene a nivel superior — el desnivel se guarda como cadena ('2.800m+') y
+  // gain solo existe dentro de cada tramo. Era siempre 0>=2000 y el evento
+  // llevaba 80 builds sin dispararse jamás. Ahora se suma el de los tramos.
+  // Arreglo de fondo pendiente: campo numérico gainTotal en los datos (T52).
+  const _totalGain=(G.selectedRaces[G.currentRaceIdx]?.segs||[]).reduce((a,s)=>a+Math.max(0,s.gain||0),0);
+  if(!G.midRaceEventTriggered.endless_climb&&_totalGain>=2000&&pct>=0.3&&pct<0.65){
     if(Math.random()<0.13){
       G.midRaceEventTriggered.endless_climb=true;
       return{id:'endless_climb',
@@ -1415,7 +1433,7 @@ function checkExpressTimedEvents(){
       }
       // Ataque en subida: cuando estés en top 5
       if(!G.midRaceEventTriggered.xp_climb_attack&&pct>=0.3&&pct<0.8){
-        const myPos=(G.liveClass||[]).findIndex(e=>e.me)+1;
+        const myPos=computeLiveClass().findIndex(e=>e.me)+1;
         if(myPos>0&&myPos<=5&&Math.random()<0.45){
           G.midRaceEventTriggered.xp_climb_attack=true;
           G.midRaceEventTriggered._xpTimedCount=(xpTimed+1);
@@ -1424,7 +1442,7 @@ function checkExpressTimedEvents(){
       }
       // Rival simple: top 5
       if(!G.midRaceEventTriggered.xp_rival&&pct>=0.3&&pct<0.8){
-        const myPos=(G.liveClass||[]).findIndex(e=>e.me)+1;
+        const myPos=computeLiveClass().findIndex(e=>e.me)+1;
         if(myPos>0&&myPos<=5&&Math.random()<0.35){
           G.midRaceEventTriggered.xp_rival=true;
           G.midRaceEventTriggered._xpTimedCount=(xpTimed+1);
@@ -1568,6 +1586,11 @@ function renderMidRaceEvent(){
 }
 window.resolveMidRaceEvent=(evId,choiceId)=>{
   const r=G.runner;
+  // T01 (v81): 'mental' se declaraba solo dentro del bloque else de la rama
+  // 'lost', pero la rama 'gut_fork' (confusing_fork) también lo lee ~200 líneas
+  // más abajo. Fuera de ámbito → ReferenceError que abortaba la función antes
+  // de limpiar G.midRaceEvent y volver a 'segment': partida congelada.
+  const mental=getEffStat('mental');
   // Si el temporizador de Exprés seguía corriendo, el jugador respondió a tiempo
   if(G._xpTimerInterval)G._xpTimerAnsweredCareer=(G._xpTimerAnsweredCareer||0)+1;
   if(evId==='storm'){
@@ -1652,8 +1675,7 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       G.time+=150; // +2:30 min
       G.raceEvent='El GPS te saca del laberinto de niebla. Pierdes 2:30 pero llegas al tramo correcto.';
     } else {
-      // Roll de Mental
-      const mental=getEffStat('mental');
+      // Roll de Mental (la constante se declara al inicio de la función)
       const roll=Math.random()*100;
       if(roll<mental){
         G.time+=80; // +1:20 min
@@ -1960,15 +1982,10 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       r.energy=Math.max(0,r.energy-14);G.raceEvent='Mantienes el ritmo de "llano" en un repecho real. −14 energía de golpe. El cuerpo tarda tres kilómetros en recuperarse.';
     }
   }
-  else if(evId==='lost'){
-    if(choiceId==='wait_gps'){
-      G.time+=180;G.raceEvent='El GPS recalcula. +3 min pero vas por el camino correcto.';
-    } else {
-      const ok=(G.runner.stats?.mental||50)>=60;
-      if(ok){G.raceEvent='El instinto te lleva bien. La senda correcta aparece en 200m.';}
-      else{G.time+=300;r.energy=Math.max(0,r.energy-8);G.raceEvent='Fallas la dirección. +5 min dando la vuelta. −8 energía por el esfuerzo extra.';}
-    }
-  }
+  // T13 (v82): aquí había un segundo bloque `else if(evId==='lost')` inalcanzable
+  // por partida doble — la cadena if/else if ya resuelve 'lost' mucho antes, y
+  // además manejaba choiceId==='wait_gps', un id que no existe entre las opciones
+  // del evento (son 'gps' y 'find_trail'). Eliminado.
   G.midRaceEvent=null;
   G.screen='segment';
   render();

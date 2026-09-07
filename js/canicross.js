@@ -256,7 +256,12 @@ function cnFinishRace(){
   const catRivals=rivals.filter(r=>cnGetCategory(r.age||30).id===myCat.id);
   const catPos=Math.max(1,catRivals.filter(r=>r.estimatedTime<totalTime).length+1);
 
-  const prize=rs.retired?0:(pos===1?race.prize:pos===2?Math.round(race.prize*0.6):pos===3?Math.round(race.prize*0.4):0);
+  // T07 (v82): race es `||{}` en la línea 235, así que race.prize puede ser
+  // undefined. Sin el ||0, una 1.ª posición con la carrera fuera de rango metía
+  // undefined en cnMoney y todos los importes del modo pasaban a NaN para
+  // siempre. race.cost sí lo llevaba (línea 272): aquí se había olvidado.
+  const rPrize=race.prize||0;
+  const prize=rs.retired?0:(pos===1?rPrize:pos===2?Math.round(rPrize*0.6):pos===3?Math.round(rPrize*0.4):0);
 
   if(rs.injuryPending){
     d.injury=rs.injuryPending;

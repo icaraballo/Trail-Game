@@ -20,7 +20,7 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
-const GAME_BUILD=80; // incrementar con cada versión del juego
+const GAME_BUILD=82; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
@@ -40,6 +40,13 @@ const PERSISTENT_UNDERSCORE_KEYS=[
   '_cnDogHealthyPrev','_cnDogInjury2Consecutive','_cnPerfectSeasons','_cnRacedWithoutCommands',
   '_cnLastPlaceCount','_cnPreseasonNothing','_cnIgnoredVetSeason','_cnVetThisSeason',
   '_yearObjectiveRewardPaid',
+  // T02 (v81): estos cinco los escribe el código y los leen logros reales de
+  // ACHIEVEMENTS, pero faltaban aquí, así que serializableState() los descartaba.
+  // Si el logro no se comprobaba en la misma sesión, no se desbloqueaba nunca;
+  // _clubObjectivesMet es un contador acumulado hasta 3, así que se reiniciaba
+  // en cada recarga y su logro era directamente inalcanzable.
+  '_coachClubOfferReceived','_coachBeatNemesis','_coachPerfectSeason',
+  '_clubCanteraPromoted','_clubObjectivesMet',
 ];
 
 // Devuelve una copia de G sin las claves transitorias (timers, flags de un solo
@@ -86,7 +93,7 @@ function migrateState(saved){
     merged.cnOwnedEquipment.line=merged.cnOwnedEquipment.line.map(id=>id==='basic_line'?'soft_line':id);
   }
   // Asegurar arrays
-  ['selectedRaces','raceResults','careerHistory','rivals','liveClass','lastRaceGains',
+  ['selectedRaces','raceResults','careerHistory','rivals','lastRaceGains',
    'injuryHistory','monthlyEvents','sponsorPenalties','joinedCircuits','circuitCompleted',
    'seasonDiary','aidSelected','paceLog','rivalChildren','lifePendingAthletes',
    'dropbagItems','workPromotionsUsed','repInvitations',
@@ -144,8 +151,10 @@ function saveToSlot(slot){
     const state=serializableState();
     state._build=GAME_BUILD;
     const data={v:SAVE_VERSION,ts:Date.now(),state};
-    LS.set(SAVE_KEY+slot, JSON.stringify(data));
-    return true;
+    // T05 (v82): antes se ignoraba el retorno de LS.set y se devolvía true
+    // siempre. LS.set ya captura QuotaExceededError y devuelve false, así que
+    // un guardado fallido se reportaba como correcto y nadie se enteraba.
+    return LS.set(SAVE_KEY+slot, JSON.stringify(data));
   }catch(e){return false;}
 }
 
@@ -221,12 +230,31 @@ function importFromText(txt, slot){
   }catch(e){return false;}
 }
 
+// T06 (v82): el autoguardado fallaba en silencio en tres capas (LS.set devolvía
+// false, saveToSlot lo ignoraba, autoSave descartaba hasta el retorno). Ahora el
+// fallo levanta G._saveFailed, que updateFinBar() convierte en un ⚠ rojo
+// permanente en la barra superior: un toast solo no vale, porque se pisa con los
+// demás y el jugador puede seguir temporadas enteras creyendo que se guarda.
+// _saveFailed no está en PERSISTENT_UNDERSCORE_KEYS a propósito: es de sesión.
+function markSaveFailed(){
+  const first=!G._saveFailed;
+  G._saveFailed=true;
+  if(first&&typeof showToast==='function'){
+    showToast('⚠ No se pudo guardar: almacenamiento lleno','#c0392b');
+  }
+  if(typeof updateFinBar==='function')updateFinBar();
+}
+
 function autoSave(){
   // En modo Entrenador hay que volcar antes el slot activo al roster,
   // si no se perdería el progreso del atleta en curso al serializar G.
-  if(G.gameMode==='coach'){try{saveCoachSlot();}catch(e){}}
+  if(G.gameMode==='coach'){try{saveCoachSlot();}catch(e){markSaveFailed();}}
   if(G._saveSlot==null)return;
-  try{saveToSlot(G._saveSlot);}catch(e){}
+  let ok=false;
+  try{ok=saveToSlot(G._saveSlot);}catch(e){ok=false;}
+  if(ok){
+    if(G._saveFailed){G._saveFailed=false;if(typeof updateFinBar==='function')updateFinBar();}
+  }else markSaveFailed();
 }
 
 function slotLabel(data){

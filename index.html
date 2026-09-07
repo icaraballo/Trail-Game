@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Juego Trail · v80</title>
+<title>Juego Trail · v82</title>
 <style>
 :root{--color-background-primary:#fff;--color-background-secondary:#f8f7f3;--color-background-tertiary:#f0ede8;--color-text-primary:#1a1a1a;--color-text-secondary:#888;--color-text-tertiary:#aaa;--color-border-tertiary:#e0dfd8;--border-radius-md:8px;--border-radius-lg:12px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -303,9 +303,12 @@ button.secondary:hover{background:#f0ede8}
       <div class="fin-cell"><div class="fin-top">Año · Mes</div><div class="fin-val neutral" id="fb-year">1</div></div>
       <div class="fin-cell"><div class="fin-top">Global</div><div class="fin-val neutral" id="fb-rank">—</div></div>
       <div class="fin-cell"><div class="fin-top">Espec.</div><div class="fin-val neutral" id="fb-specrank">—</div></div>
-      <div class="fin-cell" style="cursor:pointer" onclick="G.screen='saveScreen';render()" title="Guardar partida">
+      <!-- T10 (v82): openSaveScreen() recuerda la pantalla actual para poder
+           volver. Antes hacía G.screen='saveScreen' a pelo y la única salida de
+           esa pantalla era modeSelect, así que pulsarlo en carrera la perdía. -->
+      <div class="fin-cell" id="fb-save-cell" style="cursor:pointer" onclick="openSaveScreen()" title="Guardar partida">
         <div class="fin-top">Guardar</div>
-        <div class="fin-val neutral">💾</div>
+        <div class="fin-val neutral" id="fb-save">💾</div>
       </div>
     </div>
   </div>
@@ -337,15 +340,15 @@ button.secondary:hover{background:#f0ede8}
 </nav>
 
 
-<script src="js/constants.js?v=80"></script>
-<script src="js/state.js?v=80"></script>
-<script src="js/save.js?v=80"></script>
-<script src="js/race.js?v=80"></script>
-<script src="js/coach.js?v=80"></script>
-<script src="js/club.js?v=80"></script>
-<script src="js/canicross.js?v=80"></script>
-<script src="js/render.js?v=80"></script>
-<script src="js/devmode.js?v=80"></script>
+<script src="js/constants.js?v=82"></script>
+<script src="js/state.js?v=82"></script>
+<script src="js/save.js?v=82"></script>
+<script src="js/race.js?v=82"></script>
+<script src="js/coach.js?v=82"></script>
+<script src="js/club.js?v=82"></script>
+<script src="js/canicross.js?v=82"></script>
+<script src="js/render.js?v=82"></script>
+<script src="js/devmode.js?v=82"></script>
 <script>
 if(new URLSearchParams(location.search).get('dev')==='1'){
   G._devMode=true;
