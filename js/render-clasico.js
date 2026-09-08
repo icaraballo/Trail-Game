@@ -587,7 +587,7 @@ function renderExpresCalendar(){
           <div style="font-size:13px;font-weight:600;margin-bottom:3px;line-height:1.3">${sel?'✓ ':''}<span style="color:${tierColor[r.tier]||'#888'}">${r.name}</span></div>
           <div style="font-size:12px;color:#888">${r.km}km · ${r.type}</div>
           <div style="font-size:11px;color:#aaa;margin-top:2px">${r.monthName}</div>
-          ${locked?(r.zegamaSpecial?`<div style="font-size:11px;color:#c07a10;margin-top:3px">🏔️ Invitación — Top 20 o clasificado por tiempo</div>`:`<div style="font-size:11px;color:#ccc;margin-top:3px">🔒 Ranking #${r.reqRanking}</div>`):''}
+          ${locked?(r.zegamaSpecial?`<div style="font-size:11px;color:#c07a10;margin-top:3px">🏔️ Invitación — Top 20 o clasificado por tiempo</div>`:`<div style="font-size:11px;color:#ccc;margin-top:3px">🔒 Ranking #${r.reqRanking}</div>`):zegamaBadge}
         </div>`;
       }).join('')}
     </div>
@@ -1350,7 +1350,6 @@ function lifeAthleteEffMult(h){
   return 0.60;
 }
 window.setAthleteHours=h=>{
-  const prev=G.lifeAthleteHours||0;
   G.lifeAthleteHours=h;
   const first=G.lifeAthlete?esc(G.lifeAthlete.name.split(' ')[0]):'el atleta';
   if(h>0)showToast(`–${h}h para ti · +${h}h para ${first}`,'#c07a10');

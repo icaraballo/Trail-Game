@@ -42,6 +42,27 @@ function build(names){
   return {T:ctx.__t, ctx, src:s};
 }
 
+// DOM lo bastante real como para que una pantalla se pinte entera y se pueda
+// leer el HTML resultante. Sirve para lo que ni el linter ni content.js ven:
+// interfaz que se calcula y nunca se interpola (el caso de zegamaBadge en v92).
+function domStub(ctx){
+  const nodo=()=>({_h:'',set innerHTML(v){this._h=v},get innerHTML(){return this._h},
+    textContent:'',className:'',value:'',checked:false,scrollTop:0,offsetWidth:1,
+    style:new Proxy({},{get:()=>'',set:()=>true}),
+    classList:{add(){},remove(){},contains:()=>false,toggle(){}},
+    querySelectorAll:()=>[],querySelector:()=>null,appendChild(){},removeChild(){},
+    addEventListener(){},focus(){},getAttribute:()=>null,setAttribute(){},remove(){},
+    getAnimations:()=>[],insertAdjacentHTML(){},closest:()=>null});
+  const principal=nodo();
+  ctx.document.getElementById=id=>id==='main'?principal:nodo();
+  ctx.document.querySelector=()=>nodo();
+  ctx.document.querySelectorAll=()=>[];
+  ctx.document.createElement=()=>nodo();
+  ctx.document.body=nodo();
+  // Pinta una pantalla y devuelve su HTML.
+  return (fn)=>{ principal._h=''; fn(); return principal._h; };
+}
+
 // Marcador de comprobaciones compartido: mismo formato de salida en los dos tests.
 function scorer(){
   const st={pass:0,fail:0};
@@ -57,4 +78,4 @@ function scorer(){
   return t;
 }
 
-module.exports={build,sources,scorer,FILES};
+module.exports={build,sources,scorer,domStub,FILES};

@@ -11,15 +11,16 @@
 // cuelgan del objeto global.
 // El banco de pruebas (concatenar los 9 .js en un ámbito con stubs de DOM) vive
 // en _bundle.js, compartido con content.js.
-const {build,scorer}=require('./_bundle');
-const {T}=build(['freshState','modeCfg','currentWorkPct','setWorkPct','getEffStat',
+const {build,scorer,domStub}=require('./_bundle');
+const {T,ctx}=build(['freshState','modeCfg','currentWorkPct','setWorkPct','getEffStat',
   'applyTraining','checkSponsorObjective','isDNF','finishedResults','dnfLabel','migrateState',
   'TRAINING_BLOCKS','monthlyWorkIncome','curWorkOpt','endRaceCleanup',
   'resetRaceFlags','resetRaceDayState','drain','bumpStat','raceHistoryFor',
   'runnerCritState','screenRoutes','profBounds','serializableState',
   'deleteSlot','loadFromSlot','saveToSlot','SAVE_VERSION','SAVE_KEY','LS',
   'cnGetCategory','cnCurrentMonth','CN_CATEGORIES','shuffle','CIRCUITS_DB',
-  'raceGainTotal','raceDesnivel','fmtGain','clubRaceKm','RACES_DB','CLUB_RACES','SPEC_RACES']);
+  'raceGainTotal','raceDesnivel','fmtGain','clubRaceKm','RACES_DB','CLUB_RACES','SPEC_RACES',
+  'screenRoutes','CLUB_STAFF_TYPES','renderExpresCalendar','renderCoachIntro','TRAINING_BLOCKS']);
 const t=scorer();
 const setG=o=>{const g=T.freshState();Object.assign(g,o);T.setG(g);return g;};
 
@@ -246,5 +247,47 @@ const migClub=T.migrateState(viejoClub);
 const rc=migClub.clubModeData.seasonResults[0].race;
 t('migrateState convierte dist en km dentro de seasonResults', rc.km===21, JSON.stringify(rc));
 t('y no deja dist detrás', rc.dist===undefined);
+
+console.log('\n── v92 · interfaz que se calculaba y no se pintaba ──');
+// Esta tanda salió de revisar los 13 avisos de variables muertas del linter.
+// Una variable calculada y sin usar es a veces ruido y a veces una pieza de
+// interfaz escrita y nunca conectada: aquí se fijan las tres que lo eran.
+const pintar=domStub(ctx);
+
+// 🐛 zegamaBadge: la insignia existía, la mecánica existe (G.zegamaQual se gana
+// terminando Zegama bajo el corte) y la plantilla nunca la interpolaba.
+setG({gameMode:'expres',screen:'expresCalendar',year:2,ranking:50,zegamaQual:true,
+  selectedRaces:[],expresRaces:[]});
+let html=pintar(()=>T.renderExpresCalendar());
+t('con G.zegamaQual, el calendario exprés dice «Clasificado por tiempo»',
+  html.includes('Clasificado por tiempo'), html.includes('Zegama')?'(Zegama sí sale)':'(Zegama no sale)');
+setG({gameMode:'expres',screen:'expresCalendar',year:2,ranking:5,zegamaQual:false,
+  selectedRaces:[],expresRaces:[]});
+html=pintar(()=>T.renderExpresCalendar());
+t('y con top-20 sin clasificación, dice «Invitación por ranking»', html.includes('Invitación por ranking'));
+setG({gameMode:'expres',screen:'expresCalendar',year:2,ranking:500,zegamaQual:false,
+  selectedRaces:[],expresRaces:[]});
+html=pintar(()=>T.renderExpresCalendar());
+t('sin acceso no se anuncia ninguna clasificación',
+  !html.includes('Clasificado por tiempo')&&!html.includes('Invitación por ranking'));
+
+// El resumen de legado de coachIntro contaba las carreras y no las enseñaba.
+// (Ojo: renderLifeRetirement tiene OTRO resumen distinto que sí las mostraba —
+//  el primer intento de este test pintaba ese y pasaba por el motivo equivocado.)
+setG({screen:'coachIntro',year:6,ranking:12,
+  careerHistory:[{pos:1,prize:100},{pos:4,prize:20},{pos:2,prize:50}],
+  lifeAthlete:{name:'Ane Uriarte',age:19,spec:'montanero',stats:{}}});
+html=pintar(()=>T.renderCoachIntro());
+// La aserción va sobre la celda concreta, no sobre un '3' suelto en la página.
+const celda=/Carreras<\/div>\s*<div[^>]*>(\d+)<\/div>/.exec(html);
+t('el resumen de legado de coachIntro muestra las carreras corridas',
+  !!celda&&celda[1]==='3', celda?('pinta '+celda[1]):'no encuentra la celda «Carreras»');
+t('y sigue mostrando victorias, temporadas y premios',
+  html.includes('Victorias')&&html.includes('Temporadas')&&html.includes('Premios ganados'));
+
+// El «+30%» de la tarjeta de club estaba escrito a mano al lado del dato.
+t('el porcentaje de crecimiento del entrenador sale de CLUB_STAFF_TYPES, no a mano',
+  Math.round((T.CLUB_STAFF_TYPES.entrenador.growthBonus-1)*100)===30,
+  'growthBonus='+T.CLUB_STAFF_TYPES.entrenador.growthBonus);
 
 t.done('TODO OK');

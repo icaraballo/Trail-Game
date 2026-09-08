@@ -518,7 +518,6 @@ function renderOverlapHub(){
   if(!el)return;
   hideChrome();
   const a=G.lifeAthlete;
-  const runnerName=esc(G.runner?.name||'Corredor');
   const athleteName=a?esc(a.name):'tu atleta';
   const athleteFirst=a?esc(a.name.split(' ')[0]):'el atleta';
   el.innerHTML=`
@@ -1040,6 +1039,10 @@ function renderCoachIntro(){
           <div style="font-size:18px;font-weight:700">${yearsActive}</div>
         </div>
         <div style="background:#fff;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:12px;color:#888">Carreras</div>
+          <div style="font-size:18px;font-weight:700">${totalRaces}</div>
+        </div>
+        <div style="background:#fff;border-radius:8px;padding:10px;text-align:center">
           <div style="font-size:12px;color:#888">Victorias</div>
           <div style="font-size:18px;font-weight:700">${totalWins}</div>
         </div>
@@ -1047,7 +1050,7 @@ function renderCoachIntro(){
           <div style="font-size:12px;color:#888">Ranking mejor</div>
           <div style="font-size:18px;font-weight:700">#${topRanking}</div>
         </div>
-        <div style="background:#fff;border-radius:8px;padding:10px;text-align:center">
+        <div style="background:#fff;border-radius:8px;padding:10px;text-align:center;grid-column:1/-1">
           <div style="font-size:12px;color:#888">Premios ganados</div>
           <div style="font-size:18px;font-weight:700">€${totalPrize.toLocaleString('es-ES')}</div>
         </div>

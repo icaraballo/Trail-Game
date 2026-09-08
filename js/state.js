@@ -634,8 +634,7 @@ function getExpressSponsors(){
   const year=G.year||1;
   const tier=year<=1?1:year<=2?2:2;
   const pool=SPONSORS_DB.filter(s=>s.tier===tier||(year>=2&&s.tier===1));
-  // One per category variety
-  const cats=['zapatillas','ropa','nutricion','tecnologia'];
+  // Una por categoría: el bucle de abajo ya fuerza la variedad con picked.find
   const picked=[];
   const shuffled=shuffle(pool);
   for(const s of shuffled){

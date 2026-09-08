@@ -1562,16 +1562,17 @@ function renderCanicrossSegment(){
   const evBg={pos:'#eaf4ea',neg:'#fef0f0',special:'#fef9ec',rare:'#f0f6ff'}[ev?.eventType]||'#f5f4f0';
   const evBorder={pos:'#b8ddb8',neg:'#f5b8b8',special:'#e8c97a',rare:'#b8d4f0'}[ev?.eventType]||'#e8e6e0';
 
-  const segTypeLabel={flat:'▶ Llano',climb:'▲ Subida',descent:'▼ Bajada'}[seg?.type||'flat'];
-  const segTypeCol={flat:'#888780',climb:'#639922',descent:'#E24B4A'}[seg?.type||'flat'];
-  const segTypeBg={flat:'#F1EFE8',climb:'#EAF3DE',descent:'#FCEBEB'}[seg?.type||'flat'];
+  // (aquí se calculaban segTypeLabel/Col/Bg — la etiqueta y los colores del tipo
+  //  de tramo — y no se pintaban. Borrados en v92: profSegInfo() ya los muestra
+  //  más abajo, con las mismas etiquetas y los mismos colores. No era interfaz
+  //  que faltase, era un resto de antes de usar profSegInfo.)
 
 
   const lastLogEntry=rs.eventLog?.length>0&&!ev?rs.eventLog[rs.eventLog.length-1]:null;
 
   el.innerHTML=`
     <div class="flex-between-center" style="margin-bottom:10px">
-      <span style="font-size:12px;color:#999">${esc(race.name)} · Tramo ${rs.currentSeg+1}/${rs.numSegs}</span>
+      <span style="font-size:12px;color:#999">${esc(race.name)} · Tramo ${rs.currentSeg+1}/${rs.numSegs}${isLastSeg?' · <strong style="color:#c07a10">último</strong>':''}</span>
       <span style="font-size:13px;font-weight:600">${fmt((rs.time||0)+(rs.timePenalty||0))}</span>
     </div>
 

@@ -1626,7 +1626,6 @@ function renderMidRaceEvent(){
   const el=$main();
   const ev=G.midRaceEvent;
   if(!ev){G.screen='segment';render();return;}
-  const race=G.selectedRaces[G.currentRaceIdx];
   const isTimed=ev.timed&&G.gameMode==='expres';
   el.innerHTML=`
     ${topBar()}${progBar()}${raceStats()}

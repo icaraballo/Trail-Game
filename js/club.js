@@ -135,7 +135,6 @@ window.doClubMonthlyFocus=(focus)=>{
 function generateClubObjective(){
   const d=G.clubModeData;if(!d)return;
   const socios=d.socios||8;
-  const temporada=d.temporada||1;
   // Filtrar objetivos apropiados según estado del club
   const eligible=CLUB_OBJECTIVES.filter(o=>{
     if(o.id==='socios_80'&&socios<40)return false;
@@ -384,7 +383,11 @@ function renderClubPlantilla(){
   const runnerCard=(r,i,isCantera)=>{
     const pc=potColors[r.potential]||'#888';
     const role=CLUB_ROLES[r.role||'normal'];
+    // La tarjeta anunciaba «+30%» escrito a mano mientras growthBonus valía 1.3
+    // y nadie lo leía: cambiar el bonus dejaba la tarjeta mintiendo. Mismo caso
+    // que T138 con FIXED_COSTS.total. Ahora el porcentaje sale del dato.
     const growthBonus=hasEntrenador?CLUB_STAFF_TYPES.entrenador.growthBonus:1;
+    const growthPct=Math.round((growthBonus-1)*100);
     const specMatch=fil&&r.spec===fil.specBonus;
     return`<div class="club-runner-card" style="${specMatch?'border-color:'+fil.color+';':''};margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:10px">
@@ -396,7 +399,7 @@ function renderClubPlantilla(){
             <span style="font-size:11px;background:${role.color}22;color:${role.color};padding:1px 6px;border-radius:3px;font-weight:600">${role.emoji} ${role.label}</span>
             ${isCantera?`<span style="font-size:10px;background:#e8f4e8;color:#2d7a2d;padding:1px 5px;border-radius:3px">🌱 Cantera</span>`:''}
           </div>
-          <div style="font-size:12px;color:#888;margin-bottom:4px">${r.age} años · ${SPEC_LABEL[r.spec]||r.spec} · €${r.currentSalary||r.salary}/mes${hasEntrenador?' · ↑ +30% crecimiento':''}</div>
+          <div style="font-size:12px;color:#888;margin-bottom:4px">${r.age} años · ${SPEC_LABEL[r.spec]||r.spec} · €${r.currentSalary||r.salary}/mes${hasEntrenador?` · ↑ +${growthPct}% crecimiento`:''}</div>
           <div>${['Res','Vel','Sub','Baj'].map((k,ki)=>{
             const keys=['resistencia','velocidad','subida','bajada'];
             return`<span class="club-stat-pill">${k} ${r.stats[keys[ki]]}</span>`;

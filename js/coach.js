@@ -943,7 +943,9 @@ function renderCoachRace(){
   const isDone=G.coachRaceAnimIdx>=data.segments.length&&!G.coachRaceAidPaused&&!G.coachRaceEventPending;
   const aidSeg=G.coachRaceAidPaused?data.segments[G.coachRaceAnimIdx-1]:null;
   const midEvt=G.coachRaceEventPending;
-  const currentSeg=!isDone&&!G.coachRaceAidPaused&&!midEvt&&G.coachRaceAnimIdx>0?data.segments[G.coachRaceAnimIdx-1]:null;
+  // (había aquí un `currentSeg` que era exactamente `lastSeg`, calculado más
+  //  abajo y ya usado por la plantilla. Borrado en v92 con la revisión de
+  //  variables muertas: no era interfaz que faltase, era un resto duplicado.)
   const COL={climb:'#639922',descent:'#E24B4A',flat:'#888780'};
   const ICO={climb:'▲',descent:'▼',flat:'▶'};
   hideChrome();
