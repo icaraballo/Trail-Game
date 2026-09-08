@@ -5,6 +5,8 @@ function circuitPoints(pos,total){
 }
 
 function profSvg(race, activeSeg, mode, raceProgress){
+  // T39 (v88): sin tramos, Math.min(...[]) devuelve Infinity y el SVG sale corrupto
+  if(!race||!Array.isArray(race.segs)||!race.segs.length||!race.km)return '';
   const W=560,H=100,PT=8,PB=18,PL=4,PR=4;
   const cW=W-PL-PR,cH=H-PT-PB;
   const COL={climb:'#639922',descent:'#E24B4A',flat:'#888780'};
@@ -197,12 +199,11 @@ function applyInjuryToRaceStart(){
 
 function getSpecificInjury(paceLog,load){
   const allout=paceLog.filter(p=>p==='allout').length;
-  const push=paceLog.filter(p=>p==='push').length;
   let risk=0;
   if(load>=85)risk+=0.25;
   else if(load>=70)risk+=0.12;
   if(allout>=3)risk+=0.15;
-  if(allout>=2)risk+=0.08;
+  else if(allout>=2)risk+=0.08; // T19 (v88): faltaba el else — con 3 'allout' se sumaban los dos tramos
   risk=Math.min(0.95,risk*modeCfg().injuryRiskMult);
   risk*=fisioInjuryMult(load);
   if(Math.random()>risk)return null;
@@ -512,20 +513,7 @@ function liveClassPanel(){
 function renderStartStrategy(){
   const el=document.getElementById('main');
   const race=G.selectedRaces[G.currentRaceIdx];
-  const strategies=[
-    {id:'conservador',icon:'🐢',label:'Conservador',
-     desc:'Sales tranquilo. Guardas fuerzas para el final.',
-     detail:'Primeros tramos −8% velocidad. Últimos tramos +10% rendimiento. Fatiga acumulada más lenta.',
-     earlyMult:1.08, lateMult:0.92, fatigueMod:-0.15, col:'#4a8a2a'},
-    {id:'equilibrado',icon:'⚖️',label:'Equilibrado',
-     desc:'Ritmo constante de principio a fin.',
-     detail:'Sin bonos ni penalizaciones. El modo base.',
-     earlyMult:1.0, lateMult:1.0, fatigueMod:0, col:'#4a90d9'},
-    {id:'atope',icon:'🔥',label:'A tope',
-     desc:'Máxima velocidad desde la salida. El cuerpo paga después.',
-     detail:'Primeros tramos +10% velocidad. Fatiga exponencial acumulada más rápida. Los últimos km cuestan el doble.',
-     earlyMult:0.90, lateMult:1.12, fatigueMod:0.30, col:'#c0392b'},
-  ];
+  const strategies=RACE_STRATEGIES; // T33 (v88): fuente única en constants.js
   const sel=G.startStrategy||'equilibrado';
   el.innerHTML=`
     <h2>Estrategia de salida</h2>
@@ -567,14 +555,20 @@ function renderSegment(){
     ${G.stormActive?`<div class="${G.stormProtected?'note':'danger'}">⛈ Tormenta en curso${G.stormProtected?' · Equipado, hidratación protegida':' · Hidratación muy penalizada en todos los tramos'}</div>`:''}
     <div class="section-label">Elige tu ritmo:</div>
     <div class="pace-grid">
-      ${[['conservar','Conservar','Ahorra fuerzas','-4 energía',1.18],['steady','Ritmo fijo','Equilibrado','-9 energía',1.0],['push','Apretar','Rápido pero cuesta','-17 energía',0.9],['allout','A tope','Máximo esfuerzo','-27 energía',0.8]].map(([id,l,d,c,mult])=>{
+      ${Object.entries(PACE_COSTS).map(([id,pcDef])=>{
+        // T17 (v88): antes estos cinco valores estaban copiados a mano aquí.
+        const l=pcDef.label,d=pcDef.desc,c='-'+pcDef.ec+' energía',mult=pcDef.tm;
         const mins=Math.round(s.base*mult/60);
         const sb=getEffStat('bajada');
         const load=getBodyLoad();
         const isAllout=id==='allout';
         const isPush=id==='push';
         const onDescent=s.type==='descent';
-        const recentLog=G.paceLog||[];
+        // T16 (v88): doPace mete el ritmo elegido en G.paceLog ANTES de llamar a
+        // calcPaceCosts, así que el motor cuenta la racha incluyendo esta elección
+        // y la tarjeta la contaba sin ella: con dos 'a tope' seguidos anunciaba
+        // ×1,6 y aplicaba ×2,2. Se proyecta el log con el ritmo de esta tarjeta.
+        const recentLog=[...(G.paceLog||[]),id];
         const alloutStreak=recentLog.slice(-3).filter(x=>x==='allout').length;
         const hardCount=recentLog.slice(-4).filter(x=>x==='allout'||x==='push').length;
         let warningMsg='';let warningCol='';
@@ -592,7 +586,9 @@ function renderSegment(){
           warningMsg=`⚠ cuerpo cargado — recuperación lenta`;warningCol=getLoadWarningColor(load)||'#c07a10';
         }
         // Adjust displayed cost if fatigue multiplier active
-        const fatigueMult=alloutStreak>=3?2.2:alloutStreak===2?1.6:hardCount>=3?1.3:1.0;
+        // T16 (v88): el coste mostrado incluye el multiplicador de dificultad,
+        // igual que calcPaceCosts y que el aviso de arriba.
+        const fatigueMult=+((alloutStreak>=3?2.2:alloutStreak===2?1.6:hardCount>=3?1.3:1.0)*(modeCfg().fatigueMult||1.0)).toFixed(1);
         const adjCost=(isAllout||isPush)&&fatigueMult>1?c+` (×${fatigueMult} fatiga)`:c;
         return `<div class="pace" onclick="doPace('${id}')">
           <div class="pace-label">${l}</div>
@@ -726,8 +722,8 @@ function calcPaceCosts(p,seg,paceLog){
   const segs=curSegs();const totalSegs=segs.length;
   const segPct=G.seg/totalSegs;
   const strat=G.startStrategy||'equilibrado';
-  const STRAT={conservador:{earlyTm:1.08,lateTm:0.92,fatigueMod:-0.15},equilibrado:{earlyTm:1.0,lateTm:1.0,fatigueMod:0},atope:{earlyTm:0.90,lateTm:1.12,fatigueMod:0.30}}[strat]||{earlyTm:1.0,lateTm:1.0,fatigueMod:0};
-  const stratTm=segPct<0.33?STRAT.earlyTm:segPct>0.67?STRAT.lateTm:1.0;
+  const STRAT=RACE_STRATEGY_BY_ID[strat]||RACE_STRATEGY_BY_ID.equilibrado; // T33 (v88)
+  const stratTm=segPct<0.33?STRAT.earlyMult:segPct>0.67?STRAT.lateMult:1.0;
   const stratFatMod=1+STRAT.fatigueMod;
 
   const pc=PACE_COSTS[p]||PACE_COSTS.steady;
@@ -1741,19 +1737,19 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
   clearExpressTimer();
   if(evId==='xp_descent'){
     if(choiceId==='safe_descent'){r.legs=Math.min(100,r.legs+3);G.time+=45;G.raceEvent='Aseguras la bajada. +45 seg pero las piernas te lo agradecen.';}
-    else{const risk=r.legs<40||r.energy<30;if(risk){r.legs=Math.max(0,r.legs-8);r.energy=Math.max(0,r.energy-5);G.raceEvent='Mantienes el ritmo en la bajada pero el cuerpo está justo. -8 piernas.';}else{G.time-=30;G.raceEvent='La bajada sale bien. Ganas 30 seg.';}}
+    else{const risk=r.legs<40||r.energy<30;if(risk){r.legs=Math.max(0,r.legs-8);r.energy=Math.max(0,r.energy-5);G.raceEvent='Mantienes el ritmo en la bajada pero el cuerpo está justo. -8 piernas.';}else{G.time=Math.max(0,G.time-30);G.raceEvent='La bajada sale bien. Ganas 30 seg.';}}
   } else if(evId==='xp_rival'){
-    if(choiceId==='follow_rival'){const ok=r.legs>50&&r.energy>40;if(ok){G.time-=25;G.raceEvent='Le sigues y aguantas. Ganas 25 seg al pelotón.';}else{r.energy=Math.max(0,r.energy-10);r.legs=Math.max(0,r.legs-8);G.raceEvent='Le sigues pero el cuerpo no responde. -10 energía, -8 piernas.';}}
+    if(choiceId==='follow_rival'){const ok=r.legs>50&&r.energy>40;if(ok){G.time=Math.max(0,G.time-25);G.raceEvent='Le sigues y aguantas. Ganas 25 seg al pelotón.';}else{r.energy=Math.max(0,r.energy-10);r.legs=Math.max(0,r.legs-8);G.raceEvent='Le sigues pero el cuerpo no responde. -10 energía, -8 piernas.';}}
     else{r.stats.mental=Math.min(100,(r.stats.mental||50)+2);G.raceEvent='Mantienes tu plan. +2 Mental — la cabeza manda.';}
   } else if(evId==='xp_cramp'){
     if(choiceId==='ease_cramp'){r.legs=Math.min(100,r.legs+4);G.time+=60;G.raceEvent='Bajas el ritmo. El calambre se va. +1 min pero llegas bien.';}
-    else{const ok=Math.random()<0.45;if(ok){G.time-=20;G.raceEvent='Fuerzas y el cuerpo responde. Ganas 20 seg.';}else{r.legs=Math.max(0,r.legs-14);G.raceEvent='El calambre se dispara. -14 piernas.';}}
+    else{const ok=Math.random()<0.45;if(ok){G.time=Math.max(0,G.time-20);G.raceEvent='Fuerzas y el cuerpo responde. Ganas 20 seg.';}else{r.legs=Math.max(0,r.legs-14);G.raceEvent='El calambre se dispara. -14 piernas.';}}
   } else if(evId==='xp_final'){
-    if(choiceId==='sprint_finish'){G.time-=55;r.energy=Math.max(0,r.energy-15);G.raceEvent='¡Rematas a tope! -55 seg. Las piernas piden parar pero la meta está cerca.';}
+    if(choiceId==='sprint_finish'){G.time=Math.max(0,G.time-55);r.energy=Math.max(0,r.energy-15);G.raceEvent='¡Rematas a tope! -55 seg. Las piernas piden parar pero la meta está cerca.';}
     else{r.energy=Math.min(100,r.energy+4);G.raceEvent='Llegas sólido y con margen. Buen final controlado.';}
   } else if(evId==='xp_storm_timed'){
     if(choiceId==='shelter_storm'){G.stormProtected=true;G.stormActive=true;G.weather='tormenta';G.raceEvent='Guardas posición. La tormenta castiga menos.';}
-    else{G.stormProtected=false;G.stormActive=true;G.weather='tormenta';G.time-=40;r.hydration=Math.max(0,r.hydration-15);G.raceEvent='Aprietas bajo la tormenta. Ganas 40 seg pero la hidratación se resiente. -15 hidratación.';}
+    else{G.stormProtected=false;G.stormActive=true;G.weather='tormenta';G.time=Math.max(0,G.time-40);r.hydration=Math.max(0,r.hydration-15);G.raceEvent='Aprietas bajo la tormenta. Ganas 40 seg pero la hidratación se resiente. -15 hidratación.';}
   } else if(evId==='xp_fork'){
     const ok=Math.random()<0.6;
     if(ok){G.raceEvent='¡Acertaste la bifurcación! Camino correcto, sin perder tiempo.';}
@@ -1761,15 +1757,15 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
   }
   // ── 6 nuevos timed ──────────────────────────────────────────────
   else if(evId==='xp_rival_wheel'){
-    if(choiceId==='shake_rival'){r.energy=Math.max(0,r.energy-10);G.time-=20;G.raceEvent='Le sacudes de tu rueda. Ganas 20s pero pagas 10 de energía.';}
+    if(choiceId==='shake_rival'){r.energy=Math.max(0,r.energy-10);G.time=Math.max(0,G.time-20);G.raceEvent='Le sacudes de tu rueda. Ganas 20s pero pagas 10 de energía.';}
     else{r.stats.mental=Math.min(100,(r.stats.mental||50)+2);G.raceEvent='Mantienes el ritmo. Él viene fresquito, tú también. +2 Mental.';}
   }
   else if(evId==='xp_climb_attack'){
-    if(choiceId==='respond_climb'){r.energy=Math.max(0,r.energy-8);G.time-=15;G.raceEvent='Respondes al ataque. -8 energía pero mantienes la posición.';}
+    if(choiceId==='respond_climb'){r.energy=Math.max(0,r.energy-8);G.time=Math.max(0,G.time-15);G.raceEvent='Respondes al ataque. -8 energía pero mantienes la posición.';}
     else{G.raceEvent='Dejas ir el ataque. El gap crece pero llegas fresco al collado.';}
   }
   else if(evId==='xp_last_descent'){
-    if(choiceId==='full_descent'){const risk=r.legs<40;if(risk){r.legs=Math.max(0,r.legs-12);G.raceEvent='Caída en el último descenso. -12 piernas, llegas cojeando.'}else{G.time-=45;G.raceEvent='¡Vuelas en el descenso! -45s. Llegada espectacular.';}}
+    if(choiceId==='full_descent'){const risk=r.legs<40;if(risk){r.legs=Math.max(0,r.legs-12);G.raceEvent='Caída en el último descenso. -12 piernas, llegas cojeando.'}else{G.time=Math.max(0,G.time-45);G.raceEvent='¡Vuelas en el descenso! -45s. Llegada espectacular.';}}
     else{G.time+=20;G.raceEvent='Desciendes seguro. +20s pero sin sustos. Llegas de una pieza.';}
   }
   else if(evId==='xp_slippery'){
@@ -1788,7 +1784,7 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
     else{G.raceEvent='Llegas sereno. Sin explosiones, sin regalar energía.';}
   }
   else if(evId==='xn_rival_position'){
-    if(choiceId==='chase_rival'){r.energy=Math.max(0,r.energy-10);const caught=Math.random()<0.55;if(caught){G.time-=18;G.raceEvent='¡Le atrapas! Ganas posición. -10 energía pero merece la pena.';}else{G.raceEvent='No llegas a alcanzarle. -10 energía sin resultado.';}}
+    if(choiceId==='chase_rival'){r.energy=Math.max(0,r.energy-10);const caught=Math.random()<0.55;if(caught){G.time=Math.max(0,G.time-18);G.raceEvent='¡Le atrapas! Ganas posición. -10 energía pero merece la pena.';}else{G.raceEvent='No llegas a alcanzarle. -10 energía sin resultado.';}}
     else{G.raceEvent='Mantienes tu ritmo. Llegas más fresco al final.';}
   }
   else if(evId==='xn_heat_wave'){
@@ -1818,11 +1814,11 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
     else{const ok=Math.random()<0.65;if(ok){G.raceEvent='Tu instinto es correcto. Sin pérdida de tiempo.'}else{G.time+=30;G.raceEvent='Te equivocas. +30s para retomar el camino.';}}}
   else if(evId==='xn_retired_rival'){
     if(choiceId==='help_retired'){G.time+=20;r.stats.mental=Math.min(100,(r.stats.mental||50)+4);G.followers=(G.followers||0)+200;G.raceEvent='Te paras a ayudar. +20s pero +4 Mental y +200 seguidores.';}
-    else{G.time-=10;G.raceEvent='Aprovechas el hueco. Ganas 10s y subes posiciones.';}
+    else{G.time=Math.max(0,G.time-10);G.raceEvent='Aprovechas el hueco. Ganas 10s y subes posiciones.';}
   }
   else if(evId==='xn_endless_climb'){
     if(choiceId==='manage_climb'){G.raceEvent='Gestionas la subida. Llegas al collado con reservas.';}
-    else{r.energy=Math.max(0,r.energy-18);G.time-=30;G.raceEvent='Empujas la subida. -18 energía pero llegas 30s antes.';}
+    else{r.energy=Math.max(0,r.energy-18);G.time=Math.max(0,G.time-30);G.raceEvent='Empujas la subida. -18 energía pero llegas 30s antes.';}
   }
   else if(evId==='xn_runner_fallen'){
     if(choiceId==='help_fallen'){G.time+=20;r.stats.mental=Math.min(100,(r.stats.mental||50)+4);G.raceEvent='Le ayudas a levantarse. +20s, +4 Mental.';}
@@ -1895,14 +1891,14 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
     if(choiceId==='manage_climb'){
       r.energy=Math.max(0,r.energy-8);G.raceEvent='Marchas rápido y llegas al collado con algo en el depósito. −8 energía. Ahí estaba la cima.';
     } else {
-      G.time-=120;r.energy=Math.max(0,r.energy-20);G.raceEvent='Empujas y llegas 2 min antes. −20 energía. La bajada será otra historia.';
+      G.time=Math.max(0,G.time-120);r.energy=Math.max(0,r.energy-20);G.raceEvent='Empujas y llegas 2 min antes. −20 energía. La bajada será otra historia.';
     }
   }
   else if(evId==='stone_legs'){
     if(choiceId==='walk_descents'){
       r.legs=Math.max(0,r.legs-5);G.raceEvent='Caminas las bajadas. El ego sufre pero los cuádriceps aguantan hasta la meta. −5 piernas.';
     } else if(choiceId==='run_descents'){
-      r.legs=Math.max(0,r.legs-10);G.time-=90;G.raceEvent='Bajas corriendo con bastones. Ganas 1:30 pero los cuádriceps ya no perdonarán. −10 piernas.';
+      r.legs=Math.max(0,r.legs-10);G.time=Math.max(0,G.time-90);G.raceEvent='Bajas corriendo con bastones. Ganas 1:30 pero los cuádriceps ya no perdonarán. −10 piernas.';
     } else {
       G.time+=60;r.legs=Math.max(0,r.legs-6);G.raceEvent='La trazada suave absorbe algo del impacto. +1 min, −6 piernas. La mejor opción posible.';
     }
@@ -1960,7 +1956,7 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       else{r.energy=Math.max(0,r.energy-5);G.time+=10;G.raceEvent='La tensión de no ceder te cuesta energía. Finalmente pasa. −5 energía.';}
     } else {
       r.energy=Math.max(0,r.energy-8);
-      if(Math.random()<0.5){G.time-=15;G.raceEvent='¡Aguantas su rueda y tiras de él! Ganas 15 seg netos. −8 energía bien invertida.'}
+      if(Math.random()<0.5){G.time=Math.max(0,G.time-15);G.raceEvent='¡Aguantas su rueda y tiras de él! Ganas 15 seg netos. −8 energía bien invertida.'}
       else{G.raceEvent='Intentas seguirle pero la diferencia de forma se nota. −8 energía sin beneficio.'}
     }
   }
@@ -1978,7 +1974,7 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       r.stats.mental=Math.min(100,(r.stats.mental||50)+3);G.followers=(G.followers||0)+100;
       G.raceEvent='¡La gente te anima! Saludas y sigues fuerte. +3 Mental, +100 seguidores 📸';
     } else if(choiceId==='show_off'){
-      G.time-=50;r.energy=Math.max(0,r.energy-6);G.followers=(G.followers||0)+250;
+      G.time=Math.max(0,G.time-50);r.energy=Math.max(0,r.energy-6);G.followers=(G.followers||0)+250;
       G.raceEvent='Aceleras para la cámara. −50 seg y +250 seguidores, pero −6 energía. Las redes lo adorarán.';
     } else {
       r.stats.mental=Math.min(100,(r.stats.mental||50)+1);
@@ -1990,7 +1986,7 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       G.time+=90;G.raceEvent='Esperas. Noventa segundos de pausa forzada. Al menos las piernas descansan un poco.';
     } else if(choiceId==='alt_line'){
       r.legs=Math.max(0,r.legs-5);
-      if(Math.random()<0.6){G.time-=10;G.raceEvent='La línea alternativa funciona. −5 piernas pero ganas posición.'}
+      if(Math.random()<0.6){G.time=Math.max(0,G.time-10);G.raceEvent='La línea alternativa funciona. −5 piernas pero ganas posición.'}
       else{G.time+=45;r.legs=Math.max(0,r.legs-3);G.raceEvent='La roca está resbaladiza. +45 seg y −8 piernas en total.'}
     } else {
       if(Math.random()<0.55){G.time+=30;G.raceEvent='Pides paso con educación y alguno se aparta. +30 seg y problema resuelto.'}
@@ -2031,6 +2027,13 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
     } else {
       r.energy=Math.max(0,r.energy-14);G.raceEvent='Mantienes el ritmo de "llano" en un repecho real. −14 energía de golpe. El cuerpo tarda tres kilómetros en recuperarse.';
     }
+  }
+  else {
+    // T36 (v88): evId sin rama. Antes se limpiaba el evento en silencio y el
+    // jugador perdía la elección sin enterarse. Ahora se avisa en consola y se
+    // narra que no hubo consecuencias, en vez de tragarse la decisión.
+    console.warn('resolveMidRaceEvent: evento sin rama →',evId,choiceId);
+    G.raceEvent='La situación se resuelve sin consecuencias.';
   }
   // T13 (v82): aquí había un segundo bloque `else if(evId==='lost')` inalcanzable
   // por partida doble — la cadena if/else if ya resuelve 'lost' mucho antes, y
@@ -2116,6 +2119,7 @@ window.doAbandonConfirmed=()=>{
 window.useDropbag=id=>{
   const d=DROPBAG_OPTIONS.find(x=>x.id===id);if(!d)return;
   if(!G.dropbagUsed)G.dropbagUsed=[];
+  if(G.dropbagUsed.includes(id))return; // T37 (v88): doble clic aplicaba el efecto dos veces
   G.dropbagUsed.push(id);
   const r=G.runner;
   if(d.effect==='energy'||d.effect==='energy_slow'){
@@ -2127,6 +2131,9 @@ window.useDropbag=id=>{
   render();
 };
 window.toggleAid=id=>{
+  // T38 (v88): sin esto entraba cualquier id en G.aidSelected y se persistía
+  if(!AID_OPTIONS.some(a=>a.id===id))return;
+  if(!Array.isArray(G.aidSelected))G.aidSelected=[];
   const idx=G.aidSelected.indexOf(id);
   if(idx>=0){G.aidSelected.splice(idx,1);}
   else if(G.aidSelected.length<2){G.aidSelected.push(id);}
@@ -2209,6 +2216,7 @@ function renderRaceResult(){
 
 // ── Calcula posición, premios y stats ganados ──────────
 function calcRaceResult(race){
+  if(!race)return null; // T40 (v88): índice fuera de rango → TypeError
   const specBonus=race.spec&&race.spec===G.runner.specialty?0.92:1.0;
   // Calcular tiempos ajustados sin mutar G.rivals ni G.time
   const rivalsAdjusted=G.rivals.map(rv=>({...rv,time:Math.round(rv.time*(rv.spec===G.runner.specialty?0.97:1.0))}));
@@ -2277,7 +2285,7 @@ function applyPostRaceTracking(race,res){
   G.ranking=Math.max(1,Math.min(999,(G.ranking===999?400:G.ranking)-rankPts+Math.floor(Math.random()*4)));
   G.specRanking=Math.max(1,Math.min(999,(G.specRanking===999?350:G.specRanking)-Math.round(rankPts*1.3)+Math.floor(Math.random()*3)));
 
-  G.raceResults.push({name:race.name,time:G.time,pos,prize,all,statGains,
+  G.raceResults.push({id:race.id,name:race.name,time:G.time,pos,prize,all,statGains, // T104 (v88): id, no solo nombre
     catPos,catTotal,catName:playerCat.label,
     injuryType:G.injuryType||null,
     injuryLabel:G.injuryType?INJURY_TYPES[G.injuryType]?.label:null,
@@ -2300,12 +2308,8 @@ function applyPostRaceTracking(race,res){
     if(!G.nemesisLog)G.nemesisLog={};
     if(!G.nemesisLog[x.name])G.nemesisLog[x.name]={wins:0,gapSum:0,gapCount:0};
     // Migración: si viene de save antiguo con `gaps` array, convertirlo
-    if(G.nemesisLog[x.name].gaps){
-      const old=G.nemesisLog[x.name].gaps;
-      G.nemesisLog[x.name].gapSum=(G.nemesisLog[x.name].gapSum||0)+old.reduce((a,b)=>a+b,0);
-      G.nemesisLog[x.name].gapCount=(G.nemesisLog[x.name].gapCount||0)+old.length;
-      delete G.nemesisLog[x.name].gaps;
-    }
+    // T44 (v88): aquí había una migración en línea de {gaps:[]} → {gapSum,gapCount}.
+    // Vive ahora en migrateState(), que es donde se cargan los saves antiguos.
     G.nemesisLog[x.name].wins++;
     G.nemesisLog[x.name].gapSum+=gap;
     G.nemesisLog[x.name].gapCount++;
@@ -2314,8 +2318,8 @@ function applyPostRaceTracking(race,res){
     const sorted=Object.entries(G.nemesisLog)
       .map(([name,d])=>{
         // Compatibilidad con saves viejos
-        const sum=d.gapSum!=null?d.gapSum:(d.gaps?d.gaps.reduce((a,b)=>a+b,0):0);
-        const cnt=d.gapCount!=null?d.gapCount:(d.gaps?d.gaps.length:1);
+        const sum=d.gapSum||0;  // T44 (v88): forma única, normalizada en migrateState
+        const cnt=d.gapCount||1;
         return {name,wins:d.wins,avgGap:cnt>0?sum/cnt:0};
       })
       .sort((a,b)=>b.wins-a.wins||(a.avgGap-b.avgGap));
@@ -2362,7 +2366,11 @@ function applyPostRaceTracking(race,res){
     const injData=INJURY_TYPES[specificInjury];
     G.injuryStatus='moderada';G.injuryType=specificInjury;
     G.injuryRecoverySeasons=injData.recoverySeasons||1;
-    G.injuryRacesLeft=hasFisio()?Math.max(0,Math.round((injData.racesBlocked||0)*(injData.fisioDiscount||0.5))):injData.racesBlocked||0;
+    // T46 (v88): con el centinela de "resto de temporada" el descuento de fisio
+    // lo convertía en 500 carreras — mismo efecto práctico, número sin sentido.
+    // El centinela se respeta tal cual; el descuento solo aplica a bajas reales.
+    const _blocked=injData.racesBlocked||0;
+    G.injuryRacesLeft=(_blocked===INJURY_BLOCK_SEASON||!hasFisio())?_blocked:Math.max(0,Math.round(_blocked*(injData.fisioDiscount||0.5)));
     Object.entries(injData.statPenalty||{}).forEach(([k,v])=>{G.runner.stats[k]=Math.max(10,(G.runner.stats[k]||50)+v);});
     if(!G.injuryHistory)G.injuryHistory=[];
     G.injuryHistory.push({type:specificInjury,label:injData.label,race:race.name,year:G.year,km:race.km});

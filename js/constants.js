@@ -681,12 +681,33 @@ const SPEC_LABEL={fondista:'Fondista',montanero:'Montañero',tecnico:'Técnico',
 //  CONSTANTES DE BALANCE (E2)
 // ══════════════════════════════════════
 // Costes base por ritmo: {timeMult, energy, hydration, legs}
+// T17 (v88): la rejilla de ritmos de renderSegment tenía estos mismos valores
+// copiados a mano en un array inline. Se le añaden label/desc para que la
+// interfaz se construya desde aquí y no puedan volver a divergir (causa de T16).
 const PACE_COSTS={
-  conservar:{tm:1.18, ec:4,  hc:3,  lc:2},
-  steady:   {tm:1.0,  ec:9,  hc:6,  lc:5},
-  push:     {tm:0.9,  ec:17, hc:11, lc:10},
-  allout:   {tm:0.8,  ec:27, hc:17, lc:16},
+  conservar:{tm:1.18, ec:4,  hc:3,  lc:2,  label:'Conservar',  desc:'Ahorra fuerzas'},
+  steady:   {tm:1.0,  ec:9,  hc:6,  lc:5,  label:'Ritmo fijo', desc:'Equilibrado'},
+  push:     {tm:0.9,  ec:17, hc:11, lc:10, label:'Apretar',    desc:'Rápido pero cuesta'},
+  allout:   {tm:0.8,  ec:27, hc:17, lc:16, label:'A tope',     desc:'Máximo esfuerzo'},
 };
+// T33 (v88): la estrategia de salida vivía duplicada en race.js con dos juegos de
+// nombres — earlyMult/lateMult en la tarjeta y earlyTm/lateTm en calcPaceCosts.
+// Los valores coincidían y nada habría avisado cuando dejaran de hacerlo.
+const RACE_STRATEGIES=[
+  {id:'conservador',icon:'\u{1F422}',label:'Conservador',
+   desc:'Sales tranquilo. Guardas fuerzas para el final.',
+   detail:'Primeros tramos \u22128% velocidad. \u00daltimos tramos +10% rendimiento. Fatiga acumulada m\u00e1s lenta.',
+   earlyMult:1.08, lateMult:0.92, fatigueMod:-0.15, col:'#4a8a2a'},
+  {id:'equilibrado',icon:'\u2696\uFE0F',label:'Equilibrado',
+   desc:'Ritmo constante de principio a fin.',
+   detail:'Sin bonos ni penalizaciones. El modo base.',
+   earlyMult:1.0, lateMult:1.0, fatigueMod:0, col:'#4a90d9'},
+  {id:'atope',icon:'\u{1F525}',label:'A tope',
+   desc:'M\u00e1xima velocidad desde la salida. El cuerpo paga despu\u00e9s.',
+   detail:'Primeros tramos +10% velocidad. Fatiga exponencial acumulada m\u00e1s r\u00e1pida. Los \u00faltimos km cuestan el doble.',
+   earlyMult:0.90, lateMult:1.12, fatigueMod:0.30, col:'#c0392b'},
+];
+const RACE_STRATEGY_BY_ID=Object.fromEntries(RACE_STRATEGIES.map(s=>[s.id,s]));
 // Penalización por reservas bajas
 const LOW_STAT_PENALTIES={energy:{threshold:30,timeMult:1.15},hydration:{threshold:20,timeMult:1.20},legs:{threshold:25,timeMult:1.18}};
 // Multiplicadores clima → hidratación
@@ -1906,6 +1927,10 @@ const DROPBAG_OPTIONS=[
   {id:'zapatillas',label:'Zapatillas de cambio',desc:'Piernas -10% desgaste en segunda mitad',     effect:'legs', value:10, cost:0},
   {id:'comida',  label:'Comida real sólida',  desc:'+40 energía pero +60 seg en el avituallamiento',effect:'energy_slow', value:40, cost:0},
 ];
+// T46 (v88): 999 era un centinela sin nombre — "resto de temporada", no 999
+// carreras. Se lee en race.js (aplicación de lesión y descuento de fisio) y en
+// devmode.js. Cualquier lógica que compare injuryRacesLeft debe contemplarlo.
+const INJURY_BLOCK_SEASON=999;
 const INJURY_TYPES={
   tendinitis:{
     label:'Tendinitis',
@@ -1930,7 +1955,7 @@ const INJURY_TYPES={
     desc:'Lesión muy grave. La temporada puede estar comprometida.',
     statPenalty:{resistencia:-9,subida:-5,mental:-4,velocidad:-3},
     recoverySeasons:2,canRace:false,
-    racesBlocked:999,
+    racesBlocked:INJURY_BLOCK_SEASON, // T46 (v88): centinela = resto de temporada, no 999 carreras
     nextRaceStats:{energy:40,legs:30,hydration:60},
     fisioDiscount:0.3,
   },

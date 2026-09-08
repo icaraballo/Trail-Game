@@ -100,8 +100,11 @@ function updateFinBar(){
   if(!bar)return;
   const screens=['intro','workSetup'];
   bar.style.display=screens.includes(G.screen)?'none':'block';
-  const net=monthlyNet();
-  document.getElementById('fb-money').textContent='€'+(G.canicrossMode?G.cnMoney:G.money);
+  // T103 (v88): el saldo se pintaba de Canicross y el neto/mes seguía saliendo de
+  // monthlyNet(), que calcula sobre la economía de Clásico. En Canicross el único
+  // gasto recurrente es la manutención del perro, cobrada cada 4 semanas.
+  const net=G.canicrossMode?-(typeof cnMonthlyDogCost==='function'?cnMonthlyDogCost():0):monthlyNet();
+  document.getElementById('fb-money').textContent='€'+(G.canicrossMode?(G.cnMoney||0):G.money);
   const nb=document.getElementById('fb-net');
   nb.textContent=(net>=0?'+':'')+'€'+net+'/mes';
   nb.className='fin-val '+(net>0?'green':net<0?'red':'neutral');
@@ -159,7 +162,9 @@ function srow(label,val){const p=Math.max(0,Math.min(100,Math.round(val)));const
 function raceStats(){const r=G.runner;return `<div class="card">${[['Energía',r.energy,'#4a8a2a'],['Hidratación',r.hydration,'#4a90d9'],['Piernas',r.legs,'#c07a10']].map(([l,v,c])=>`<div class="bar-row"><span class="bar-label" style="color:${v<25?'#c0392b':'#666'}">${l}${v<25?' ⚠':''}</span>${rbar(v,c)}<span class="bar-pct" style="color:${v<25?'#c0392b':'#1a1a1a'}">${Math.round(v)}%</span></div>`).join('')}</div>`;}
 function progBar(){const segs=curSegs();const done=segs.slice(0,G.seg).reduce((a,s)=>a+s.km,0);const total=segs.reduce((a,s)=>a+s.km,0);const pct=total>0?Math.round(done/total*100):0;return `<div class="prog-wrap"><div class="prog-meta"><span>${done}km hechos</span><span>${total-done}km restantes</span></div><div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div></div>`;}
 function topBar(){const race=G.selectedRaces[G.currentRaceIdx];return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-size:12px;color:#999">${race?.name||''} · ${G.seg+1}/${curSegs().length}</span><span style="font-size:13px;font-weight:600">${fmt(G.time)}</span></div>`;}
-function getEffStat(k){let b=0;Object.values(G.sponsors).forEach(sp=>{if(sp?.statBonus[k])b+=sp.statBonus[k];});if(G.club?.statBonus[k])b+=G.club.statBonus[k];if(G.spending.suplementos&&k==='nutricion')b+=3;return Math.min(100,G.runner.stats[k]+b);}
+// T102 (v88): sin optional chaining sobre statBonus, un sponsor o club sin ese
+// campo lanzaba TypeError en una función que corre en cada tramo de carrera.
+function getEffStat(k){let b=0;Object.values(G.sponsors||{}).forEach(sp=>{if(sp?.statBonus?.[k])b+=sp.statBonus[k];});if(G.club?.statBonus?.[k])b+=G.club.statBonus[k];if(G.spending?.suplementos&&k==='nutricion')b+=3;return Math.min(100,(G.runner?.stats?.[k]||0)+b);}
 
 // ── Club de Clásico (bonus de entrenamiento) — no confundir con G.clubModeData ──
 // Movido aquí desde js/coach.js el 2026-09-04 (split club.js/coach.js); usa clubRepLabel()/changeClubRep()/assignClubCompanion() de este mismo archivo/state.js.
@@ -3093,7 +3098,12 @@ window.doNextYear=yearNet=>{
   // Fin de modo Exprés (temporadas según modeCfg().maxYears)
   if(G.gameMode==='expres'&&G.year>modeCfg().maxYears){G.screen='retirement';render();return;}
 
-  if(G.year>=3&&G.ranking<200&&monthlyNet()>=0)G.workPct=Math.min(G.workPct,80);
+  // T23 (v88): esto bajaba la jornada del jugador en silencio. Sigue bajándola
+  // (es la recompensa por vivir del trail), pero ahora se avisa.
+  if(G.year>=3&&G.ranking<200&&monthlyNet()>=0&&G.workPct>80){
+    G.workPct=80;
+    if(typeof showToast==='function')showToast('Tu ranking te permite reducir la jornada al 80 % — puedes volver a subirla cuando quieras','#4a8a2a');
+  }
   // Traspasar clasificación Zegama
   G.zegamaQual=G.zegamaQualNext;G.zegamaQualNext=false;
   G.selectedRaces=[];G.trainingBlock=null;G.raceResults=[];G.currentRaceIdx=0;G.trainingEff=1.0;
@@ -3122,7 +3132,13 @@ window.doNextYear=yearNet=>{
       // Línea en diario
       const first=G.lifeAthlete.name.split(' ')[0];
       G.seasonDiary=G.seasonDiary||[];
-      G.seasonDiary.push(`Año ${G.year-1} · ${first}: ${h}h dedicadas. ${gain===3?'Progresa bien.':gain===2?'Va mejorando.':'Poco tiempo, pero algo es algo.'}`);
+      // T24 (v88): esto era una cadena suelta en un array de objetos y el diario
+      // la pintaba como «Año undefined · undefined años».
+      G.seasonDiary.push({
+        year:G.year-1, age:(G.runner.age||25)-1,
+        text:`${first}: ${h}h dedicadas. ${gain===3?'Progresa bien.':gain===2?'Va mejorando.':'Poco tiempo, pero algo es algo.'}`,
+        highlight:'Atleta a tu cargo',
+      });
     }
     G.lifeAthleteHours=0; // reset para la siguiente temporada
   }
@@ -3638,7 +3654,12 @@ function checkRivalRetirements(){
     G.rivalChildren.push(child);
     // Entrada en diario
     G.seasonDiary=G.seasonDiary||[];
-    G.seasonDiary.push(`${r.name} se retira. Su ${childFirst} ya corre por los montes.`);
+    // T24 (v88): mismo caso — era una cadena en un array de objetos.
+    G.seasonDiary.push({
+      year:G.year, age:G.runner.age||25,
+      text:`${r.name} se retira. Su ${childFirst} ya corre por los montes.`,
+      highlight:'Relevo generacional',
+    });
   });
 }
 
@@ -4114,7 +4135,7 @@ window.afterRace=()=>{
     const race=G.selectedRaces[G.currentRaceIdx];
     const injData=INJURY_TYPES[G.injuryType]||{};
     const remaining=G.injuryRacesLeft;
-    G.raceResults.push({name:race?.name||'',time:0,pos:0,prize:0,all:[],statGains:[],injured:true,injuryLabel:injData.label||'Lesión'});
+    G.raceResults.push({id:race?.id,name:race?.name||'',time:0,pos:0,prize:0,all:[],statGains:[],injured:true,injuryLabel:injData.label||'Lesión'}); // T104 (v88): id
     const el=document.getElementById('main');
     el.innerHTML=`
       <h2>Baja por lesión</h2>
@@ -4167,7 +4188,9 @@ window.skipInjuredRace=()=>{ afterRace(); };
 
 window.handleEv=(evId,choiceIdx)=>{
   const ev=G.pendingEvent;if(!ev)return goNextRace();
-  const choice=ev.choices[choiceIdx];
+  // T35 (v88): choiceIdx fuera de rango → TypeError al leer .effect
+  const choice=(Array.isArray(ev.choices)?ev.choices:[])[choiceIdx];
+  if(!choice){G.pendingEvent=null;return goNextRace();}
   switch(choice.effect){
     case'skip':G.skipNext=true;break;case'legs_penalty':G.legsPenalty=true;break;
     case'train_emergency':G.trainingEff=Math.min(G.trainingEff,0.8);break;

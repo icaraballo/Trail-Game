@@ -9,3 +9,6 @@
 
 # Ficheros temporales de auditoría/pruebas
 _audit_*.html
+
+# Dependencias de desarrollo (T105: eslint)
+node_modules/

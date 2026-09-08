@@ -1,0 +1,12 @@
+{
+  "name": "trail-game",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Juego de gestión de trail running — vanilla JS, sin framework. El navegador carga js/*.js como scripts clásicos: no hay bundler ni módulos.",
+  "scripts": {
+    "lint": "eslint js/*.js"
+  },
+  "devDependencies": {
+    "eslint": "^9.13.0"
+  }
+}

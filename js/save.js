@@ -20,7 +20,7 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
-const GAME_BUILD=87; // incrementar con cada versión del juego
+const GAME_BUILD=88; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
@@ -113,6 +113,40 @@ function migrateState(saved){
   if(saved.trainingBlock)merged.trainingBlock={...base.trainingBlock,...saved.trainingBlock};
   // T115 (v84): saves anteriores al arquetipo
   if(merged.clubModeData&&!merged.clubModeData.archetype)merged.clubModeData.archetype='equilibrado';
+  // T24 (v88): seasonDiary mezclaba objetos {year,age,text,highlight} y cadenas
+  // sueltas; las cadenas se pintaban como «Año undefined · undefined años».
+  // Los dos pushes que las creaban ya escriben objetos; esto arregla lo guardado.
+  if(Array.isArray(merged.seasonDiary)){
+    merged.seasonDiary=merged.seasonDiary.map(e=>{
+      if(e&&typeof e==='object')return e;
+      if(typeof e!=='string')return null;
+      const m=e.match(/^Año\s+(\d+)\s*·\s*(.*)$/);   // «Año N · resto»
+      return {year:m?Number(m[1]):(merged.year||1), age:merged.runner?.age||25,
+              text:m?m[2]:e, highlight:'—'};
+    }).filter(Boolean);
+  }
+  // T43 (v88): vacByQuarter[q] existía como número y como {amount}. vacDaysUsed()
+  // trataba las dos formas pero vacTrainingHBonus() solo la numérica: con la otra
+  // devolvía NaN y contaminaba las horas de entrenamiento. Se normaliza a número.
+  Object.keys(merged.vacByQuarter||{}).forEach(q=>{
+    const v=merged.vacByQuarter[q];
+    const n=(v&&typeof v==='object')?Number(v.amount):Number(v);
+    merged.vacByQuarter[q]=Number.isFinite(n)?n:0;
+  });
+  // T44 (v88): nemesisLog[nombre] existía como {gaps:[]} y como {gapSum,gapCount},
+  // con la conversión repetida en línea dentro de race.js. Se hace aquí una vez.
+  Object.keys(merged.nemesisLog||{}).forEach(k=>{
+    const d=merged.nemesisLog[k];
+    if(!d||typeof d!=='object'){delete merged.nemesisLog[k];return;}
+    if(Array.isArray(d.gaps)){
+      d.gapSum=(d.gapSum||0)+d.gaps.reduce((a,b)=>a+(Number(b)||0),0);
+      d.gapCount=(d.gapCount||0)+d.gaps.length;
+      delete d.gaps;
+    }
+    d.wins=Number(d.wins)||0;
+    d.gapSum=Number(d.gapSum)||0;
+    d.gapCount=Number(d.gapCount)||0;
+  });
   return merged;
 }
 
@@ -151,6 +185,26 @@ function sanitizeState(raw){
   s.followers=clampI(s.followers,0,99999999,0);
   s.coachReputation=clampI(s.coachReputation,0,100,0);
   s.coachTrust=clampI(s.coachTrust,0,100,60);
+  // T30 (v88): solo se recortaban runner.name y runName. Todas estas cadenas se
+  // pintan en la interfaz y venían de un save importado sin tocar. showToast usa
+  // textContent y esc() escapa el HTML, así que no había inyección abierta (ver
+  // T09), pero sí un nombre de 50.000 caracteres capaz de reventar el layout.
+  const cut=(v,n)=>typeof v==='string'?v.slice(0,n):v;
+  if(s.club&&typeof s.club==='object')s.club.name=cut(s.club.name,40);
+  if(s.clubModeData&&typeof s.clubModeData==='object'){
+    s.clubModeData.name=cut(s.clubModeData.name,40);
+    if(Array.isArray(s.clubModeData.runners))
+      s.clubModeData.runners.forEach(r=>{if(r&&typeof r==='object')r.name=cut(r.name,30);});
+  }
+  s.clubCompanion=cut(s.clubCompanion,40);
+  if(s.coachAthlete&&typeof s.coachAthlete==='object')s.coachAthlete.name=cut(s.coachAthlete.name,30);
+  if(s.dog&&typeof s.dog==='object')s.dog.name=cut(s.dog.name,30);
+  if(s.lifeAthlete&&typeof s.lifeAthlete==='object')s.lifeAthlete.name=cut(s.lifeAthlete.name,30);
+  if(Array.isArray(s.rivals))s.rivals.forEach(r=>{if(r&&typeof r==='object')r.name=cut(r.name,40);});
+  if(Array.isArray(s.coachRoster))s.coachRoster.forEach(sl=>{
+    if(sl&&typeof sl==='object'&&sl.coachAthlete&&typeof sl.coachAthlete==='object')
+      sl.coachAthlete.name=cut(sl.coachAthlete.name,30);
+  });
   return s;
 }
 
@@ -172,6 +226,10 @@ function loadFromSlot(slot){
     if(!raw)return null;
     const data=JSON.parse(raw);
     if(!data||!data.state)return null;
+    // T30 (v88): se validaba ANTES de migrar, así que sanitizeState() juzgaba un
+    // estado incompleto y los campos que la migración rellena nunca pasaban por
+    // el saneado. Ahora se hace la comprobación mínima de forma, se migra, y se
+    // sanea el resultado — que es lo que de verdad se carga en G.
     const safe=sanitizeState(data.state);
     if(!safe)return null;
     // v62 Migration Guard: Purgar saves de Ultratrail/Backyard (fase testing)
@@ -179,7 +237,8 @@ function loadFromSlot(slot){
       LS.del(SAVE_KEY+slot);
       return null;
     }
-    data.state=migrateState(safe);
+    const migrated=migrateState(safe);
+    data.state=sanitizeState(migrated)||migrated;
     return data;
   }catch(e){return null;}
 }
@@ -220,8 +279,15 @@ function fallbackCopy(txt){
   document.body.removeChild(ta);
 }
 
+// T42 (v88): importFromText aceptaba cualquier pegado y lo escribía en
+// localStorage — vía directa a llenar la cuota. Un save real ronda los 40-80 KB;
+// 512 KB deja margen de sobra para una partida larga y corta el abuso.
+const MAX_IMPORT_CHARS=512*1024;
+
 function importFromText(txt, slot){
   try{
+    if(typeof txt!=='string')throw new Error('Formato no reconocido');
+    if(txt.length>MAX_IMPORT_CHARS)throw new Error('Texto demasiado grande');
     const clean=txt.trim();
     if(!clean.startsWith(SAVE_VERSION+'::'))throw new Error('Formato no reconocido');
     const b64=clean.slice(SAVE_VERSION.length+2);
@@ -231,7 +297,8 @@ function importFromText(txt, slot){
     const raw=JSON.parse(json);
     const safe=sanitizeState(raw);
     if(!safe)throw new Error('Estado inválido');
-    const state=migrateState(safe);
+    const migrated=migrateState(safe);          // T30 (v88): sanear después de migrar
+    const state=sanitizeState(migrated)||migrated;
     const data={v:SAVE_VERSION,ts:Date.now(),state};
     LS.set(SAVE_KEY+slot, JSON.stringify(data));
     return true;

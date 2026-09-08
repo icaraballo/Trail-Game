@@ -1,5 +1,5 @@
 function assignClubCompanion(club){
-  if(!club||club.id==='none'||!club.companions.length) return null;
+  if(!club||club.id==='none'||!club.companions?.length) return null; // T41 (v88): club migrado sin companions → TypeError
   return club.companions[Math.floor(Math.random()*club.companions.length)];
 }
 function freshState(){
@@ -334,7 +334,9 @@ function monthlyNet(){
   if(G.gameMode==='expres')return monthlySponsorIncome();
   return monthlyWorkIncome()+monthlySponsorIncome()+monthlyBrandIncome()-FIXED_COSTS.total-monthlyClubCost();
 }
-function sponsorAnnual(){return Math.round(Object.values(G.sponsors).filter(Boolean).reduce((a,s)=>a+(s.salary||0),0)*(modeCfg().sponsorMult||1));}
+// T27 (v88): el anual ignoraba followersSponsorMult(), que el mensual sí aplica.
+// Con 100.000 seguidores el desfase era del 65 % a favor del mensual.
+function sponsorAnnual(){return Math.round(Object.values(G.sponsors).filter(Boolean).reduce((a,s)=>a+(s.salary||0),0)*(modeCfg().sponsorMult||1)*followersSponsorMult());}
 function curSegs(){return G.selectedRaces[G.currentRaceIdx]?.segs||[];}
 function checkSponsorObjective(sp){
   if(!sp)return true;
@@ -343,8 +345,11 @@ function checkSponsorObjective(sp){
   const top10=races.filter(r=>r.pos<=10).length;
   const top5=races.filter(r=>r.pos<=5).length;
   const podio=races.filter(r=>r.pos<=3).length;
+  // T104 (v88): se cruzaba por nombre. Dos carreras homónimas, o un rename en los
+  // datos, y los objetivos de sponsor dejaban de contar. Los ids existen; se usan.
+  // El fallback por nombre cubre los resultados guardados antes de v88.
   const nacionales=races.filter(r=>{
-    const rd=G.selectedRaces.find(x=>x.name===r.name);
+    const rd=(G.selectedRaces||[]).find(x=>r.id!=null?x.id===r.id:x.name===r.name);
     return rd&&(rd.tier==='nacional'||rd.tier==='elite');
   });
   switch(sp.objKey){
@@ -376,7 +381,9 @@ function fameLevel(){
 }
 function vacDaysUsed(){return Object.values(G.vacByQuarter||{}).reduce((a,v)=>a+(v?.amount||v||0),0);}
 function vacDaysLeft(){return (G.vacDaysTotal||15)-vacDaysUsed();}
-function vacTrainingHBonus(q){return (G.vacByQuarter?.[q]||0)*1.5;}
+// T43 (v88): con la forma {amount} esto devolvía NaN. migrateState ya normaliza
+// los saves antiguos; esta guarda cubre lo que se cree en caliente.
+function vacTrainingHBonus(q){const v=G.vacByQuarter?.[q];const n=(v&&typeof v==='object')?Number(v.amount):Number(v);return (Number.isFinite(n)?n:0)*1.5;}
 // tierDiffMult por modo: escala la desviación desde el neutro (medio) del
 // spread local↔élite proporcionalmente a la dificultad — mismo criterio que
 // injuryRiskMult/fatigueMult/rivalMult, para que elegir una carrera de tier
@@ -560,9 +567,19 @@ function startExpressTimer(defaultChoiceIdx){
     if(G._xpTimerVal<=0){
       clearExpressTimer();
       G._xpTimerExpiredCareer=(G._xpTimerExpiredCareer||0)+1; // tracking logros Exprés
+      // T34 (v88): si defaultChoiceIdx no existía no se resolvía nada y el
+      // jugador se quedaba encallado en la pantalla del evento sin contador.
+      // Ahora cae a la primera opción válida y, si no hay ninguna, cierra el
+      // evento y devuelve al tramo en vez de dejar la partida muerta.
       const ev=G.midRaceEvent;
-      if(ev&&ev.choices[defaultChoiceIdx]){
-        resolveMidRaceEvent(ev.id,ev.choices[defaultChoiceIdx].id);
+      if(!ev){return;}
+      const choices=Array.isArray(ev.choices)?ev.choices:[];
+      const pick=choices[defaultChoiceIdx]||choices[0];
+      if(pick&&pick.id!=null){
+        resolveMidRaceEvent(ev.id,pick.id);
+      } else {
+        console.warn('startExpressTimer: evento sin opciones válidas →',ev.id);
+        G.midRaceEvent=null;G.screen='segment';render();
       }
     }
   },1000);
@@ -701,7 +718,12 @@ function seasonWeatherMultiplier(month){
   return 1.0;
 }
 function generateMonthlyEvents(){
-  G.monthlyEvents=[];
+  // T26 (v88): esto hacía G.monthlyEvents=[] y se llevaba por delante los eventos
+  // que el jugador no había atendido — incluidos los económicos, que son los que
+  // más pesan. Ahora los pendientes sobreviven y los nuevos se añaden detrás.
+  // El de ascenso laboral no se duplica: se comprueba antes de volver a crearlo.
+  const pending=(G.monthlyEvents||[]).filter(e=>e&&!e.resolved);
+  G.monthlyEvents=pending;
   const hasClub=G.club&&G.club.id!=='none';
   const hasWork=!!(WORK_OPTIONS.find(o=>o.pct===(G.workByQuarter?G.workByQuarter[G.currentQuarter||1]:G.workPct))?.income);
   const pool=MONTHLY_EVENTS_POOL.filter(e=>(!e.requiresClub||hasClub)&&(!e.requiresWork||hasWork));
@@ -711,7 +733,7 @@ function generateMonthlyEvents(){
     const curPct=G.workByQuarter?G.workByQuarter[1]:G.workPct;
     if(!G.workSeasonCount)G.workSeasonCount={pct:curPct,seasons:0};
     if(G.workSeasonCount.pct===curPct&&G.workSeasonCount.seasons>=3){
-      if(!(G.workPromotionsUsed||[]).includes(curPct)){
+      if(!(G.workPromotionsUsed||[]).includes(curPct)&&!pending.some(e=>e._isPromotion)){ // T26 (v88): sin duplicar el pendiente
         G.monthlyEvents.push({
           id:'work_promotion',
           title:'Tu empresa te ofrece un ascenso',
@@ -740,7 +762,11 @@ function getNutritionCost(id){
 function isNutritionAvailable(n){
   if(G.year<n.reqYear)return {ok:false,reason:`Disponible desde año ${n.reqYear}`};
   if(n.id==='pro'){
-    const req=n.yearReqs?.[G.year];
+    // T28 (v88): yearReqs solo define 4, 5 y 6 — del año 7 en adelante devolvía
+    // undefined y la nutrición más potente quedaba libre. Se mantiene el último
+    // año definido, igual que ya hacía nutritionCost() con yearCosts.
+    const _reqYears=Object.keys(n.yearReqs||{}).map(Number);
+    const req=_reqYears.length?n.yearReqs[Math.min(G.year,Math.max(..._reqYears))]:undefined;
     if(req==='nutSponsor'&&!G.sponsors.nutricion)
       return {ok:false,reason:'Requiere sponsor de nutrición activo'};
     if(req==='nutSponsorTop10'&&(!G.sponsors.nutricion||G.ranking>10))

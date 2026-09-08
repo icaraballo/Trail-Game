@@ -74,11 +74,22 @@ function coachSlotKeys(){
     'coachEmotionalState','coachDecisionLog','coachTrainerStyle','coachTrait'];
 }
 
+// T101 (v88): saveCoachSlot guardaba el MISMO objeto que G (coachAthlete,
+// coachRaceResults, coachSponsors…), no un clon. Mutar el atleta activo mutaba
+// también su entrada del roster y al revés: es la causa probable de cualquier
+// "se me ha mezclado el progreso de dos atletas". Se clona en ambos sentidos.
+// Los dos sitios que pintan el roster (coachSlotNotifCount y renderCoachHub) ya
+// llaman a saveCoachSlot() antes de leer, así que la copia no queda obsoleta.
+function cloneSlotValue(v){
+  if(v==null||typeof v!=='object')return v;
+  try{return structuredClone(v);}catch(e){return JSON.parse(JSON.stringify(v));}
+}
+
 function saveCoachSlot(){
   const idx=G.coachActiveIdx||0;
   if(!G.coachRoster)G.coachRoster=[];
   const slot={};
-  coachSlotKeys().forEach(k=>{slot[k]=G[k];});
+  coachSlotKeys().forEach(k=>{slot[k]=cloneSlotValue(G[k]);});
   G.coachRoster[idx]=slot;
 }
 
@@ -86,7 +97,11 @@ function loadCoachSlot(idx){
   if(!G.coachRoster||!G.coachRoster[idx])return;
   const slot=G.coachRoster[idx];
   G.coachActiveIdx=idx;
-  coachSlotKeys().forEach(k=>{if(k in slot)G[k]=slot[k];});
+  // T100 (v88): con `if(k in slot)` una clave ausente en el slot destino dejaba
+  // en pie el valor del atleta que estabas mirando antes. Se parte del valor
+  // limpio de freshState() en ese caso.
+  const fresh=freshState();
+  coachSlotKeys().forEach(k=>{G[k]=(k in slot)?cloneSlotValue(slot[k]):cloneSlotValue(fresh[k]);});
 }
 
 window.switchCoachSlot=idx=>{
@@ -176,7 +191,10 @@ window.doCoachSelect=id=>{
   G.coachGels=3;G.coachGelsUsed=0;G.coachRadioUsed={};G.coachAidExtras={};G.coachPreRaceBlock=null;
   G.coachSeasonObjective=null;G.coachInjury=null;G.coachSponsors=[];G.coachSponsorPool=null;G.coachRadioWindowOpen=false;
   G._coachSlotNotifs=[];
-  G.coachEmotionalState='fresco';G.coachDecisionLog=G.coachDecisionLog||[];
+  // T100 (v88): aquí se reseteaban las 20 claves del atleta menos esta, que hacía
+  // `G.coachDecisionLog=G.coachDecisionLog||[]` y por tanto heredaba el log del
+  // atleta anterior: sus decisiones aparecían en el historial del recién fichado.
+  G.coachEmotionalState='fresco';G.coachDecisionLog=[];
   generateCoachSeasonObjective();
   generateCoachSponsorPool();
   saveCoachSlot();
