@@ -4,7 +4,7 @@
 //  G._devMode no está activo. No forma parte del juego real.
 // ══════════════════════════════════════════════════════════════════
 
-// Lista completa de pantallas del dispatcher de render() (js/render.js), para
+// Lista completa de pantallas del dispatcher de render() (js/render-core.js), para
 // el salto libre. Mantener a mano si se añaden pantallas nuevas al juego —
 // no se genera dinámicamente para no acoplar devmode.js al objeto interno
 // del dispatcher.
@@ -592,7 +592,7 @@ window.devRunCode=()=>{
 // ── Drawer lateral — el panel dev vive ENCIMA de la pantalla de juego, no la
 // sustituye. Así se puede provocar algo desde el panel (forzar un evento,
 // tocar un stat) y ver el resultado en la misma pantalla sin navegar fuera
-// y volver. render() (js/render.js) llama a renderDevOverlay() en cada pasada
+// y volver. render() (js/render-core.js) llama a renderDevOverlay() en cada pasada
 // mientras G._devMode esté activo, así que el contenido del drawer se
 // mantiene en vivo aunque el cambio de estado no venga de un botón dev
 // (p.ej. avanzar un tramo de carrera jugando normal).
@@ -613,7 +613,7 @@ window.renderDevOverlay=()=>{
 function renderDevPanel(){
   const el=document.getElementById('dev-drawer');
   if(!el)return;
-  // El drawer se refresca en CADA render() del juego (js/render.js), no solo
+  // El drawer se refresca en CADA render() del juego (js/render-core.js), no solo
   // cuando tú tocas un botón dev — cualquier cosa que dispare un render()
   // mientras el panel está abierto (una animación de carrera en curso, un
   // autoguardado...) regeneraba el innerHTML entero y borraba en silencio lo

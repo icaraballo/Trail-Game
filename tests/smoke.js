@@ -18,7 +18,8 @@ const {T}=build(['freshState','modeCfg','currentWorkPct','setWorkPct','getEffSta
   'resetRaceFlags','resetRaceDayState','drain','bumpStat','raceHistoryFor',
   'runnerCritState','screenRoutes','profBounds','serializableState',
   'deleteSlot','loadFromSlot','saveToSlot','SAVE_VERSION','SAVE_KEY','LS',
-  'cnGetCategory','cnCurrentMonth','CN_CATEGORIES','shuffle','CIRCUITS_DB']);
+  'cnGetCategory','cnCurrentMonth','CN_CATEGORIES','shuffle','CIRCUITS_DB',
+  'raceGainTotal','raceDesnivel','fmtGain','clubRaceKm','RACES_DB','CLUB_RACES','SPEC_RACES']);
 const t=scorer();
 const setG=o=>{const g=T.freshState();Object.assign(g,o);T.setG(g);return g;};
 
@@ -212,5 +213,38 @@ const cuenta=[0,0,0,0,0];
 for(let i=0;i<6000;i++) cuenta[T.shuffle([0,1,2,3,4]).indexOf(0)]++;
 const peor=Math.max(...cuenta.map(c=>Math.abs(c-1200)));
 t('el primer elemento acaba repartido por las 5 posiciones', peor<220, 'reparto: '+cuenta.join('/'));
+
+console.log('\n── T52 (v92) · un solo esquema de carrera ──');
+// El desnivel se escribía a mano Y se podía sumar de los tramos, y las dos
+// cifras no coincidían en 8 de 24 carreras. Ahora la fuente son los tramos.
+t('fmtGain reproduce el formato de las cadenas que había',
+  T.fmtGain(600)==='600m+'&&T.fmtGain(1200)==='1.200m+'&&T.fmtGain(2800)==='2.800m+',
+  [600,1200,2800].map(n=>T.fmtGain(n)).join(' '));
+t('fmtGain no se rompe con 0 ni con basura', T.fmtGain(0)==='0m+'&&T.fmtGain(undefined)==='0m+'&&T.fmtGain(-50)==='0m+');
+const todasR=[...T.RACES_DB,...Object.values(T.SPEC_RACES||{}).flat()];
+t('ninguna carrera declara ya el desnivel a mano', todasR.every(r=>r.desnivel===undefined));
+t('raceGainTotal suma solo los tramos de subida',
+  todasR.every(r=>T.raceGainTotal(r)===r.segs.reduce((a,x)=>a+Math.max(0,x.gain||0),0)));
+t('y lo que se pinta sale de ahí (Zegama: 2.800m+)',
+  T.raceDesnivel(T.RACES_DB.find(r=>r.id==='mayo'))==='2.800m+', T.raceDesnivel(T.RACES_DB.find(r=>r.id==='mayo')));
+t('pinar ya anuncia sus 600m reales, no los 1.200m+ que decía',
+  T.raceDesnivel(T.RACES_DB.find(r=>r.id==='pinar'))==='600m+', T.raceDesnivel(T.RACES_DB.find(r=>r.id==='pinar')));
+t('una carrera sin tramos no revienta ni pinta undefined', T.raceDesnivel({id:'x'})==='—'&&T.raceGainTotal(null)===0);
+t('un save antiguo con la cadena dentro la sigue pudiendo pintar si no hay tramos',
+  T.raceDesnivel({id:'x',desnivel:'1.900m+'})==='1.900m+');
+
+console.log('\n── T52 (v92) · `dist` desaparece, todo es `km` ──');
+t('CLUB_RACES usa km y ninguna conserva dist', T.CLUB_RACES.every(r=>typeof r.km==='number'&&r.dist===undefined));
+t('clubRaceKm lee un save nuevo', T.clubRaceKm({km:35})===35);
+t('y uno viejo, que trae dist', T.clubRaceKm({dist:21})===21);
+t('y no pinta undefined con basura', T.clubRaceKm(null)===0&&T.clubRaceKm({})===0);
+// La migración: clubModeData.seasonResults guarda copias de las carreras.
+const viejoClub={runner:{name:'Txiki',age:30,stats:{resistencia:50,velocidad:50,subida:50,bajada:50,nutricion:50,mental:50}},
+  year:2,money:100,
+  clubModeData:{seasonResults:[{race:{id:'clr1',name:'Trail Local',dist:21},runner:{name:'A'},pos:3}]}};
+const migClub=T.migrateState(viejoClub);
+const rc=migClub.clubModeData.seasonResults[0].race;
+t('migrateState convierte dist en km dentro de seasonResults', rc.km===21, JSON.stringify(rc));
+t('y no deja dist detrás', rc.dist===undefined);
 
 t.done('TODO OK');

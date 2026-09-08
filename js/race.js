@@ -169,7 +169,7 @@ function racePreviewCard(race, mode, raceProgress){
   const cid=race.id+(mode||'');
   return `<div class="card">
     <div style="font-size:14px;font-weight:600;margin-bottom:2px">${race.name}</div>
-    <div style="font-size:12px;color:#888;margin-bottom:10px">${race.type} · ${race.km}km · ${race.desnivel}</div>
+    <div style="font-size:12px;color:#888;margin-bottom:10px">${race.type} · ${race.km}km · ${raceDesnivel(race)}</div>
     <div id="prof-wrap-${cid}">${profSvg(race,-1,mode||'preview',raceProgress||0)}</div>
     <div id="prof-info-${cid}" data-sel="-1" style="min-height:20px">${profSegInfo(race,null,mode||'preview',raceProgress||0)}</div>
     <div style="display:flex;gap:10px;font-size:12px;color:#aaa;margin-top:8px;flex-wrap:wrap">
@@ -418,9 +418,9 @@ function renderPreRace(){
       <h2>${race.name}</h2>
       <span style="font-size:12px;color:#999;padding-top:5px">Carrera ${G.currentRaceIdx+1}/${G.selectedRaces.length}</span>
     </div>
-    <p class="sub">${race.type} · ${race.km}km · ${race.desnivel}</p>
+    <p class="sub">${race.type} · ${race.km}km · ${raceDesnivel(race)}</p>
     <div class="stat-grid">
-      ${[['Distancia',race.km+'km'],['Desnivel',race.desnivel],['Clima',wlabel[G.weather]]].map(([l,v])=>`<div class="stat"><div class="stat-label">${l}</div><div class="stat-val" style="font-size:12px">${v}</div></div>`).join('')}
+      ${[['Distancia',race.km+'km'],['Desnivel',raceDesnivel(race)],['Clima',wlabel[G.weather]]].map(([l,v])=>`<div class="stat"><div class="stat-label">${l}</div><div class="stat-val" style="font-size:12px">${v}</div></div>`).join('')}
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
       <span class="terrain-badge" style="background:${G.terrainCondition.color}22;color:${G.terrainCondition.color}">${G.terrainCondition.icon} ${G.terrainCondition.label}</span>
@@ -1116,11 +1116,11 @@ function checkTerrainNavigationEvents(ctx){
 
   // 🏔 DESNIVEL INFINITO — carreras con mucho desnivel (>2000m), tramo 30%-65%, 1 vez
   // T12 (v82): la condición leía race.gain, una propiedad que NINGUNA carrera
-  // tiene a nivel superior — el desnivel se guarda como cadena ('2.800m+') y
-  // gain solo existe dentro de cada tramo. Era siempre 0>=2000 y el evento
-  // llevaba 80 builds sin dispararse jamás. Ahora se suma el de los tramos.
-  // Arreglo de fondo pendiente: campo numérico gainTotal en los datos (T52).
-  const _totalGain=(G.selectedRaces[G.currentRaceIdx]?.segs||[]).reduce((a,s)=>a+Math.max(0,s.gain||0),0);
+  // tenía a nivel superior — el desnivel era una cadena y `gain` solo existía
+  // dentro de cada tramo. Era siempre 0>=2000 y el evento llevaba 80 builds sin
+  // dispararse. Se parcheó sumando los tramos aquí mismo; T52 (v92) le da nombre
+  // y un solo sitio, así que este cálculo ya no vive suelto en el evento.
+  const _totalGain=raceGainTotal(G.selectedRaces[G.currentRaceIdx]);
   if(!G.midRaceEventTriggered.endless_climb&&_totalGain>=2000&&pct>=0.3&&pct<0.65){
     if(Math.random()<0.13){
       G.midRaceEventTriggered.endless_climb=true;
@@ -2501,7 +2501,8 @@ function finishRace(){
   autoSave();
 }
 // T74 (v90): estas líneas estaban copiadas en cuatro sitios (race.js:goNextRace,
-// render.js x3). El backlog las marcaba como críticas de unificar antes de que
+// render-clasico.js y render-temporada.js). El backlog las marcaba como críticas
+// de unificar antes de que
 // nadie vuelva a tocar la inicialización de carrera.
 //
 // OJO — son DOS resets, no uno, y la diferencia es real: goNextRace y el prep

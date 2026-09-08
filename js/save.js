@@ -81,6 +81,14 @@ function migrateState(saved){
       delete saved.circuitPoints[viejo];
     }
   }
+  // T52 (v92): CLUB_RACES pasó de `dist` a `km`. Las carreras se copian dentro de
+  // clubModeData.seasonResults, así que los saves anteriores las traen con dist.
+  if(saved&&saved.clubModeData&&Array.isArray(saved.clubModeData.seasonResults)){
+    for(const r of saved.clubModeData.seasonResults)
+      if(r&&r.race&&r.race.km===undefined&&r.race.dist!==undefined){
+        r.race.km=r.race.dist; delete r.race.dist;
+      }
+  }
   const base=freshState();
   const merged={...base,...saved};
   // Merge profundo en las estructuras anidadas críticas

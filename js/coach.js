@@ -436,7 +436,7 @@ function renderCoachTraining(){
           <div>
             <span style="font-size:13px;font-weight:${isNext?700:400}">${isNext?'→ ':''}${esc(r.name)}</span>
             ${isNext?`<span style="font-size:11px;background:#f0f6ff;color:#4a90d9;padding:1px 6px;border-radius:3px;margin-left:6px">Próxima</span>`:''}
-            <div style="font-size:12px;color:#aaa">${MONTH_NAMES[(r.month||1)-1]} · ${r.type} · ${r.km}km · ${r.desnivel}</div>
+            <div style="font-size:12px;color:#aaa">${MONTH_NAMES[(r.month||1)-1]} · ${r.type} · ${r.km}km · ${raceDesnivel(r)}</div>
           </div>
           <span style="font-size:11px;font-weight:700;color:${tC};flex-shrink:0;margin-left:8px">${TIER_LABEL_RACE[r.tier]||r.tier}</span>
         </div>`;
@@ -966,7 +966,7 @@ function renderCoachRace(){
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
       <div style="flex:1">
         <div style="font-size:15px;font-weight:700">${esc(race.name)}</div>
-        <div style="font-size:12px;color:#888">${race.type} · ${race.km}km · ${race.desnivel}</div>
+        <div style="font-size:12px;color:#888">${race.type} · ${race.km}km · ${raceDesnivel(race)}</div>
       </div>
       <div style="font-size:12px;background:#f5f4f0;padding:4px 10px;border-radius:6px;flex-shrink:0">${Math.round(kmDone)}/${race.km}km</div>
     </div>

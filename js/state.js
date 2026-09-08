@@ -88,7 +88,7 @@ function freshState(){
     _yearObjectiveRewardPaid:false, // T03 (v81): ya estaba en PERSISTENT_UNDERSCORE_KEYS
                                  // pero sin declarar aquí. Sin valor por defecto tras
                                  // migrateState, un save antiguo lo deja undefined y
-                                 // render.js:2983 vuelve a pagar el objetivo del año.
+                                 // render-clasico.js vuelve a pagar el objetivo del año.
     _expressSponsorPool:null,    // pool de sponsors generado para esta temporada Express
     // ── Modo Entrenador ──────────────────
     coachPool:null,           // 3 atletas presentados al inicio

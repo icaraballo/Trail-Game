@@ -224,7 +224,8 @@ function cnGenerateRivals(race){
   const n=(race.tier||1)*4+Math.floor(Math.random()*4)+3;
   const base={1:360,2:390,3:415,4:440}[race.tier||1]||390;
   // T117 (v92): sort(()=>Math.random()-0.5) no da una permutación uniforme.
-  // shuffle() de render.js ya es Fisher-Yates y render.js carga antes que este.
+  // shuffle() de render-core.js ya es Fisher-Yates. Da igual el orden de carga:
+  // esto se llama en partida, no al evaluar el fichero.
   const pool=shuffle([...CN_RIVAL_NAMES]).slice(0,Math.min(n,CN_RIVAL_NAMES.length));
   while(pool.length<n)pool.push('Equipo #'+(pool.length+1));
   return pool.map(name=>{

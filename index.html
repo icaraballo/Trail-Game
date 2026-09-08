@@ -350,7 +350,12 @@ button.secondary:hover{background:#f0ede8}
 <script src="js/coach.js?v=92"></script>
 <script src="js/club.js?v=92"></script>
 <script src="js/canicross.js?v=92"></script>
-<script src="js/render.js?v=92"></script>
+<!-- T53 (v92): render.js partido en tres. El orden importa solo para las
+     sentencias de nivel raíz, y entre estos tres no hay ninguna que dependa
+     de otra — pero se mantiene el orden temático por legibilidad. -->
+<script src="js/render-core.js?v=92"></script>
+<script src="js/render-clasico.js?v=92"></script>
+<script src="js/render-temporada.js?v=92"></script>
 <script>
 // T70 (v90): devmode.js son 56 KB que solo sirven con ?dev=1. Se carga a
 // demanda; render() espera a que esté dentro para que renderDevOverlay()

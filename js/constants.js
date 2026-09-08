@@ -290,30 +290,63 @@ function trainingEffFromH(h){
   return 1.00;
 }
 
+// ── T52 (v92) · Un solo esquema de carrera ────────────────────────────────
+// El desnivel vivía DOS veces: como cadena escrita a mano en cada carrera
+// ('1.200m+') y como la suma de los `gain` de sus tramos, que es lo que de
+// verdad se corre. Las dos no coincidían en ocho de las veinticuatro carreras
+// —`pinar` anunciaba 1.200m+ y sus tramos suman 600— y no había forma de
+// notarlo jugando. Ahora la fuente es una: los tramos. La cadena se genera.
+//
+// Es también lo que arregla T12 de raíz: aquel evento leía `race.gain`, un
+// campo numérico que ninguna carrera tenía porque el desnivel era una cadena.
+// Ahora ese número existe y se llama raceGainTotal().
+function raceGainTotal(race){
+  if(!race||!Array.isArray(race.segs))return 0;
+  return race.segs.reduce((a,s)=>a+Math.max(0,s.gain||0),0);
+}
+// Mismo formato que llevaban las cadenas a mano: 600 → '600m+', 1200 → '1.200m+'.
+function fmtGain(n){
+  const v=Math.max(0,Math.round(n||0));
+  return (v>=1000?Math.floor(v/1000)+'.'+String(v%1000).padStart(3,'0'):String(v))+'m+';
+}
+// Lo que se pinta. `race.desnivel` sobrevive en los saves antiguos (selectedRaces
+// guarda copias de las carreras), pero ya no se lee: si los tramos están, mandan.
+function raceDesnivel(race){
+  if(race&&Array.isArray(race.segs)&&race.segs.length)return fmtGain(raceGainTotal(race));
+  return (race&&race.desnivel)||'—';
+}
+
+// CLUB_RACES llamaba `dist` a lo que el resto del juego llama `km`. Unificado en
+// `km` (T52), pero `clubModeData.seasonResults` guarda copias de esas carreras
+// dentro del save, así que los guardados anteriores traen `dist`. migrateState
+// los convierte; esto es el cinturón para que ninguna pantalla llegue a pintar
+// "undefinedkm" si algún camino se escapa.
+function clubRaceKm(race){return (race&&(race.km??race.dist))??0;}
+
 const RACES_DB=[
-  {id:'pinar',    name:'Trail Mágina',             type:'20K local',   km:20, cost:30,  prize:60,   reqRanking:999, desnivel:'1.200m+',weather_risk:0.10, month:1, monthName:'Enero',      quarter:1, tier:'local',
+  {id:'pinar',    name:'Trail Mágina',             type:'20K local',   km:20, cost:30,  prize:60,   reqRanking:999,weather_risk:0.10, month:1, monthName:'Enero',      quarter:1, tier:'local',
    segs:[{name:'Llano Salida',km:4,type:'flat',gain:0,base:1100},{name:'Subida Pinar',km:5,type:'climb',gain:600,base:1900},{name:'Cresta',km:4,type:'flat',gain:0,base:1300,aid:true},{name:'Bajada',km:4,type:'descent',gain:-600,base:1300},{name:'Sprint',km:3,type:'flat',gain:0,base:800}]},
-  {id:'febrero',  name:'La Pedriza Trail',        type:'25K regional',km:25, cost:40,  prize:80,   reqRanking:999, desnivel:'1.300m+',weather_risk:0.25, month:2, monthName:'Febrero',     quarter:1, tier:'local',
+  {id:'febrero',  name:'La Pedriza Trail',        type:'25K regional',km:25, cost:40,  prize:80,   reqRanking:999,weather_risk:0.25, month:2, monthName:'Febrero',     quarter:1, tier:'local',
    segs:[{name:'Salida',km:3,type:'flat',gain:0,base:1200},{name:'Subida Granito',km:7,type:'climb',gain:700,base:2200},{name:'Cuerda Larga',km:2,type:'flat',gain:0,base:1400,aid:true},{name:'Subida Cogolludo',km:3,type:'climb',gain:600,base:2400},{name:'Bajada Técnica',km:8,type:'descent',gain:-900,base:2000,aid:true},{name:'Meta',km:2,type:'flat',gain:0,base:1000}]},
-  {id:'copa',     name:'Copa Catalana de Trail',  type:'30K regional',km:30, cost:70,  prize:200,  reqRanking:999, desnivel:'1.200m+',weather_risk:0.20, month:3, monthName:'Marzo',       quarter:1, tier:'regional',
+  {id:'copa',     name:'Copa Catalana de Trail',  type:'30K regional',km:30, cost:70,  prize:200,  reqRanking:999,weather_risk:0.20, month:3, monthName:'Marzo',       quarter:1, tier:'regional',
    segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1200},{name:'Primera Subida',km:5,type:'climb',gain:600,base:2100},{name:'Collado',km:3,type:'flat',gain:0,base:1100,aid:true},{name:'Bajada',km:4,type:'descent',gain:-600,base:1600},{name:'Ribera',km:5,type:'flat',gain:0,base:1700},{name:'Segundo Repecho',km:5,type:'climb',gain:600,base:2000},{name:'Meta',km:4,type:'descent',gain:-500,base:1200,aid:true}]},
-  {id:'abril',    name:'Maratón de Montaña de Guadarrama',type:'28K media',   km:28, cost:55,  prize:150,  reqRanking:999, desnivel:'1.600m+',weather_risk:0.15, month:4, monthName:'Abril',       quarter:2, tier:'regional',
+  {id:'abril',    name:'Maratón de Montaña de Guadarrama',type:'28K media',   km:28, cost:55,  prize:150,  reqRanking:999,weather_risk:0.15, month:4, monthName:'Abril',       quarter:2, tier:'regional',
    segs:[{name:'Llano Inicio',km:4,type:'flat',gain:0,base:1400},{name:'Subida Peñalara',km:7,type:'climb',gain:900,base:2500},{name:'Collado',km:2,type:'flat',gain:0,base:1500,aid:true},{name:'Bajada Técnica',km:5,type:'descent',gain:-800,base:2000},{name:'Valle',km:3,type:'flat',gain:0,base:1400,aid:true},{name:'Repecho Final',km:4,type:'climb',gain:700,base:2200},{name:'Descenso Meta',km:3,type:'descent',gain:-600,base:1700}]},
-  {id:'mayo',     name:'Zegama-Aizkorri',         type:'42K élite',   km:42, cost:100, prize:500,  reqRanking:20,  desnivel:'2.800m+',weather_risk:0.25, month:5, monthName:'Mayo',        quarter:2, tier:'elite',   zegamaSpecial:true,
+  {id:'mayo',     name:'Zegama-Aizkorri',         type:'42K élite',   km:42, cost:100, prize:500,  reqRanking:20,weather_risk:0.25, month:5, monthName:'Mayo',        quarter:2, tier:'elite',   zegamaSpecial:true,
    segs:[{name:'Salida Zumarraga',km:3,type:'flat',gain:0,base:900},{name:'Subida Usategi',km:6,type:'climb',gain:700,base:2800},{name:'Cresta Aizkorri',km:5,type:'climb',gain:800,base:3200,aid:true},{name:'Bajada Técnica',km:5,type:'descent',gain:-1000,base:2400},{name:'Valle de Zegama',km:3,type:'flat',gain:0,base:1200,aid:true},{name:'Subida Aratz',km:8,type:'climb',gain:1000,base:3100},{name:'Collado Zelai',km:3,type:'climb',gain:300,base:1800,aid:true},{name:'Descenso Final',km:7,type:'descent',gain:-1100,base:2200},{name:'Meta Zegama',km:2,type:'flat',gain:0,base:900}]},
-  {id:'junio',    name:'Buff Epic Trail',         type:'32K nacional',km:32, cost:90,  prize:300,  reqRanking:30,  desnivel:'2.200m+',weather_risk:0.20, month:6, monthName:'Junio',       quarter:2, tier:'nacional',
+  {id:'junio',    name:'Buff Epic Trail',         type:'32K nacional',km:32, cost:90,  prize:300,  reqRanking:30,weather_risk:0.20, month:6, monthName:'Junio',       quarter:2, tier:'nacional',
    segs:[{name:'Salida Bagà',km:4,type:'flat',gain:0,base:1300},{name:'Repecho Berguedà',km:4,type:'climb',gain:700,base:2300},{name:'Cresta',km:3,type:'climb',gain:600,base:2000,aid:true},{name:'Bajada',km:4,type:'descent',gain:-800,base:1700},{name:'Valle',km:5,type:'flat',gain:0,base:1800,aid:true},{name:'La Pared',km:3,type:'climb',gain:900,base:2600},{name:'Descenso',km:5,type:'descent',gain:-700,base:1700},{name:'Sprint',km:4,type:'flat',gain:0,base:1100}]},
-  {id:'julio',    name:'Maratón Alpino Madrileño',type:'42K nacional', km:42, cost:110, prize:450,  reqRanking:25,  desnivel:'2.600m+',weather_risk:0.35, month:7, monthName:'Julio',       quarter:3, tier:'nacional',
+  {id:'julio',    name:'Maratón Alpino Madrileño',type:'42K nacional', km:42, cost:110, prize:450,  reqRanking:25,weather_risk:0.35, month:7, monthName:'Julio',       quarter:3, tier:'nacional',
    segs:[{name:'Salida Navacerrada',km:5,type:'flat',gain:0,base:1500},{name:'Subida Siete Picos',km:8,type:'climb',gain:900,base:2500},{name:'Collado',km:2,type:'flat',gain:0,base:1800,aid:true},{name:'Bajada Técnica',km:6,type:'descent',gain:-800,base:2000},{name:'Valle Lozoya',km:3,type:'flat',gain:0,base:1500,aid:true},{name:'Subida Peñalara',km:8,type:'climb',gain:1000,base:2800},{name:'Repecho Final',km:3,type:'climb',gain:700,base:2200,aid:true},{name:'Gran Descenso',km:7,type:'descent',gain:-900,base:2500}]},
-  {id:'agosto',   name:'KV Canfranc · Vertical', type:'12K vertical', km:12, cost:50,  prize:120,  reqRanking:999, desnivel:'1.000m+',weather_risk:0.20, month:8, monthName:'Agosto',      quarter:3, tier:'local',    altitude:true,
+  {id:'agosto',   name:'KV Canfranc · Vertical', type:'12K vertical', km:12, cost:50,  prize:120,  reqRanking:999,weather_risk:0.20, month:8, monthName:'Agosto',      quarter:3, tier:'local',    altitude:true,
    segs:[{name:'Salida Canfranc',km:2,type:'flat',gain:0,base:900},{name:'Rampa Inicial',km:3,type:'climb',gain:300,base:2000},{name:'Subida Vertical',km:5,type:'climb',gain:700,base:3500,aid:true},{name:'Descenso Rápido',km:2,type:'descent',gain:-700,base:1500}]},
-  {id:'sierra',   name:'Ultra Pirineu UP55',      type:'55K élite',   km:55, cost:130, prize:700,  reqRanking:15,  desnivel:'3.700m+',weather_risk:0.30, month:9, monthName:'Septiembre',  quarter:3, tier:'elite',
+  {id:'sierra',   name:'Ultra Pirineu UP55',      type:'55K élite',   km:55, cost:130, prize:700,  reqRanking:15,weather_risk:0.30, month:9, monthName:'Septiembre',  quarter:3, tier:'elite',
    segs:[{name:'Salida Bagà',km:4,type:'flat',gain:0,base:1400},{name:'Primer Repecho',km:6,type:'climb',gain:900,base:2800},{name:'Puig de la Canal',km:3,type:'flat',gain:0,base:1800,aid:true},{name:'Bajada Gisclareny',km:5,type:'descent',gain:-900,base:2000},{name:'Valle Llobregat',km:5,type:'flat',gain:0,base:1600,aid:true},{name:'Subida Pedraforca',km:7,type:'climb',gain:1400,base:3200},{name:'Cresta Pedraforca',km:3,type:'climb',gain:400,base:2200,aid:true},{name:'Subida Final',km:5,type:'climb',gain:1000,base:2800,aid:true},{name:'Gran Descenso',km:9,type:'descent',gain:-1300,base:2400},{name:'Meta Guardiola',km:8,type:'flat',gain:0,base:1500}]},
-  {id:'octubre',  name:'Ultra Sierra Nevada',     type:'32K media',   km:32, cost:65,  prize:200,  reqRanking:999, desnivel:'1.800m+',weather_risk:0.25, month:10,monthName:'Octubre',     quarter:4, tier:'regional',
+  {id:'octubre',  name:'Ultra Sierra Nevada',     type:'32K media',   km:32, cost:65,  prize:200,  reqRanking:999,weather_risk:0.25, month:10,monthName:'Octubre',     quarter:4, tier:'regional',
    segs:[{name:'Salida Granada',km:4,type:'flat',gain:0,base:1400},{name:'Subida Veleta',km:7,type:'climb',gain:900,base:2800},{name:'Collado',km:3,type:'flat',gain:0,base:1600,aid:true},{name:'Bajada Técnica',km:6,type:'descent',gain:-800,base:2200},{name:'Valle',km:4,type:'flat',gain:0,base:1500,aid:true},{name:'Subida Final',km:5,type:'climb',gain:900,base:2600},{name:'Descenso Meta',km:3,type:'descent',gain:-700,base:1800}]},
-  {id:'monteperdido',name:'Monte Perdido Trail 50K',type:'50K élite',km:50,cost:150,prize:800,    reqRanking:20,  desnivel:'1.900m+',weather_risk:0.40, month:11,monthName:'Noviembre',   quarter:4, tier:'elite',    altitude:true,
+  {id:'monteperdido',name:'Monte Perdido Trail 50K',type:'50K élite',km:50,cost:150,prize:800,    reqRanking:20,weather_risk:0.40, month:11,monthName:'Noviembre',   quarter:4, tier:'elite',    altitude:true,
    segs:[{name:'Salida Llano',km:8,type:'flat',gain:0,base:1800},{name:'Primer Repecho',km:6,type:'climb',gain:650,base:2400},{name:'Cresta Alta',km:5,type:'climb',gain:500,base:2100,aid:true},{name:'Bajada Técnica',km:6,type:'descent',gain:-900,base:1800},{name:'Valle del Río',km:8,type:'flat',gain:0,base:1800,aid:true},{name:'La Pared',km:5,type:'climb',gain:750,base:2700},{name:'Descenso Final',km:6,type:'descent',gain:-600,base:1600,aid:true},{name:'Sprint Llegada',km:6,type:'flat',gain:0,base:900}]},
-  {id:'diciembre', name:'San Silvestre de Montaña',type:'15K popular', km:15, cost:20,  prize:40,   reqRanking:999, desnivel:'400m+',  weather_risk:0.30, month:12,monthName:'Diciembre',   quarter:4, tier:'local',
+  {id:'diciembre', name:'San Silvestre de Montaña',type:'15K popular', km:15, cost:20,  prize:40,   reqRanking:999,  weather_risk:0.30, month:12,monthName:'Diciembre',   quarter:4, tier:'local',
    segs:[{name:'Salida',km:3,type:'flat',gain:0,base:900},{name:'Subida',km:4,type:'climb',gain:250,base:1600},{name:'Cresta',km:2,type:'flat',gain:0,base:900,aid:true},{name:'Bajada',km:3,type:'descent',gain:-250,base:1100},{name:'Meta',km:3,type:'flat',gain:0,base:800}]},
 ];
 
@@ -1314,35 +1347,35 @@ const COACH_RADIO_MESSAGES=[
 ];
 const SPEC_RACES={
   fondista:[
-    {id:'sf1',name:'Transvulcania Ultramarathon',type:'73K ultra',   km:73,cost:200,prize:1000,reqRanking:10, desnivel:'4.200m+',weather_risk:0.30,month:5,monthName:'Mayo',    quarter:2,tier:'elite',  spec:'fondista',
+    {id:'sf1',name:'Transvulcania Ultramarathon',type:'73K ultra',   km:73,cost:200,prize:1000,reqRanking:10,weather_risk:0.30,month:5,monthName:'Mayo',    quarter:2,tier:'elite',  spec:'fondista',
      segs:[{name:'Salida Los Llanos',km:5,type:'flat',gain:0,base:1500},{name:'Valle Aridane',km:5,type:'flat',gain:0,base:1600,aid:true},{name:'Subida Inicial',km:8,type:'climb',gain:900,base:2800},{name:'Cumbre Vieja',km:6,type:'climb',gain:800,base:3200,aid:true},{name:'Bajada Técnica',km:8,type:'descent',gain:-1100,base:2200},{name:'Valle Central',km:6,type:'flat',gain:0,base:1800,aid:true},{name:'Subida Roque',km:7,type:'climb',gain:1000,base:3000},{name:'Cresta Alta',km:4,type:'flat',gain:0,base:1800,aid:true},{name:'Subida Final',km:6,type:'climb',gain:1500,base:3200},{name:'Gran Descenso',km:9,type:'descent',gain:-1400,base:2500,aid:true},{name:'Llegada Santa Cruz',km:9,type:'flat',gain:0,base:1800,aid:true}]},
-    {id:'sf2',name:'Andalucía Ultra Trail',  type:'42K fondista',km:42,cost:85, prize:300, reqRanking:999,desnivel:'1.500m+',weather_risk:0.15,month:7,monthName:'Julio',    quarter:3,tier:'regional',spec:'fondista',
+    {id:'sf2',name:'Andalucía Ultra Trail',  type:'42K fondista',km:42,cost:85, prize:300, reqRanking:999,weather_risk:0.15,month:7,monthName:'Julio',    quarter:3,tier:'regional',spec:'fondista',
      segs:[{name:'Salida Almería',km:5,type:'flat',gain:0,base:1200},{name:'Subida Sierra',km:9,type:'climb',gain:700,base:2400,aid:true},{name:'Collado',km:3,type:'flat',gain:0,base:1500},{name:'Bajada',km:7,type:'descent',gain:-700,base:2000},{name:'Valle Almanzora',km:4,type:'flat',gain:0,base:1400,aid:true},{name:'Repecho Final',km:7,type:'climb',gain:800,base:2200},{name:'Descenso Meta',km:5,type:'descent',gain:-700,base:1800},{name:'Meta',km:2,type:'flat',gain:0,base:1100}]},
-    {id:'sf3',name:'100 Millas de Aneto',    type:'100K ultra',  km:100,cost:200,prize:1200,reqRanking:15,desnivel:'4.500m+',weather_risk:0.25,month:10,monthName:'Octubre', quarter:4,tier:'elite',spec:'fondista',
+    {id:'sf3',name:'100 Millas de Aneto',    type:'100K ultra',  km:100,cost:200,prize:1200,reqRanking:15,weather_risk:0.25,month:10,monthName:'Octubre', quarter:4,tier:'elite',spec:'fondista',
      segs:[{name:'Salida Benasque',km:8,type:'flat',gain:0,base:1500},{name:'Subida Aneto 1',km:14,type:'climb',gain:1300,base:3100,aid:true},{name:'Collado 1',km:6,type:'flat',gain:0,base:2000},{name:'Bajada 1',km:10,type:'descent',gain:-1200,base:2200},{name:'Valle Central',km:8,type:'flat',gain:0,base:1500,aid:true},{name:'Subida Aneto 2',km:14,type:'climb',gain:1700,base:3300},{name:'Collado 2',km:4,type:'flat',gain:0,base:2000,aid:true},{name:'Subida Final',km:10,type:'climb',gain:1500,base:3200,aid:true},{name:'Gran Descenso',km:14,type:'descent',gain:-1400,base:2800},{name:'Meta Benasque',km:12,type:'flat',gain:0,base:1500}]},
   ],
   montanero:[
-    {id:'sm1',name:'Zegama Skyrace',          type:'25K vertical',km:25,cost:80, prize:280, reqRanking:999,desnivel:'2.200m+',weather_risk:0.35,month:3,monthName:'Marzo',    quarter:1,tier:'regional',spec:'montanero',
+    {id:'sm1',name:'Zegama Skyrace',          type:'25K vertical',km:25,cost:80, prize:280, reqRanking:999,weather_risk:0.35,month:3,monthName:'Marzo',    quarter:1,tier:'regional',spec:'montanero',
      segs:[{name:'Salida',km:2,type:'flat',gain:0,base:900},{name:'Subida Continua',km:10,type:'climb',gain:2200,base:3500,aid:true},{name:'Cresta',km:3,type:'flat',gain:0,base:1200},{name:'Bajada Técnica',km:7,type:'descent',gain:-1800,base:2200},{name:'Meta',km:3,type:'flat',gain:0,base:1000}]},
-    {id:'sm2',name:'Trail dels Bastions',     type:'50K montaña', km:50,cost:120,prize:600, reqRanking:20, desnivel:'3.000m+',weather_risk:0.30,month:7,monthName:'Julio',    quarter:3,tier:'nacional',spec:'montanero',
+    {id:'sm2',name:'Trail dels Bastions',     type:'50K montaña', km:50,cost:120,prize:600, reqRanking:20,weather_risk:0.30,month:7,monthName:'Julio',    quarter:3,tier:'nacional',spec:'montanero',
      segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1100},{name:'Subida 1',km:9,type:'climb',gain:900,base:2800,aid:true},{name:'Cresta Alta',km:4,type:'flat',gain:0,base:1600},{name:'Bajada Técnica',km:7,type:'descent',gain:-800,base:2400},{name:'Valle',km:5,type:'flat',gain:0,base:1400,aid:true},{name:'Subida 2',km:9,type:'climb',gain:1100,base:3000},{name:'Collado',km:3,type:'flat',gain:0,base:1600,aid:true},{name:'Subida 3',km:6,type:'climb',gain:1000,base:2800},{name:'Bajada Final',km:3,type:'descent',gain:-900,base:1900}]},
-    {id:'sm3',name:'UTMB OCC',                type:'55K élite mt',km:55,cost:160,prize:900, reqRanking:12, desnivel:'3.500m+',weather_risk:0.40,month:8,monthName:'Agosto',   quarter:3,tier:'elite',spec:'montanero',
+    {id:'sm3',name:'UTMB OCC',                type:'55K élite mt',km:55,cost:160,prize:900, reqRanking:12,weather_risk:0.40,month:8,monthName:'Agosto',   quarter:3,tier:'elite',spec:'montanero',
      segs:[{name:'Salida Orsières',km:4,type:'flat',gain:0,base:900},{name:'Subida Champex',km:10,type:'climb',gain:1400,base:3000,aid:true},{name:'Lac de Champex',km:4,type:'flat',gain:0,base:1200},{name:'Bajada Vallorcine',km:8,type:'descent',gain:-1100,base:2200,aid:true},{name:'Valle Montagne',km:5,type:'flat',gain:0,base:1100,aid:true},{name:'Subida Tête Vents',km:9,type:'climb',gain:1300,base:3000},{name:'Cresta Brévent',km:3,type:'flat',gain:0,base:1600,aid:true},{name:'Subida Final',km:5,type:'climb',gain:800,base:2600},{name:'Gran Descenso Chamonix',km:7,type:'descent',gain:-1000,base:2000}]},
   ],
   tecnico:[
-    {id:'st1',name:'Descenso de Jaca',        type:'18K técnico', km:18,cost:55, prize:160, reqRanking:999,desnivel:'800m+', weather_risk:0.20,month:5,monthName:'Mayo',     quarter:2,tier:'regional',spec:'tecnico',
+    {id:'st1',name:'Descenso de Jaca',        type:'18K técnico', km:18,cost:55, prize:160, reqRanking:999, weather_risk:0.20,month:5,monthName:'Mayo',     quarter:2,tier:'regional',spec:'tecnico',
      segs:[{name:'Salida',km:2,type:'flat',gain:0,base:800},{name:'Subida',km:4,type:'climb',gain:400,base:1600},{name:'Cresta',km:2,type:'flat',gain:0,base:900,aid:true},{name:'Bajada Técnica',km:6,type:'descent',gain:-800,base:2000},{name:'Meta',km:4,type:'flat',gain:0,base:1100}]},
-    {id:'st2',name:'TransValles Cantábrico',  type:'30K técnico', km:30,cost:80, prize:260, reqRanking:25, desnivel:'1.600m+',weather_risk:0.25,month:8,monthName:'Agosto',   quarter:3,tier:'nacional',spec:'tecnico',
+    {id:'st2',name:'TransValles Cantábrico',  type:'30K técnico', km:30,cost:80, prize:260, reqRanking:25,weather_risk:0.25,month:8,monthName:'Agosto',   quarter:3,tier:'nacional',spec:'tecnico',
      segs:[{name:'Salida',km:3,type:'flat',gain:0,base:1000},{name:'Subida',km:5,type:'climb',gain:600,base:2100},{name:'Cresta',km:3,type:'flat',gain:0,base:1100,aid:true},{name:'Bajada Técnica 1',km:5,type:'descent',gain:-700,base:2200},{name:'Puerto',km:4,type:'climb',gain:400,base:1800,aid:true},{name:'Bajada Final',km:6,type:'descent',gain:-900,base:2500},{name:'Meta',km:4,type:'flat',gain:0,base:1100}]},
-    {id:'st3',name:'TransPirenaica Técnica',  type:'40K técnico', km:40,cost:110,prize:500, reqRanking:15, desnivel:'2.200m+',weather_risk:0.30,month:11,monthName:'Noviembre',quarter:4,tier:'elite',spec:'tecnico',
+    {id:'st3',name:'TransPirenaica Técnica',  type:'40K técnico', km:40,cost:110,prize:500, reqRanking:15,weather_risk:0.30,month:11,monthName:'Noviembre',quarter:4,tier:'elite',spec:'tecnico',
      segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1200},{name:'Subida',km:7,type:'climb',gain:700,base:2400},{name:'Alto',km:5,type:'flat',gain:0,base:1400,aid:true},{name:'Bajada 1',km:6,type:'descent',gain:-800,base:2300},{name:'Repecho',km:5,type:'climb',gain:500,base:1900,aid:true},{name:'Descenso Final',km:8,type:'descent',gain:-1100,base:2800},{name:'Meta',km:5,type:'flat',gain:0,base:1100}]},
   ],
   todoterreno:[
-    {id:'stt1',name:'Copa Spain Trail',        type:'28K mixto',   km:28,cost:65, prize:200, reqRanking:999,desnivel:'1.000m+',weather_risk:0.18,month:4,monthName:'Abril',   quarter:2,tier:'regional',spec:'todoterreno',
+    {id:'stt1',name:'Copa Spain Trail',        type:'28K mixto',   km:28,cost:65, prize:200, reqRanking:999,weather_risk:0.18,month:4,monthName:'Abril',   quarter:2,tier:'regional',spec:'todoterreno',
      segs:[{name:'Salida',km:4,type:'flat',gain:0,base:1200},{name:'Subida',km:6,type:'climb',gain:500,base:2000},{name:'Cresta',km:3,type:'flat',gain:0,base:1100,aid:true},{name:'Bajada',km:6,type:'descent',gain:-500,base:1800},{name:'Llano',km:5,type:'flat',gain:0,base:1300},{name:'Meta',km:4,type:'climb',gain:200,base:1500}]},
-    {id:'stt2',name:'Ultra Alpujarra Trail',   type:'35K mixto',   km:35,cost:85, prize:320, reqRanking:22, desnivel:'2.000m+',weather_risk:0.22,month:8,monthName:'Agosto',   quarter:3,tier:'nacional',spec:'todoterreno',
+    {id:'stt2',name:'Ultra Alpujarra Trail',   type:'35K mixto',   km:35,cost:85, prize:320, reqRanking:22,weather_risk:0.22,month:8,monthName:'Agosto',   quarter:3,tier:'nacional',spec:'todoterreno',
      segs:[{name:'Salida',km:5,type:'flat',gain:0,base:1300},{name:'Subida',km:7,type:'climb',gain:600,base:2200},{name:'Alto',km:5,type:'flat',gain:0,base:1400,aid:true},{name:'Bajada',km:7,type:'descent',gain:-600,base:1900},{name:'Valle',km:6,type:'flat',gain:0,base:1500,aid:true},{name:'Meta',km:5,type:'climb',gain:300,base:1700}]},
-    {id:'stt3',name:'Transandalus Trail',      type:'50K mixto',   km:50,cost:130,prize:650, reqRanking:15, desnivel:'2.000m+',weather_risk:0.28,month:10,monthName:'Octubre', quarter:4,tier:'elite',spec:'todoterreno',
+    {id:'stt3',name:'Transandalus Trail',      type:'50K mixto',   km:50,cost:130,prize:650, reqRanking:15,weather_risk:0.28,month:10,monthName:'Octubre', quarter:4,tier:'elite',spec:'todoterreno',
      segs:[{name:'Salida',km:6,type:'flat',gain:0,base:1500},{name:'Subida Larga',km:8,type:'climb',gain:800,base:2600},{name:'Cima',km:6,type:'flat',gain:0,base:1700,aid:true},{name:'Bajada Técnica',km:8,type:'descent',gain:-900,base:2300},{name:'Llanura',km:7,type:'flat',gain:0,base:1700,aid:true},{name:'Último Puerto',km:6,type:'climb',gain:700,base:2400},{name:'Descenso Meta',km:9,type:'descent',gain:-600,base:2100,aid:true}]},
   ],
 };
@@ -1625,19 +1658,19 @@ const CLUB_TIER_FIELD={
 
 const CLUB_RACES=[
   // Locales — siempre disponibles
-  {id:'clr1', name:'Trail Local de Primavera',  dist:21, month:4, cost:0,  tier:'local',    prize:300,  repReq:0,  sociosReq:0,  desc:'Carrera de club. Ambiente familiar.'},
-  {id:'clr8', name:'Kilómetro Vertical Otoño',  dist:8,  month:11,cost:50, tier:'local',    prize:200,  repReq:0,  sociosReq:0,  desc:'Cierre de temporada. Corto pero letal.'},
+  {id:'clr1', name:'Trail Local de Primavera',  km:  21, month:4, cost:0,  tier:'local',    prize:300,  repReq:0,  sociosReq:0,  desc:'Carrera de club. Ambiente familiar.'},
+  {id:'clr8', name:'Kilómetro Vertical Otoño',  km:  8,  month:11,cost:50, tier:'local',    prize:200,  repReq:0,  sociosReq:0,  desc:'Cierre de temporada. Corto pero letal.'},
   // Regionales — se desbloquean con rep ≥15
-  {id:'clr2', name:'Circuito Vasco Trail',      dist:28, month:5, cost:80, tier:'regional', prize:600,  repReq:15, sociosReq:0,  desc:'Circuito con varios clubes del norte.'},
-  {id:'clr3', name:'Vertical del Gorbea',       dist:12, month:6, cost:60, tier:'regional', prize:400,  repReq:15, sociosReq:0,  desc:'Vertical de referencia. Sube sin parar.'},
-  {id:'clr5', name:'Vuelta al Txindoki',        dist:35, month:8, cost:90, tier:'regional', prize:700,  repReq:25, sociosReq:15, desc:'Clásica del Goierri. Mucho desnivel.'},
-  {id:'clr6', name:'Copa de Clubes País Vasco', dist:42, month:9, cost:0,  tier:'regional', prize:800,  repReq:30, sociosReq:20, desc:'Puntos para el ranking de clubes regional.'},
+  {id:'clr2', name:'Circuito Vasco Trail',      km:  28, month:5, cost:80, tier:'regional', prize:600,  repReq:15, sociosReq:0,  desc:'Circuito con varios clubes del norte.'},
+  {id:'clr3', name:'Vertical del Gorbea',       km:  12, month:6, cost:60, tier:'regional', prize:400,  repReq:15, sociosReq:0,  desc:'Vertical de referencia. Sube sin parar.'},
+  {id:'clr5', name:'Vuelta al Txindoki',        km:  35, month:8, cost:90, tier:'regional', prize:700,  repReq:25, sociosReq:15, desc:'Clásica del Goierri. Mucho desnivel.'},
+  {id:'clr6', name:'Copa de Clubes País Vasco', km:  42, month:9, cost:0,  tier:'regional', prize:800,  repReq:30, sociosReq:20, desc:'Puntos para el ranking de clubes regional.'},
   // Nacionales — se desbloquean con rep ≥45
-  {id:'clr4', name:'Ultra Aralar',              dist:50, month:7, cost:120,tier:'nacional',  prize:1200, repReq:45, sociosReq:30, desc:'Ultra exigente. Solo los mejores del club.'},
-  {id:'clr7', name:'Marathon de Montaña',       dist:44, month:10,cost:100,tier:'nacional',  prize:1500, repReq:45, sociosReq:30, desc:'Nacional. Clasifica para el ranking anual.'},
+  {id:'clr4', name:'Ultra Aralar',              km:  50, month:7, cost:120,tier:'nacional',  prize:1200, repReq:45, sociosReq:30, desc:'Ultra exigente. Solo los mejores del club.'},
+  {id:'clr7', name:'Marathon de Montaña',       km:  44, month:10,cost:100,tier:'nacional',  prize:1500, repReq:45, sociosReq:30, desc:'Nacional. Clasifica para el ranking anual.'},
   // Élite — se desbloquean con rep ≥70
-  {id:'clr9', name:'Campeonato Nacional de Trail',dist:60,month:6, cost:200,tier:'elite',    prize:3000, repReq:70, sociosReq:60, desc:'Lo más alto del trail nacional. Invitación por méritos.'},
-  {id:'clr10',name:'Zegama-Aizkorri Open',      dist:42, month:5, cost:150,tier:'elite',    prize:2500, repReq:80, sociosReq:80, desc:'La carrera más mítica del País Vasco. Pocas plazas de club.'},
+  {id:'clr9', name:'Campeonato Nacional de Trail',km:  60,month:6, cost:200,tier:'elite',    prize:3000, repReq:70, sociosReq:60, desc:'Lo más alto del trail nacional. Invitación por méritos.'},
+  {id:'clr10',name:'Zegama-Aizkorri Open',      km:  42, month:5, cost:150,tier:'elite',    prize:2500, repReq:80, sociosReq:80, desc:'La carrera más mítica del País Vasco. Pocas plazas de club.'},
 ];
 
 const CLUB_EVENTS=[

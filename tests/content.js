@@ -17,6 +17,7 @@ const {T}=build(['freshState','ACHIEVEMENTS','RACES_DB','SPEC_RACES','SPONSORS_D
   'CLUB_RUNNER_POOL','CLUB_ARCHETYPES','COACH_ATHLETE_POOL','COACH_BETWEEN_EVENTS','COACH_MID_RACE_EVENTS',
   'CLUB_SPONSORS_POOL','COACH_SPONSORS_POOL','SEASON_OBJECTIVES','RACE_STRATEGIES','FAME_ACTIONS',
   'TIER_LABEL_RACE','CLUB_OBJECTIVES','CLUB_YOUTH_POOL','LIFE_ATHLETE_POOL','RIVAL_INCIDENTS',
+  'CLUB_RACES','raceGainTotal','raceDesnivel','fmtGain',
   'checkSponsorObjective']);
 const SRC=sources();
 
@@ -177,15 +178,33 @@ for(const r of todasLasCarreras){
   }
   // El motor reparte el esfuerzo por tramo pero cobra la distancia de r.km.
   if(sumKm!==r.km){err('los tramos no suman la distancia de la carrera en '+r.id, sumKm+' km de tramos vs km:'+r.km);kmMal++;}
-  // T52: `desnivel` es una cadena de presentación y no hay un gainTotal numérico,
-  // así que nada garantiza que lo que se enseña sea lo que se corre.
-  const pintado=parseInt(String(r.desnivel||'').replace(/\./g,''),10);
-  if(!isNaN(pintado)&&pintado!==subida){avi('el desnivel que se muestra no es el que suman los tramos en '+r.id, pintado+'m+ mostrado vs '+subida+'m real');desnivelMal++;}
+  // T52 (v92): el desnivel ya no se escribe a mano. Esto es el guardián: si
+  // alguien vuelve a declararlo en los datos, hay otra vez dos fuentes de verdad
+  // y la que se pinta puede volver a mentir (pasaba en 8 de 24 carreras).
+  if(r.desnivel!==undefined){err('carrera con `desnivel` escrito a mano — se deriva de los tramos (T52)', r.id+': '+r.desnivel);desnivelMal++;}
+  if(T.raceGainTotal(r)!==subida){err('raceGainTotal no coincide con la suma de los tramos en '+r.id, T.raceGainTotal(r)+' vs '+subida);desnivelMal++;}
 }
 if(!kmMal) ok('en todas, los tramos suman exactamente su km');
 if(!segMal) ok('todos los tramos tienen name/km/type/gain/base y tipo válido');
 if(!tierMal) ok('todos los tier existen en TIER_LABEL_RACE');
-if(!desnivelMal) ok('el desnivel mostrado coincide con el de los tramos');
+if(!desnivelMal) ok('ninguna declara el desnivel a mano y raceGainTotal cuadra con los tramos');
+
+// ── 5b · T52 · un solo nombre para la distancia ─────────────────────────────
+bloque('Distancia · un solo nombre');
+let dist=0;
+for(const [nom,tabla] of Object.entries({RACES_DB:T.RACES_DB,CLUB_RACES:T.CLUB_RACES,
+    ...Object.fromEntries(Object.entries(T.SPEC_RACES||{}).map(([k,v])=>['SPEC_RACES.'+k,v]))})){
+  for(const r of tabla||[]){
+    // CLUB_RACES llamaba `dist` a lo mismo que el resto llama `km`.
+    if(r.dist!==undefined){err('carrera con `dist` en vez de `km` en '+nom, r.id);dist++;}
+    if(typeof r.km!=='number'||!(r.km>0)){err('carrera sin km numérico en '+nom, r.id+': '+r.km);dist++;}
+  }
+}
+if(!dist) ok('todas las tablas de carrera usan `km`, y es un número positivo');
+// El formato que sustituye a las cadenas a mano tiene que salir igual.
+const fmtOK=T.fmtGain(600)==='600m+'&&T.fmtGain(1200)==='1.200m+'&&T.fmtGain(2800)==='2.800m+'&&T.fmtGain(0)==='0m+';
+if(fmtOK) ok('fmtGain reproduce el formato de las cadenas que había escritas a mano');
+else err('fmtGain no reproduce el formato original', [600,1200,2800,0].map(n=>T.fmtGain(n)).join(' · '));
 
 // ── 6 · Referencias cruzadas entre tablas ───────────────────────────────────
 bloque('Referencias cruzadas');
@@ -289,6 +308,73 @@ for(const r of T.RACES_DB){
   if(r.quarter!==undefined&&r.quarter!==qEsperado){avi('el trimestre no corresponde al mes en '+r.id, 'month:'+r.month+' → Q'+qEsperado+', pero pone quarter:'+r.quarter);calMal++;}
 }
 if(!calMal) ok('meses en rango y trimestres coherentes');
+
+// ── 9 · T53 · el corte de render.js no puede haber roto nada ─────────────────
+bloque('Estructura de los ficheros');
+const fsx=require('fs'), pathx=require('path');
+const JS=pathx.join(__dirname,'..','js');
+const HTML=fsx.readFileSync(pathx.join(__dirname,'..','index.html'),'utf8');
+const {FILES}=require('./_bundle');
+
+// 9a · Los .js del disco y los que carga index.html tienen que ser los mismos, en
+// el mismo orden. Un fichero nuevo que nadie incluye no da error: simplemente sus
+// funciones no existen, y solo se nota al pulsar el botón que las llama.
+const enDisco=fsx.readdirSync(JS).filter(f=>f.endsWith('.js')).sort();
+const enHtml=[...HTML.matchAll(/js\/([\w-]+\.js)\?v=\d+/g)].map(m=>m[1]);
+const faltanEnHtml=enDisco.filter(f=>!enHtml.includes(f));
+const sobranEnHtml=enHtml.filter(f=>!enDisco.includes(f));
+if(faltanEnHtml.length) err('ficheros en js/ que index.html no carga', faltanEnHtml.join(', '));
+if(sobranEnHtml.length) err('index.html carga ficheros que no existen', sobranEnHtml.join(', '));
+if(!faltanEnHtml.length&&!sobranEnHtml.length) ok('los '+enDisco.length+' ficheros de js/ son exactamente los que carga index.html');
+// 9b · Y el banco de pruebas tiene que usar ESE orden, no otro: si no, un test
+// puede pasar con un orden que el navegador nunca ejecuta.
+const ordenHtml=enHtml.join(',');
+if(FILES.join(',')!==ordenHtml) err('tests/_bundle.js carga los ficheros en otro orden que index.html', 'bundle: '+FILES.join(',')+' · html: '+ordenHtml);
+else ok('el banco de pruebas usa el mismo orden de carga que index.html');
+
+// 9c · Ningún nombre de nivel raíz puede estar declarado en dos ficheros: en el
+// navegador son un único ámbito global, y dos `const` con el mismo nombre lanzan
+// SyntaxError antes de que arranque nada.
+const RE_TOP=/^(?:function\s+([\w$]+)|(?:const|let|var)\s+([\w$]+)\s*=)/gm;
+const dueño=new Map(); let choques=0;
+for(const f of FILES){
+  const txt=LIMPIO[f]||fsx.readFileSync(pathx.join(JS,f),'utf8');
+  for(const m of txt.matchAll(RE_TOP)){
+    const n=m[1]||m[2];
+    if(dueño.has(n)&&dueño.get(n)!==f){err('nombre de nivel raíz declarado en dos ficheros', n+': '+dueño.get(n)+' y '+f);choques++;}
+    else dueño.set(n,f);
+  }
+}
+if(!choques) ok('los '+dueño.size+' nombres de nivel raíz son únicos entre los '+FILES.length+' ficheros');
+
+// 9d · LA COMPROBACIÓN QUE IMPORTA TRAS MOVER FUNCIONES DE FICHERO: cada manejador
+// citado desde el HTML que genera el juego tiene que existir. Si el corte hubiera
+// perdido una función, el síntoma sería un botón que no hace nada al pulsarlo —
+// invisible hasta que alguien lo pulsa, en la pantalla concreta donde vive.
+const definidos=new Set(dueño.keys());
+for(const f of FILES)
+  for(const m of (LIMPIO[f]||'').matchAll(/^window\.([\w$]+)\s*=/gm)) definidos.add(m[1]);
+// Lo que aporta el navegador, más `render` y `G`, que sí son del juego.
+for(const g of ['document','window','event','Math','JSON','Object','Array','String','Number',
+  'localStorage','console','history','location','alert','confirm','setTimeout','clearTimeout',
+  'requestAnimationFrame','parseInt','parseFloat','encodeURIComponent','decodeURIComponent','G'])
+  definidos.add(g);
+const PALABRAS=new Set(['if','for','while','switch','return','typeof','function','catch','new','do','else']);
+const manejadores=new Map();
+for(const [f,txt] of Object.entries(LIMPIO).concat([['index.html',HTML]]))
+  // El atributo va siempre entre comillas dobles en este proyecto; dentro se usan
+  // simples. Hay que leer el atributo ENTERO y no solo su primera sentencia,
+  // porque la mitad de los manejadores se montan dentro de una expresión de
+  // plantilla: onclick="${locked?'':'toggleCircuit(\''+c.id+'\')'}".
+  for(const m of txt.matchAll(/\bon(?:click|input|change|submit|keyup|blur|focus)\s*=\s*"([^"]*)"/g))
+    // `([^.\w$])` delante evita contar los métodos (`x.foo()`), y exigir que el
+    // paréntesis vaya PEGADO al nombre evita la prosa: «ranking (recientes)».
+    for(const c of m[1].matchAll(/(?:^|[^.\w$])([\w$]+)\(/g))
+      if(!PALABRAS.has(c[1])&&!manejadores.has(c[1])) manejadores.set(c[1], f);
+let sinDefinir=0;
+for(const [n,f] of manejadores)
+  if(!definidos.has(n)){err('un manejador del HTML llama a algo que no existe', n+'() citado desde '+f);sinDefinir++;}
+if(!sinDefinir) ok('los '+manejadores.size+' manejadores citados desde el HTML existen y están definidos');
 
 console.log('\n'+(errores===0
   ? '✅ CONTENIDO OK'+(avisos?'  ('+avisos+' avisos, ninguno bloquea)':'')

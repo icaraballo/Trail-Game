@@ -2,7 +2,7 @@
 // Modo Club (gestión de club como mánager): G.clubModeData.
 // Extraído de js/coach.js el 2026-09-04 (split club.js/coach.js).
 // No confundir con el sistema de club de Clásico (G.club/CLUBS,
-// bonus de entrenamiento), que vive en js/render.js/js/state.js.
+// bonus de entrenamiento), que vive en js/render-clasico.js y js/state.js.
 
 function clubLevelByRep(){
   const rep=(G.clubModeData&&G.clubModeData.reputacion)||0;
@@ -23,9 +23,9 @@ function simClubRace(runner,race,clubData){
   let base=(s.resistencia*0.35+s.velocidad*0.2+s.subida*0.25+s.bajada*0.2);
 
   // Bonus por especialidad vs terreno
-  if(runner.spec==='montanero')base+=race.dist>30?4:2;
-  if(runner.spec==='fondista') base+=race.dist>40?5:0;
-  if(runner.spec==='tecnico')  base+=race.dist<25?3:0;
+  if(runner.spec==='montanero')base+=race.km>30?4:2;
+  if(runner.spec==='fondista') base+=race.km>40?5:0;
+  if(runner.spec==='tecnico')  base+=race.km<25?3:0;
 
   // C8 Rol
   const role=CLUB_ROLES[runner.role||'normal']||CLUB_ROLES.normal;
@@ -573,7 +573,7 @@ function renderClubCalendar(){
                 <span style="font-size:13px;font-weight:700">${esc(race.name)}</span>
                 <span style="font-size:10px;background:${tc}18;color:${tc};padding:1px 5px;border-radius:3px;font-weight:600;text-transform:uppercase">${race.tier}</span>
               </div>
-              <div style="font-size:12px;color:#888">${race.dist}km · ${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][race.month-1]} · ${race.cost>0?`€${race.cost} inscripción`:'Gratuita'} · Premio €${race.prize}</div>
+              <div style="font-size:12px;color:#888">${race.km}km · ${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][race.month-1]} · ${race.cost>0?`€${race.cost} inscripción`:'Gratuita'} · Premio €${race.prize}</div>
             </div>
             <span style="font-size:12px;color:${assigned.length>0?'#2d7a2d':'#aaa'}">${assigned.length}/4</span>
           </div>
@@ -715,7 +715,7 @@ function renderClubSimulate(){
       <div style="font-size:40px;margin-bottom:8px">${posIcon}</div>
       <div style="font-size:24px;font-weight:700;color:${posColor};margin-bottom:4px">#${r.pos} de ${r.rivals}</div>
       <div style="font-size:14px;font-weight:600;margin-bottom:4px">${esc(r.runner.flag)} ${esc(r.runner.name)}</div>
-      <div style="font-size:13px;color:#888">${esc(r.race.name)} · ${r.race.dist}km</div>
+      <div style="font-size:13px;color:#888">${esc(r.race.name)} · ${clubRaceKm(r.race)}km</div>
       ${r.prize>0?`<div style="font-size:13px;color:#2d7a2d;font-weight:600;margin-top:8px">+€${r.prize} premio</div>`:''}
     </div>
     <div class="card" style="margin-bottom:14px">
