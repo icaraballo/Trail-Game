@@ -89,8 +89,7 @@ function cnCanRace(){
   const d=G.dog;
   if(!d||d.retired)return false;
   if(d.injury&&d.injuryRaces>0)return false;
-  const threshold=(G.cnSeason||1)===1?20:30;
-  if(d.bond<threshold)return false;
+  if(d.bond<cnRaceThreshold())return false; // T142 (v91): el umbral vivía aquí y en cnRaceThreshold()
   return true;
 }
 

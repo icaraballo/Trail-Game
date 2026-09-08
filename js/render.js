@@ -104,10 +104,14 @@ function updateFinBar(){
   // monthlyNet(), que calcula sobre la economía de Clásico. En Canicross el único
   // gasto recurrente es la manutención del perro, cobrada cada 4 semanas.
   const net=G.canicrossMode?-(typeof cnMonthlyDogCost==='function'?cnMonthlyDogCost():0):monthlyNet();
-  document.getElementById('fb-money').textContent='€'+(G.canicrossMode?(G.cnMoney||0):G.money);
+  // T145 (v91): fb-debt sí se comprobaba y estos dos no, en la misma función.
+  const mb=document.getElementById('fb-money');
+  if(mb)mb.textContent='€'+(G.canicrossMode?(G.cnMoney||0):G.money);
   const nb=document.getElementById('fb-net');
-  nb.textContent=(net>=0?'+':'')+'€'+net+'/mes';
-  nb.className='fin-val '+(net>0?'green':net<0?'red':'neutral');
+  if(nb){
+    nb.textContent=(net>=0?'+':'')+'€'+net+'/mes';
+    nb.className='fin-val '+(net>0?'green':net<0?'red':'neutral');
+  }
   // T29 (v86): la deuda a la vista en todo momento — señal pasiva, sin interrumpir.
   const dc=document.getElementById('fb-debt-cell');
   const dv=document.getElementById('fb-debt');
@@ -208,7 +212,7 @@ function renderClubSetup(){
       const perks=[];
       if(c.hasFisio)perks.push('Fisio incluido');
       if(c.hasEntrenador)perks.push('Entrenador incluido');
-      return `<div class="work-card ${isActive?'':''}${isActive?'border: 2px solid #4a90d9;':''}" style="margin-bottom:10px;${isActive?'border:2px solid #4a90d9;':''}" onclick="${isActive?'':'selectClub(\''+c.id+'\')'}">
+      return `<div class="work-card" style="margin-bottom:10px;${isActive?'border:2px solid #4a90d9;':''}" onclick="${isActive?'':'selectClub(\''+c.id+'\')'}">
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
             <span class="card-title">${c.name}</span>

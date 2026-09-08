@@ -10,7 +10,10 @@ const WORK_OPTIONS=[
   {pct:0,  label:'Profesional (sin trabajo)',hours:0,income:0,trainingH:32,
    desc:'Solo viable si sponsors + premios cubren tus gastos.'},
 ];
-const FIXED_COSTS={rent:60,food:20,transport:8,gear:7,total:95};// por mes (escala juego)
+// T138 (v91): `total` estaba escrito a mano junto a sus propios sumandos, así
+// que tocar cualquiera de los cuatro dejaba el total mintiendo. Ahora se suma.
+const FIXED_COSTS=(()=>{const c={rent:60,food:20,transport:8,gear:7};// por mes (escala juego)
+  return {...c, total:Object.values(c).reduce((a,b)=>a+b,0)};})();
 
 const SEASON_OBJECTIVES=[
   {
@@ -59,7 +62,7 @@ const ACHIEVEMENTS=[
   {id:'podium_10',     rarity:'medium', label:'Consagrado',            desc:'Lograr 10 podios',                                   check:()=>(G.careerHistory||[]).filter(h=>h.pos<=3).length>=10},
   {id:'distance_500',  rarity:'medium', label:'Ultra leguas',          desc:'Acumular 500 km en carrera',                         check:()=>(G.totalCareerKm||0)>=500},
   {id:'distance_1000', rarity:'medium', label:'Mil kilómetros',        desc:'Acumular 1.000 km a lo largo de tu carrera',         check:()=>(G.totalCareerKm||0)>=1000},
-  {id:'ultra_finisher',rarity:'medium', label:'Ultra finisher',        desc:'Terminar una carrera de 40 km o más',                check:()=>(G.careerHistory||[]).some(h=>{const r=[...RACES_DB,...(Object.values(SPEC_RACES||{}).flat())];return r.find(x=>x.name===h.name)?.km>=40;})},
+  {id:'ultra_finisher',rarity:'medium', label:'Ultra finisher',        desc:'Terminar una carrera de 40 km o más',                check:()=>(G.careerHistory||[]).some(h=>allRacesByName().get(h.name)?.km>=40)},
   {id:'top_50',        rarity:'medium', label:'Ranking Top 50',        desc:'Alcanzar ranking #50 o mejor',                      check:()=>(G.ranking||999)<=50},
   {id:'wealthy',       rarity:'medium', label:'Financieramente estable',desc:'Ahorrar €5.000',                                   check:()=>(G.money||0)>=5000},
   {id:'year_5',        rarity:'medium', label:'Veterano',              desc:'Completar 5 temporadas',                            check:()=>G.year>=5},
@@ -74,7 +77,7 @@ const ACHIEVEMENTS=[
   {id:'win_same_2',    rarity:'medium', label:'Defensor del título',   desc:'Ganar la misma carrera en 2 temporadas distintas',   check:()=>RACES_DB.some(r=>{const w=(G.careerHistory||[]).filter(h=>h.name===r.name&&h.pos===1);return new Set(w.map(x=>x.year)).size>=2;})},
   // ══ MODO NORMAL — DIFÍCIL ════════════════════════════
   {id:'runner_50',     rarity:'hard',   label:'Veterano de verdad',    desc:'Completar 50 carreras',                              check:()=>(G.careerHistory||[]).length>=50},
-  {id:'win_10',        rarity:'medium', label:'Habitual ganador',       desc:'Ganar 10 carreras',                                  check:()=>(G.careerHistory||[]).filter(h=>h.pos===1).length>=10},
+  {id:'win_10',        rarity:'hard',   label:'Habitual ganador',       desc:'Ganar 10 carreras',                                  check:()=>(G.careerHistory||[]).filter(h=>h.pos===1).length>=10},
   {id:'podium_20',     rarity:'hard',   label:'Podio habitual',        desc:'Lograr 20 podios',                                   check:()=>(G.careerHistory||[]).filter(h=>h.pos<=3).length>=20},
   {id:'top_10',        rarity:'hard',   label:'Ranking Top 10',        desc:'Alcanzar ranking #10 o mejor',                      check:()=>(G.ranking||999)<=10},
   {id:'spec_top10',    rarity:'hard',   label:'Top 10 de especialidad',desc:'Alcanzar el ranking #10 en tu especialidad',         check:()=>(G.specRanking||999)<=10},
@@ -135,7 +138,7 @@ const ACHIEVEMENTS=[
   {id:'top_25',          rarity:'medium', label:'Élite emergente',         desc:'Alcanzar el ranking #25 o mejor',                                check:()=>(G.ranking||999)<=25},
   {id:'money_10k',       rarity:'medium', label:'Cuatro cifras',           desc:'Ahorrar €10.000',                                                check:()=>(G.money||0)>=10000},
   {id:'followers_25k',   rarity:'medium', label:'Referente nacional',      desc:'Llegar a 25.000 seguidores',                                     check:()=>(G.followers||0)>=25000},
-  {id:'year_6',          rarity:'medium', label:'Veterano',                desc:'Completar 6 temporadas',                                         check:()=>(G.year||0)>=6},
+  {id:'year_6',          rarity:'medium', label:'Seis temporadas',         desc:'Completar 6 temporadas',                                         check:()=>(G.year||0)>=6},
   {id:'nemesis_defeat',  rarity:'medium', label:'Cuenta saldada',          desc:'Derrotar a tu rival nemesis en 3 ocasiones distintas',           check:()=>(G._nemesisDefeatCount||0)>=3},
   {id:'pb_three',        rarity:'medium', label:'Máquina de marcas',       desc:'Batir el récord personal en 3 distancias distintas',             check:()=>Object.keys(G.personalBests||{}).length>=3},
   {id:'tapering_win',    rarity:'medium', label:'La descarga perfecta',    desc:'Ganar una carrera tras usar el bloque de tapering la semana previa',check:()=>!!(G._wonWithTaper)},
@@ -717,7 +720,9 @@ const STORM_HYD_MULT={protected:1.3,exposed:2.0};
 const STAT_SCALE_PER_KM=0.003;
 const RESISTANCE_SCALE_PER_KM=0.004;
 // Puntos de ranking por posición de carrera
-const RANKING_PTS=[38,27,18,18,18,10,10,10,10,6,4]; // idx 0=1º, 1=2º... >10=2pts
+// T130 (v91): tenía una 11ª entrada (un 4) que getRankPts no podía leer nunca
+// — corta en pos<=10, o sea índice máximo 9. Fuera; el >10 son 2, como decía.
+const RANKING_PTS=[38,27,18,18,18,10,10,10,10,6]; // idx 0=1º, 1=2º... >10=2pts
 function getRankPts(pos){return pos<=10?(RANKING_PTS[pos-1]||2):2;}
 // Tabla de reparto de premios por posición
 const PRIZE_TABLE=[1.0,0.5,0.25,0.12,0.07,0.04,0.02,0.01]; // idx 0=1º... >8=0
@@ -1345,6 +1350,18 @@ const SPEC_RACES={
 // ══════════════════════════════════════
 //  CIRCUITOS / LIGAS
 // ══════════════════════════════════════
+// T141 (v91): ultra_finisher reconstruía RACES_DB + SPEC_RACES y hacía un find
+// lineal por cada carrera del historial, en cada evaluación del logro. Se monta
+// una vez, perezosamente (SPEC_RACES se declara más abajo que ACHIEVEMENTS).
+let _ALL_RACES_BY_NAME=null;
+function allRacesByName(){
+  if(_ALL_RACES_BY_NAME)return _ALL_RACES_BY_NAME;
+  _ALL_RACES_BY_NAME=new Map();
+  for(const r of [...RACES_DB,...Object.values(SPEC_RACES||{}).flat()])
+    if(!_ALL_RACES_BY_NAME.has(r.name))_ALL_RACES_BY_NAME.set(r.name,r);
+  return _ALL_RACES_BY_NAME;
+}
+
 const CIRCUITS_DB=[
   {id:'copa_trail',name:'Copa Trail España',color:'#4a90d9',
    desc:'Liga nacional con 3 pruebas clave. Acumula puntos para el podio final.',
@@ -1367,7 +1384,6 @@ const CIRCUITS_DB=[
    reward:{money:200,followerBonus:500}},
 ];
 
-// Puntos por posición en carrera de circuito
 const FAME_ACTIONS=[
   {id:'reel',      label:'Subir reel de entrenamiento',  icon:'🎬',
    desc:'Contenido rápido. Pocos seguidores pero constante.',
@@ -1710,7 +1726,11 @@ const CLUB_EVENTS=[
 // weather_risk, tier, etc.) para evitar mantener a mano un segundo dataset de
 // tramos que pueda desincronizarse del esquema real (CR-07).
 const EXCLUSIVE_CLUB_RACE=(()=>{
+  // T139 (v91): si el id desaparece de RACES_DB, el spread de un undefined dejaba
+  // la carrera exclusiva sin tramos, sin km y sin desnivel, y el fallo solo se veía
+  // al entrar en ella. Mejor que se note al cargar.
   const template=RACES_DB.find(r=>r.id==='julio'); // Maratón Alpino Madrileño, 42K nacional
+  if(!template)console.error('EXCLUSIVE_CLUB_RACE: no existe la carrera plantilla "julio" en RACES_DB');
   return {
     ...template,
     id:'copa_clubes',
