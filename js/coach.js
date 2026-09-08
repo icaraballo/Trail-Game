@@ -118,8 +118,13 @@ function coachSlotUnlocked(idx){
   return false;
 }
 
+// T111 (v92): llamaba a saveCoachSlot() en cada invocación, y se la invoca una
+// vez por slot dentro del map que pinta el roster — tres clonados profundos por
+// render. NO se puede quitar del todo: el comentario de T101 (v88) explica que
+// el roster guarda clones y se queda obsoleto si no se refresca antes de leer.
+// Así que sube a las dos funciones que pintan, una sola vez cada una. Quitarlo
+// de verdad exige que el roster deje de ser una caché de clones (T55/T58).
 function coachSlotNotifCount(idx){
-  saveCoachSlot();
   const slot=G.coachRoster[idx];
   if(!slot||!slot.coachAthlete)return 0;
   let n=0;
@@ -261,6 +266,7 @@ function renderCoachHome(){
   markNotifsRead();
 
   // Build slot tabs
+  saveCoachSlot(); // T111/T112 (v92): una vez antes de pintar, no una por slot
   const roster=G.coachRoster||[];
   const activeIdx=G.coachActiveIdx||0;
   const filledSlots=roster.filter(s=>s&&s.coachAthlete).length;
@@ -1598,7 +1604,7 @@ function renderCoachSeasonEnd(){
 
     ${clubUnlock?`<div class="note" style="margin-bottom:12px">🏕️ <strong>Modo Club disponible</strong> — ${completedSeasons} temporadas completadas como entrenador.</div>`:''}
     <button class="main" style="margin-top:6px;opacity:0.5" onclick="saveCoachSlot();G.screen='coachHub';render()">← Volver al hub</button>
-    <button class="main" style="margin-top:6px;opacity:0.4" onclick="G=freshState();render()">← Menú principal</button>`;
+    <button class="main" style="margin-top:6px;opacity:0.4" onclick="backToMainMenu()">← Menú principal</button>`;
 }
 
 // Renovación entusiasta: el atleta propone mejoras de condiciones
@@ -1687,6 +1693,7 @@ function renderCoachHub(){
   const el=$main();
   hideChrome();
   saveCoachSlot();
+  saveCoachSlot(); // T111/T112 (v92): una vez antes de pintar, no una por slot
   const roster=G.coachRoster||[];
   const rep=G.coachReputation||0;
   // E2: detectar desbloqueo de slot y celebrar
@@ -1823,7 +1830,7 @@ function renderCoachHub(){
         </div>`).join('')}
     </div>`:''}
 
-    <button class="main" style="margin-top:12px;opacity:0.5" onclick="G=freshState();render()">← Menú principal</button>`;
+    <button class="main" style="margin-top:12px;opacity:0.5" onclick="backToMainMenu()">← Menú principal</button>`;
 }
 
 window.addCoachSlot=idx=>{

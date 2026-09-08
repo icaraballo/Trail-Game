@@ -364,7 +364,7 @@ function renderClubHub(){
     <button class="main" style="margin-top:6px" onclick="G.screen='clubSponsors';render()">🤝 Sponsors del club (${(d.clubSponsors||[]).length})</button>
     <button class="main" style="margin-top:6px;opacity:0.6" onclick="G.screen='clubRivals';render()">⚔️ Clubes rivales</button>
     <button class="main" style="margin-top:6px;opacity:0.7" onclick="G.screen='clubMonthly';render()">📅 Decisión mensual del club</button>
-    <button class="main" style="margin-top:6px;opacity:0.5" onclick="G=freshState();render()">← Menú principal</button>`;
+    <button class="main" style="margin-top:6px;opacity:0.5" onclick="backToMainMenu()">← Menú principal</button>`;
 }
 
 
@@ -1058,7 +1058,7 @@ function renderClubSeasonEnd(){
     </div>
 
     <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doClubNextSeason(${socioGain},${socioLoss},${netBalance})">Temporada ${d.temporada+1} →</button>
-    <button class="main" style="margin-top:6px;opacity:0.5" onclick="G=freshState();render()">← Menú principal</button>`;
+    <button class="main" style="margin-top:6px;opacity:0.5" onclick="backToMainMenu()">← Menú principal</button>`;
 }
 
 window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{

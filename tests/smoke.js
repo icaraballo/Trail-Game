@@ -16,7 +16,9 @@ const {T}=build(['freshState','modeCfg','currentWorkPct','setWorkPct','getEffSta
   'applyTraining','checkSponsorObjective','isDNF','finishedResults','dnfLabel','migrateState',
   'TRAINING_BLOCKS','monthlyWorkIncome','curWorkOpt','endRaceCleanup',
   'resetRaceFlags','resetRaceDayState','drain','bumpStat','raceHistoryFor',
-  'runnerCritState','screenRoutes','profBounds','serializableState']);
+  'runnerCritState','screenRoutes','profBounds','serializableState',
+  'deleteSlot','loadFromSlot','saveToSlot','SAVE_VERSION','SAVE_KEY','LS',
+  'cnGetCategory','cnCurrentMonth','CN_CATEGORIES','shuffle','CIRCUITS_DB']);
 const t=scorer();
 const setG=o=>{const g=T.freshState();Object.assign(g,o);T.setG(g);return g;};
 
@@ -158,5 +160,57 @@ t('serializableState sigue tragando una función dentro de G',
   !('checkAll' in T.serializableState().coachSeasonObjective));
 let clonable=true; try{structuredClone({f:()=>1})}catch(e){clonable=false;}
 t('y structuredClone la rechazaría: el cambio de T68 rompería el guardado', clonable===false);
+
+console.log('\n── T123 (v92) · borrar una ranura la borra de verdad ──');
+// El bug: G._saveSlot seguía apuntando ahí y el siguiente autoSave la recreaba.
+setG({_saveSlot:2});
+T.deleteSlot(2);
+t('deleteSlot suelta la ranura activa', T.getG()._saveSlot===null);
+setG({_saveSlot:1});
+T.deleteSlot(2);
+t('y no toca la ranura activa si borras otra', T.getG()._saveSlot===1);
+
+console.log('\n── T124 (v92) · SAVE_VERSION se comprueba al cargar ──');
+const almacen={};
+const LSfake={get:k=>almacen[k]??null,set:(k,v)=>{almacen[k]=v},del:k=>{delete almacen[k]}};
+const LSreal=T.LS.get, LSrealSet=T.LS.set, LSrealDel=T.LS.del;
+T.LS.get=LSfake.get; T.LS.set=LSfake.set; T.LS.del=LSfake.del;
+const estadoMin=()=>{const g=T.freshState();g.runner.name='Txiki';return g;};
+almacen[T.SAVE_KEY+'9']=JSON.stringify({v:T.SAVE_VERSION,ts:1,state:estadoMin()});
+t('un save del formato actual carga', T.loadFromSlot(9)!==null);
+almacen[T.SAVE_KEY+'9']=JSON.stringify({v:'TRAIL_SAVE_V9',ts:1,state:estadoMin()});
+t('un save de un formato futuro ya NO entra como si nada', T.loadFromSlot(9)===null);
+almacen[T.SAVE_KEY+'9']=JSON.stringify({ts:1,state:estadoMin()});
+t('un save antiguo sin campo v sigue cargando (lo migra migrateState)', T.loadFromSlot(9)!==null);
+
+console.log('\n── T140 (v92) · el id del circuito pasa a ASCII, con migración ──');
+t('CIRCUITS_DB ya no tiene ids con ñ', T.CIRCUITS_DB.every(c=>/^[\w-]+$/.test(c.id)));
+t('y el circuito de montaña existe con el id nuevo', T.CIRCUITS_DB.some(c=>c.id==='circuito_montana'));
+almacen[T.SAVE_KEY+'8']=JSON.stringify({v:T.SAVE_VERSION,ts:1,state:{...estadoMin(),
+  joinedCircuits:['circuito_montaña'],circuitCompleted:['circuito_montaña'],
+  circuitPoints:{'circuito_montaña':42}}});
+const migT140=T.loadFromSlot(8);
+t('un save viejo migra joinedCircuits', migT140&&migT140.state.joinedCircuits[0]==='circuito_montana', migT140&&migT140.state.joinedCircuits[0]);
+t('y circuitCompleted', migT140&&migT140.state.circuitCompleted[0]==='circuito_montana');
+t('y conserva los puntos bajo la clave nueva', migT140&&migT140.state.circuitPoints.circuito_montana===42);
+t('sin dejar la clave vieja detrás', migT140&&!('circuito_montaña' in migT140.state.circuitPoints));
+T.LS.get=LSreal; T.LS.set=LSrealSet; T.LS.del=LSrealDel;
+
+console.log('\n── T119/T120 (v92) · bordes de canicross ──');
+setG({cnWeek:-5});
+t('cnCurrentMonth con semana negativa da octubre, no marzo', T.cnCurrentMonth()===10, T.cnCurrentMonth());
+setG({cnWeek:0});   t('semana 0 → octubre', T.cnCurrentMonth()===10);
+setG({cnWeek:999}); t('una semana enorme sigue dando el último mes', T.cnCurrentMonth()===3);
+t('cnGetCategory con edad negativa da la primera categoría', T.cnGetCategory(-4)===T.CN_CATEGORIES[0], JSON.stringify(T.cnGetCategory(-4)));
+t('y con edad no numérica también', T.cnGetCategory(undefined)===T.CN_CATEGORIES[0]);
+
+console.log('\n── T117 (v92) · el barajado es uniforme ──');
+// sort(()=>Math.random()-0.5) dejaba el primer elemento en su sitio mucho más
+// de lo que le toca. Con 6.000 barajados de 5 elementos, cada posición debería
+// salir ~1.200 veces; se admite un margen amplio para que no sea escamosa.
+const cuenta=[0,0,0,0,0];
+for(let i=0;i<6000;i++) cuenta[T.shuffle([0,1,2,3,4]).indexOf(0)]++;
+const peor=Math.max(...cuenta.map(c=>Math.abs(c-1200)));
+t('el primer elemento acaba repartido por las 5 posiciones', peor<220, 'reparto: '+cuenta.join('/'));
 
 t.done('TODO OK');

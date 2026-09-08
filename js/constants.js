@@ -1369,7 +1369,8 @@ const CIRCUITS_DB=[
    raceIds:['copa','junio','sierra'],
    pointsForPrize:150,
    reward:{money:500,sponsorBonus:true}},
-  {id:'circuito_montaña',name:'Circuito de Alta Montaña',color:'#4a8a2a',
+  {id:'circuito_montana', // T140 (v92): llevaba ñ, y los ids son claves de objeto que acaban en localStorage
+   name:'Circuito de Alta Montaña',color:'#4a8a2a',
    desc:'3 pruebas de montaña exigentes. Solo para los mejores.',
    prize:'€800 + acceso directo al Monte Perdido',
    raceIds:['agosto','sm2','sm3'],

@@ -125,7 +125,9 @@ function cnMonthlyDogCost(){
 }
 
 function cnCurrentMonth(){
-  const w=G.cnWeek||0;
+  // T119 (v92): sin suelo, una semana negativa caía en el `return 3` final y
+  // daba marzo antes de empezar la temporada.
+  const w=Math.max(0,G.cnWeek||0);
   if(w<5)return 10;
   if(w<9)return 11;
   if(w<13)return 12;
@@ -211,13 +213,19 @@ const CN_CATEGORIES=[
 ];
 
 function cnGetCategory(age){
-  return CN_CATEGORIES.find(c=>age>=c.min&&age<=c.max)||CN_CATEGORIES[1];
+  // T120 (v92): una edad negativa no casaba con ninguna categoría y caía en el
+  // fallback, que es la categoría del medio. Ahora una edad inválida da la
+  // primera categoría, que es la que de verdad le corresponde.
+  const a=Number.isFinite(age)?Math.max(0,age):0;
+  return CN_CATEGORIES.find(c=>a>=c.min&&a<=c.max)||CN_CATEGORIES[1];
 }
 
 function cnGenerateRivals(race){
   const n=(race.tier||1)*4+Math.floor(Math.random()*4)+3;
   const base={1:360,2:390,3:415,4:440}[race.tier||1]||390;
-  const pool=[...CN_RIVAL_NAMES].sort(()=>Math.random()-0.5).slice(0,Math.min(n,CN_RIVAL_NAMES.length));
+  // T117 (v92): sort(()=>Math.random()-0.5) no da una permutación uniforme.
+  // shuffle() de render.js ya es Fisher-Yates y render.js carga antes que este.
+  const pool=shuffle([...CN_RIVAL_NAMES]).slice(0,Math.min(n,CN_RIVAL_NAMES.length));
   while(pool.length<n)pool.push('Equipo #'+(pool.length+1));
   return pool.map(name=>{
     const skill=0.80+Math.random()*0.40;
@@ -270,10 +278,16 @@ function cnFinishRace(){
     // igual que el resto de restas de salud del archivo.
     d.health=Math.max(0,(d.health||100)-20);
   }
+  // T118 (v92): la inscripción se cobraba DENTRO del if(!rs.retired), así que
+  // retirarse salía gratis — y hasta compensaba si la carrera iba mal. Si has
+  // tomado la salida, la inscripción está pagada, termines o no. La versión que
+  // pedía la ficha (cobrar al inscribirse en el calendario) hace falta también
+  // para las carreras a las que te apuntas y no corres, pero eso necesita una
+  // vía de devolución al desapuntarse y es otra tarea.
+  G.cnMoney=Math.max(0,(G.cnMoney||0)-(race.cost||0));
   if(!rs.retired){
     d.races=(d.races||0)+1;
     d.kmTogether=(d.kmTogether||0)+(race.km||0);
-    G.cnMoney=Math.max(0,(G.cnMoney||0)-(race.cost||0));
     G.cnMoney=(G.cnMoney||0)+prize;
     G.followers=(G.followers||0)+Math.round((pos<=3?150:pos<=10?80:30)*(race.tier||1));
   }

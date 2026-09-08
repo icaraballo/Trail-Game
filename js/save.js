@@ -20,7 +20,7 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
-const GAME_BUILD=91; // incrementar con cada versión del juego
+const GAME_BUILD=92; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
@@ -69,6 +69,18 @@ function serializableState(){
 // cuando se creó el save. Garantiza que cargar una partida vieja no deja
 // propiedades undefined que revienten el render.
 function migrateState(saved){
+  // T140 (v92): el circuito de montaña tenía la ñ en el id, y ese id se guarda en
+  // joinedCircuits, circuitCompleted y como clave de circuitPoints. Renombrado a
+  // ASCII; los saves anteriores traen el viejo en los tres sitios.
+  if(saved){
+    const viejo='circuito_monta\u00f1a', nuevo='circuito_montana';
+    for(const k of ['joinedCircuits','circuitCompleted'])
+      if(Array.isArray(saved[k]))saved[k]=saved[k].map(x=>x===viejo?nuevo:x);
+    if(saved.circuitPoints&&Object.prototype.hasOwnProperty.call(saved.circuitPoints,viejo)){
+      saved.circuitPoints[nuevo]=saved.circuitPoints[viejo];
+      delete saved.circuitPoints[viejo];
+    }
+  }
   const base=freshState();
   const merged={...base,...saved};
   // Merge profundo en las estructuras anidadas críticas
@@ -102,12 +114,17 @@ function migrateState(saved){
    'cnVetHistory','cnRaceResults','cnSelectedRaces','rivalIncidents']
     .forEach(k=>{if(!Array.isArray(merged[k]))merged[k]=Array.isArray(base[k])?[...base[k]]:[];});
   // Deep-merge de objetos anidados adicionales
-  if(saved.dog)          merged.dog={...base.dog,...saved.dog};
+  // T125 (v92): estos cinco hacían {...null, ...saved.x} porque los cinco valen
+  // null en freshState(): aparentaban dar valores por defecto a saves antiguos y
+  // no daban ninguno. Se deja el clon, que sí sirve, y se quita el merge que
+  // mentía. Cuando T48/T49 les den forma por defecto, volverá a tener sentido.
+  // `club` se queda con su merge: ese sí tiene un objeto real detrás.
+  if(saved.dog)          merged.dog={...saved.dog};
   if(saved.club)         merged.club={...base.club,...saved.club};
-  if(saved.clubModeData) merged.clubModeData={...base.clubModeData,...saved.clubModeData};
-  if(saved.ownBrand)     merged.ownBrand={...base.ownBrand,...saved.ownBrand};
-  if(saved.cnRaceState)  merged.cnRaceState={...base.cnRaceState,...saved.cnRaceState};
-  if(saved.coachAthlete) merged.coachAthlete={...base.coachAthlete,...saved.coachAthlete};
+  if(saved.clubModeData) merged.clubModeData={...saved.clubModeData};
+  if(saved.ownBrand)     merged.ownBrand={...saved.ownBrand};
+  if(saved.cnRaceState)  merged.cnRaceState={...saved.cnRaceState};
+  if(saved.coachAthlete) merged.coachAthlete={...saved.coachAthlete};
   if(saved.lifeAthlete)  merged.lifeAthlete={...base.lifeAthlete,...saved.lifeAthlete};
   if(saved.trainingMomentum) merged.trainingMomentum={...base.trainingMomentum,...saved.trainingMomentum};
   if(saved.trainingBlock)merged.trainingBlock={...base.trainingBlock,...saved.trainingBlock};
@@ -264,6 +281,13 @@ function loadFromSlot(slot){
     if(!raw)return null;
     const data=JSON.parse(raw);
     if(!data||!data.state)return null;
+    // T124 (v92): la constante se escribía en cada guardado y no se leía nunca,
+    // así que un save de un formato futuro entraba como si nada. Los saves sin
+    // `v` son anteriores a que se escribiera: esos sí pasan, los migra migrateState.
+    if(data.v&&data.v!==SAVE_VERSION){
+      console.warn('Ranura '+slot+': formato '+data.v+', se esperaba '+SAVE_VERSION+'. No se carga.');
+      return null;
+    }
     // T30 (v88): se validaba ANTES de migrar, así que sanitizeState() juzgaba un
     // estado incompleto y los campos que la migración rellena nunca pasaban por
     // el saneado. Ahora se hace la comprobación mínima de forma, se migra, y se
@@ -283,6 +307,9 @@ function loadFromSlot(slot){
 
 function deleteSlot(slot){
   LS.del(SAVE_KEY+slot);
+  // T123 (v92): G._saveSlot seguía apuntando a la ranura borrada, así que el
+  // siguiente autoSave() la volvía a escribir. Borrar no borraba.
+  if(G._saveSlot===slot)G._saveSlot=null;
 }
 
 function getAllSlots(){

@@ -372,6 +372,19 @@ function screenRoutes(){
 
 // T81 (v90): document.getElementById('main') aparecía en 89 sitios.
 function $main(){return document.getElementById('main');}
+// T129 (v92): siete botones hacían G=freshState() directamente desde el onclick.
+// Si la partida nunca se guardó en una ranura (G._saveSlot null), ese clic la
+// borraba entera sin preguntar y sin vuelta atrás. Cuando SÍ hay ranura activa
+// el autoSave ya ha escrito, así que volver al menú no pierde nada y no se
+// molesta al jugador. El confirm() nativo es provisional: T87 lo cambia por el
+// modal propio, junto con los otros seis.
+window.backToMainMenu=()=>{
+  const enCurso=!['intro','modeSelect','saveScreen'].includes(G.screen)&&
+    !!(G.runner?.name||G.coachAthlete||G.dog||(G.club&&G.club.id!=='none'));
+  if(enCurso&&G._saveSlot==null&&
+     !confirm('Esta partida no está guardada en ninguna ranura: si vuelves al menú se pierde. ¿Volver igualmente?'))return;
+  G=freshState();render();
+};
 // T82 (v90): esconder la barra de pestañas era la misma pareja de líneas
 // repetida. Nada más: la barra de finanzas se gestiona aparte, en updateFinBar.
 function hideChrome(){const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';}
@@ -3979,7 +3992,7 @@ function renderCareerEnd(){
       <strong>Deuda final: €${G.debt||0}</strong><br>${motivo}
       ${G.debtInterestTotal>0?`<div style="font-size:12px;margin-top:6px">Intereses pagados a lo largo de la carrera: <strong>€${G.debtInterestTotal}</strong>.</div>`:''}
     </div>
-    <button class="main" style="margin-top:6px" onclick="G=freshState();render()">← Menú principal</button>`;
+    <button class="main" style="margin-top:6px" onclick="backToMainMenu()">← Menú principal</button>`;
 }
 
 function renderRetirement(){
