@@ -26,7 +26,7 @@ function checkAndUnlockAchievements(){
   return newUnlocks;
 }
 function renderAchievements(){
-  const el=document.getElementById('main');
+  const el=$main();
   if(!G._achF)G._achF={mode:'all',rarity:'all',status:'all',tab:'all'};
   if(!G._achF.tab)G._achF.tab='all';
   const f=G._achF;
@@ -173,7 +173,7 @@ function getEffStat(k){let b=0;Object.values(G.sponsors||{}).forEach(sp=>{if(sp?
 // ── Club de Clásico (bonus de entrenamiento) — no confundir con G.clubModeData ──
 // Movido aquí desde js/coach.js el 2026-09-04 (split club.js/coach.js); usa clubRepLabel()/changeClubRep()/assignClubCompanion() de este mismo archivo/state.js.
 function renderClubSetup(){
-  const el=document.getElementById('main');
+  const el=$main();
   const currentClub=G.club||CLUBS[0];
   const rep=G.clubReputation||0;
   const repInfo=clubRepLabel();
@@ -308,63 +308,16 @@ function showToast(msg,color='#1a1a1a'){
   t._tmr=setTimeout(()=>t.classList.remove('show'),1800);
 }
 
-// ══════════════════════════════════════
-//  RENDER PRINCIPAL
-// ══════════════════════════════════════
-// Fisher-Yates unbiased shuffle (replaces sort(()=>Math.random()-0.5))
-function shuffle(arr){
-  const a=[...arr];
-  for(let i=a.length-1;i>0;i--){
-    const j=Math.floor(Math.random()*(i+1));
-    [a[i],a[j]]=[a[j],a[i]];
-  }
-  return a;
-}
-
-function render(){
-  // Defensive timer cleanup — prevent orphaned intervals from previous screens
-  if(G._xpTimerInterval){clearInterval(G._xpTimerInterval);G._xpTimerInterval=null;}
-  if(typeof _coachRaceTimer!=='undefined'&&_coachRaceTimer&&G.screen!=='coachRace'){clearInterval(_coachRaceTimer);_coachRaceTimer=null;}
-  updateFinBar();
-  updateTabNav();
-  // Refresca el panel dev si está abierto, para que sus datos (carrera en
-  // curso, placeholders del editor de estado...) sigan en vivo sin importar
-  // qué pantalla del juego se acabe de renderizar debajo.
-  if(G._devMode)renderDevOverlay();
-  renderModeSwitcher();
-  // Clear any pending Express timer if we've left the mid-race event screen
-  if(G.screen!=='midRaceEvent')clearExpressTimer();
-  const el=document.getElementById('main');
-  if(!el)return;
-  // T29 (v86): una partida terminada por quiebra se puede cargar, pero no
-  // seguir jugando. Cualquier pantalla vuelve al resumen de fin de carrera.
-  if(G.careerEnded&&G.screen!=='careerEnd'&&G.screen!=='saveScreen'&&G.screen!=='modeSelect'){
-    G.screen='careerEnd';
-  }
-  // Canicross — tab routing propio
-  if(G.gameMode==='canicross'&&SCREENS_WITH_TABS.includes(G.screen)){
-    if(G.activeTab==='game'){renderCnCorredorTab();triggerFade(el);return;}
-    if(G.activeTab==='runner'){renderCnPerroTab();triggerFade(el);return;}
-    if(G.activeTab==='fame'){renderCnEquipoTab();triggerFade(el);return;}
-    if(G.activeTab==='calendar'){renderCnCalendarioTab();triggerFade(el);return;}
-    if(G.activeTab==='finances'){renderCnFinanzasTab();triggerFade(el);return;}
-  }
-  // Si estamos en una pestaña auxiliar
-  if(G.activeTab==='calendar'&&SCREENS_WITH_TABS.includes(G.screen)){
-    if(G.gameMode==='coach'){renderCoachCalendar();triggerFade(el);return;}
-    renderCalendarTab();triggerFade(el);return;
-  }
-  if(G.activeTab==='finances'&&SCREENS_WITH_TABS.includes(G.screen)){renderFinancesTab();triggerFade(el);return;}
-  if(G.activeTab==='runner'&&SCREENS_WITH_TABS.includes(G.screen)){
-    if(G.gameMode==='coach'){renderCoachAthleteTab();triggerFade(el);return;}
-    renderRunnerTab();triggerFade(el);return;
-  }
-  if(G.activeTab==='fame'&&SCREENS_WITH_TABS.includes(G.screen)){
-    if(G.gameMode==='coach'){renderCoachRepTab();triggerFade(el);return;}
-    renderFameTab();triggerFade(el);return;
-  }
-  // Flujo normal del juego
-  ({
+// T63 (v90): el despachador de 60 rutas se reconstruía entero en CADA render.
+// No puede ser una constante de módulo: la mitad de las pantallas viven en
+// coach.js, club.js y canicross.js, que index.html carga DESPUÉS de render.js,
+// así que evaluarla al cargar el fichero daría undefined. Se construye en la
+// primera llamada, cuando ya están todos los scripts dentro, y se reutiliza.
+// T146 puede derivar DEV_ALL_SCREENS de aquí en vez de mantener 70 a mano.
+let _SCREEN_ROUTES=null;
+function screenRoutes(){
+  if(_SCREEN_ROUTES)return _SCREEN_ROUTES;
+  return _SCREEN_ROUTES={
     intro:renderIntro,workSetup:renderWorkSetup,seasonStart:renderSeasonStart,
     modeSelect:renderModeSelect,saveScreen:renderSaveScreen,
     calendar:renderCalendar,sponsors:renderSponsors,training:renderTraining,
@@ -410,7 +363,72 @@ function render(){
     canicrossDisplasia:renderCnDisplasia,
     achievements:renderAchievements,
     debtCrisis:renderDebtCrisis,careerEnd:renderCareerEnd,   // T29 (v86)
-  }[G.screen]||renderIntro)();
+};
+}
+
+// T81 (v90): document.getElementById('main') aparecía en 89 sitios.
+function $main(){return document.getElementById('main');}
+// T82 (v90): esconder la barra de pestañas era la misma pareja de líneas
+// repetida. Nada más: la barra de finanzas se gestiona aparte, en updateFinBar.
+function hideChrome(){const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';}
+
+// ══════════════════════════════════════
+//  RENDER PRINCIPAL
+// ══════════════════════════════════════
+// Fisher-Yates unbiased shuffle (replaces sort(()=>Math.random()-0.5))
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+function render(){
+  // Defensive timer cleanup — prevent orphaned intervals from previous screens
+  if(G._xpTimerInterval){clearInterval(G._xpTimerInterval);G._xpTimerInterval=null;}
+  if(typeof _coachRaceTimer!=='undefined'&&_coachRaceTimer&&G.screen!=='coachRace'){clearInterval(_coachRaceTimer);_coachRaceTimer=null;}
+  updateFinBar();
+  updateTabNav();
+  // Refresca el panel dev si está abierto, para que sus datos (carrera en
+  // curso, placeholders del editor de estado...) sigan en vivo sin importar
+  // qué pantalla del juego se acabe de renderizar debajo.
+  if(G._devMode&&typeof renderDevOverlay==='function')renderDevOverlay(); // T70 (v90): devmode.js solo se carga con ?dev=1
+  renderModeSwitcher();
+  // Clear any pending Express timer if we've left the mid-race event screen
+  if(G.screen!=='midRaceEvent')clearExpressTimer();
+  const el=$main();
+  if(!el)return;
+  // T29 (v86): una partida terminada por quiebra se puede cargar, pero no
+  // seguir jugando. Cualquier pantalla vuelve al resumen de fin de carrera.
+  if(G.careerEnded&&G.screen!=='careerEnd'&&G.screen!=='saveScreen'&&G.screen!=='modeSelect'){
+    G.screen='careerEnd';
+  }
+  // Canicross — tab routing propio
+  if(G.gameMode==='canicross'&&SCREENS_WITH_TABS.includes(G.screen)){
+    if(G.activeTab==='game'){renderCnCorredorTab();triggerFade(el);return;}
+    if(G.activeTab==='runner'){renderCnPerroTab();triggerFade(el);return;}
+    if(G.activeTab==='fame'){renderCnEquipoTab();triggerFade(el);return;}
+    if(G.activeTab==='calendar'){renderCnCalendarioTab();triggerFade(el);return;}
+    if(G.activeTab==='finances'){renderCnFinanzasTab();triggerFade(el);return;}
+  }
+  // Si estamos en una pestaña auxiliar
+  if(G.activeTab==='calendar'&&SCREENS_WITH_TABS.includes(G.screen)){
+    if(G.gameMode==='coach'){renderCoachCalendar();triggerFade(el);return;}
+    renderCalendarTab();triggerFade(el);return;
+  }
+  if(G.activeTab==='finances'&&SCREENS_WITH_TABS.includes(G.screen)){renderFinancesTab();triggerFade(el);return;}
+  if(G.activeTab==='runner'&&SCREENS_WITH_TABS.includes(G.screen)){
+    if(G.gameMode==='coach'){renderCoachAthleteTab();triggerFade(el);return;}
+    renderRunnerTab();triggerFade(el);return;
+  }
+  if(G.activeTab==='fame'&&SCREENS_WITH_TABS.includes(G.screen)){
+    if(G.gameMode==='coach'){renderCoachRepTab();triggerFade(el);return;}
+    renderFameTab();triggerFade(el);return;
+  }
+  // Flujo normal del juego
+  (screenRoutes()[G.screen]||renderIntro)();
   triggerFade(el);
 }
 function triggerFade(el){
@@ -421,7 +439,7 @@ function triggerFade(el){
 
 // ── CALENDAR TAB ───────────────────────
 function renderCalendarTab(){
-  const el=document.getElementById('main');
+  const el=$main();
   const selIds=G.selectedRaces.map(r=>r.id);
   const specRaces=getSpecRaces();
   const qLabel={1:'Primer trimestre',2:'Segundo trimestre',3:'Tercer trimestre',4:'Cuarto trimestre'};
@@ -515,7 +533,7 @@ window.toggleQTab=q=>{
 
 // ── FINANCES TAB ───────────────────────
 function renderFinancesTab(){
-  const el=document.getElementById('main');
+  const el=$main();
   const wo=WORK_OPTIONS.find(o=>o.pct===currentWorkPct())||WORK_OPTIONS[0]; // T22 (v89)
   const workM=monthlyWorkIncome();
   const sponsorM=monthlySponsorIncome();
@@ -625,7 +643,7 @@ function renderFinancesTab(){
 
 // ── RUNNER TAB ─────────────────────────
 function renderRunnerTab(){
-  const el=document.getElementById('main');
+  const el=$main();
   const load=getBodyLoad();const lt=getLoadThresholdsByMode();
   const r=G.runner;
   const specLabel=SPEC_LABEL;
@@ -859,7 +877,7 @@ function renderRunnerTab(){
 
 // ── SAVE SCREEN ────────────────────────
 function renderSaveScreen(){
-  const el=document.getElementById('main');
+  const el=$main();
   const slots=getAllSlots();
   el.innerHTML=`
     <h1>Juego Trail</h1>
@@ -997,7 +1015,7 @@ window.doImport=(slot)=>{
 // ══════════════════════════════════════════════════════════════════
 
 function renderExpresSeasonStart(){
-  const el=document.getElementById('main');
+  const el=$main();
   const load=getBodyLoad();const lt=getLoadThresholdsByMode();
   const showObjectives=!G.yearObjective||G._yearObjectiveRewardPaid;
   el.innerHTML=`
@@ -1032,7 +1050,7 @@ function renderExpresSeasonStart(){
 }
 
 function renderExpresCalendar(){
-  const el=document.getElementById('main');
+  const el=$main();
   const selIds=G.selectedRaces.map(r=>r.id);
   const canAccess=r=>r.zegamaSpecial?(G.ranking<=20||G.zegamaQual):(r.reqRanking>=G.ranking||r.reqRanking===999);
   const allRaces=[...RACES_DB,...getSpecRaces()];
@@ -1074,7 +1092,7 @@ window.toggleExpresRace=id=>{
 };
 
 function renderExpresSponsors(){
-  const el=document.getElementById('main');
+  const el=$main();
   if(!G._expressSponsorPool){G._expressSponsorPool=getExpressSponsors();}
   const pool=G._expressSponsorPool;
   const curSponsors=Object.values(G.sponsors).filter(Boolean);
@@ -1119,7 +1137,7 @@ window.selectExpressSponsor=(spId,cat)=>{
 };
 
 function renderExpresPrep(){
-  const el=document.getElementById('main');
+  const el=$main();
   const nextRace=G.selectedRaces[G.currentRaceIdx];
   const load=getBodyLoad();
   const lt=getLoadThresholdsByMode();
@@ -1188,16 +1206,12 @@ window.doExpresPrep=choice=>{
     showToast('🎯 Foco mental — +5 Mental · Carga -4','#4a8a2a');
   }
   // Go to simplified pre-race prep
-  G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;
-  G._raceInitialized=false;G._recoveryUsed=false;
-  G.redZoneStreak=0;G.redZoneMax=0;G.redZoneZeroHits={energy:false,hydration:false,legs:false};
-  G.dayConditionGenerated=false;G.dayCondition=null;
-  G.gelsCarried=0;G.gelsUsed=0;G.warmedUp=false;G.startStrategy=null;
+  resetRaceFlags();resetRaceDayState();
   G.screen='expresPreRacePrep';render();
 };
 
 function renderExpresPreRacePrep(){
-  const el=document.getElementById('main');
+  const el=$main();
   const race=G.selectedRaces[G.currentRaceIdx];
   if(!race){G.screen='preRace';render();return;}
   const altPenalty=getAltitudePenalty(race);
@@ -1238,7 +1252,7 @@ function renderExpresPreRacePrep(){
 }
 
 function renderExpresSeasonBalance(){
-  const el=document.getElementById('main');
+  const el=$main();
   const sponsorIncome=sponsorAnnual();
   const raceIncome=G.raceResults.reduce((a,r)=>a+r.prize,0);
   const yearNet=sponsorIncome+raceIncome;
@@ -1278,7 +1292,7 @@ function renderExpresSeasonBalance(){
 }
 
 function renderModeSelect(){
-  const el=document.getElementById('main');
+  const el=$main();
   const modeColors={
     facil:    {bg:'#f2faf0', border:'#8cc88c', tick:'#2d7a2d',  iconBg:'#e0f2e0'},
     medio:    {bg:'#fef9ec', border:'#e8c97a', tick:'#c07a10',  iconBg:'#fef3d0'},
@@ -1488,7 +1502,7 @@ function renderIntro(){
   // Persistir valores actuales del DOM en G antes de redibujar
   const _rn=document.getElementById('runname');if(_rn)G.runName=_rn.value;
   const _nm=document.getElementById('rname');if(_nm&&G.runner)G.runner.name=_nm.value;
-  const el=document.getElementById('main');
+  const el=$main();
   const r=G.runner;
   el.innerHTML=`
     <h1>Juego Trail</h1>
@@ -1548,7 +1562,7 @@ function renderIntro(){
 
 // ── WORK SETUP (TRIMESTRAL) ────────────
 function renderWorkSetup(){
-  const el=document.getElementById('main');
+  const el=$main();
   const q=G.currentQuarter||1;
   const qLabel={1:'Q1 — Ene/Feb/Mar',2:'Q2 — Abr/May/Jun',3:'Q3 — Jul/Ago/Sep',4:'Q4 — Oct/Nov/Dic'};
   const sponsorM=monthlySponsorIncome();
@@ -1655,7 +1669,7 @@ window.setVacQ=(q,days)=>{
 
 // ── SEASON START ───────────────────────
 function renderSeasonStart(){
-  const el=document.getElementById('main');
+  const el=$main();
   const wo=WORK_OPTIONS.find(o=>o.pct===currentWorkPct()); // T22 (v89)
   const net=monthlyNet();
   const showObjectives=!G.yearObjective||G._yearObjectiveRewardPaid; // Se vuelve a ofrecer cada vez que se cobra el objetivo actual
@@ -1719,7 +1733,7 @@ function renderSeasonStart(){
 
 // ── CALENDAR ───────────────────────────
 function renderCalendar(){
-  const el=document.getElementById('main');
+  const el=$main();
   const canAccess=r=>r.zegamaSpecial?(G.ranking<=20||G.zegamaQual):(r.reqRanking>=G.ranking||r.reqRanking===999);
   const selIds=G.selectedRaces.map(r=>r.id);
   const spent=G.selectedRaces.reduce((a,r)=>a+r.cost,0);
@@ -1836,7 +1850,7 @@ window.toggleSpecQ=q=>{
 
 // ── SPONSORS ───────────────────────────
 function renderSponsors(){
-  const el=document.getElementById('main');
+  const el=$main();
   const cats=['zapatillas','ropa','nutricion','tecnologia'];
   const catLabel={zapatillas:'Zapatillas',ropa:'Ropa',nutricion:'Nutrición',tecnologia:'Tecnología GPS'};
   const tierLabel=TIER_LABEL_SPONSOR;
@@ -1990,7 +2004,7 @@ window.negotiatePenalty=id=>{
 
 // ── TRAINING ───────────────────────────
 function renderTraining(){
-  const el=document.getElementById('main');
+  const el=$main();
   const nextRace=G.selectedRaces[0];
   const wo=curWorkOpt();
   const hint=bodyLoadHint();
@@ -2104,7 +2118,7 @@ window.setAthleteHours=h=>{
 };
 // ── PRE-RACE PREP (Tanda 7) ────────────
 function renderPreRacePrep(){
-  const el=document.getElementById('main');
+  const el=$main();
   const race=G.selectedRaces[G.currentRaceIdx];
   if(!race){G.screen='preRace';render();return;}
   const isUltra=race.km>=40;
@@ -2203,7 +2217,7 @@ window.toggleDropbag=id=>{
 //  CONDICIÓN DEL DÍA DE CARRERA
 // ══════════════════════════════════════
 function renderMidSeasonCalendar(){
-  const el=document.getElementById('main');
+  const el=$main();
   const doneNames=G.raceResults.map(r=>r.name);
   const selIds=G.selectedRaces.map(r=>r.id);
   const spent=G.selectedRaces.reduce((a,r)=>a+r.cost,0);
@@ -2307,7 +2321,7 @@ window.toggleRaceMid=id=>{
 
 // ── CIRCUITS ───────────────────────────
 function renderCircuits(){
-  const el=document.getElementById('main');
+  const el=$main();
   el.innerHTML=`
     <h2>Circuitos y ligas</h2>
     <p class="sub">Únete a un circuito para ganar puntos extra y premios al final del año</p>
@@ -2349,7 +2363,7 @@ window.toggleCircuit=id=>{
 
 // ── FAME TAB ───────────────────────────
 function renderFameTab(){
-  const el=document.getElementById('main');
+  const el=$main();
   const f=G.followers||0;
   const level=fameLevel();
   const nextLevel=FAME_THRESHOLDS.find(t=>t.followers>f);
@@ -2441,7 +2455,7 @@ window.addRepInvitation=id=>{
 // ── BETWEEN RACE MANAGEMENT ────────────
 // ── CLUB SETUP ─────────────────────────
 function renderBetweenManage(){
-  const el=document.getElementById('main');
+  const el=$main();
   const load=getBodyLoad();
   const lt=getLoadThresholdsByMode();
   const nextRace=G.selectedRaces[G.currentRaceIdx];
@@ -2522,7 +2536,7 @@ window.doRecovery=id=>{
   render();
 };
 function renderBetweenRace(){
-  const el=document.getElementById('main');const ev=G.pendingEvent;
+  const el=$main();const ev=G.pendingEvent;
   if(!ev){goNextRace();return;}
   el.innerHTML=`
     <div style="font-size:12px;font-weight:600;color:#aaa;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Entre carreras</div>
@@ -2535,7 +2549,7 @@ function renderBetweenRace(){
 
 // ── SEASON BALANCE ─────────────────────
 function renderSeasonBalance(){
-  const el=document.getElementById('main');
+  const el=$main();
   const annualWork=monthlyWorkIncome()*12;
   const annualSponsor=sponsorAnnual();
   const annualFixed=FIXED_COSTS.total*12;
@@ -2879,8 +2893,7 @@ window.toggleNR=()=>{const p=document.getElementById('nr-panel'),b=document.getE
 window.doStartRaces=()=>{
   if(!G.trainingBlock)return;
   G.raceResults=[];G.currentRaceIdx=0;
-  G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;G.redZoneZeroHits={energy:false,hydration:false,legs:false};
-  G._raceInitialized=false;G._recoveryUsed=false;
+  resetRaceFlags();
   if(G.selectedRaces.length===0){
     endSeasonRaces('seasonBalance'); // T25 (v89)
   } else {
@@ -3205,9 +3218,9 @@ function checkFirstAthleteOffer(){
 }
 
 function renderLifeAthleteOffer(){
-  const el=document.getElementById('main');
+  const el=$main();
   if(!el)return;
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  hideChrome();
   const a=G.pendingLifeAthleteOffer;
   if(!a){G.screen='workSetup';render();return;}
 
@@ -3296,9 +3309,9 @@ window.rejectLifeAthlete=()=>{
   autoSave();render();
 };
 function renderOverlapHub(){
-  const el=document.getElementById('main');
+  const el=$main();
   if(!el)return;
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  hideChrome();
   const a=G.lifeAthlete;
   const runnerName=esc(G.runner?.name||'Corredor');
   const athleteName=a?esc(a.name):'tu atleta';
@@ -3492,8 +3505,8 @@ function checkClubOffer(){
 }
 
 function renderClubOffer(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
   const isReturn=(G._clubOfferDelay>0); // segunda vez que aparece
   const cost=Math.round((G.money||0)*0.6);
@@ -3575,8 +3588,8 @@ window.confirmClubOffer=()=>{
 };
 
 function renderClubIntro(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
 
   const d=G.clubModeData;
@@ -3699,8 +3712,8 @@ function checkLifeExtraAthlete(){
 // ══════════════════════════════════════
 //  CARRERA DE VIDA — CV-4: TRANSICIÓN AL RETIRO
 function renderLifeRetirement(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
 
   const totalRaces=G.careerHistory.length;
@@ -3812,8 +3825,8 @@ window.confirmLifeCoachTransition=()=>{
 };
 
 function renderCoachIntro(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
 
   const a=G.lifeAthlete;
@@ -3906,8 +3919,8 @@ function debtPanel(){
 
 // T29 (v86) — escalón 2: vuelta forzosa a jornada completa.
 function renderDebtCrisis(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   const cfg=modeCfg().bankruptcy||{soft:500,hard:null};
   el.innerHTML=`
     <div style="text-align:center;padding:18px 0 14px">
@@ -3930,8 +3943,8 @@ function renderDebtCrisis(){
 
 // T29 (v86) — escalón 3: la partida queda visitable pero no jugable.
 function renderCareerEnd(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
   const hist=G.careerHistory||[];
   const totalWins=hist.filter(r=>r.pos===1).length;
@@ -3966,9 +3979,9 @@ function renderCareerEnd(){
 }
 
 function renderRetirement(){
-  const el=document.getElementById('main');
+  const el=$main();
   // hide persistent UI
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  hideChrome();
   const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
 
   const totalRaces=G.careerHistory.length;
@@ -4154,7 +4167,7 @@ window.afterRace=()=>{
     const injData=INJURY_TYPES[G.injuryType]||{};
     const remaining=G.injuryRacesLeft;
     G.raceResults.push({id:race?.id,name:race?.name||'',time:0,pos:null,dnf:true,dnfReason:'lesion',prize:0,all:[],statGains:[],injured:true,injuryLabel:injData.label||'Lesión'}); // T104 (v88): id · T45 (v89): forma única de DNF
-    const el=document.getElementById('main');
+    const el=$main();
     el.innerHTML=`
       <h2>Baja por lesión</h2>
       <p class="sub">${race?.name||'Próxima carrera'}</p>
@@ -4177,8 +4190,7 @@ window.afterRace=()=>{
   } else if(G.injuryType&&INJURY_TYPES[G.injuryType]?.canRace===true){
     applyInjuryToRaceStart();
   }
-  G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;G.redZoneZeroHits={energy:false,hydration:false,legs:false};
-  G._raceInitialized=false;G._recoveryUsed=false;
+  resetRaceFlags();
   if(isExpres){G.pendingEvent=null;G.screen='expresPrep';render();return;}
   const hasFisioVal=G.spending.fisio||G.club?.hasFisio;
   if(Math.random()<0.65){

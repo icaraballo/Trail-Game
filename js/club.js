@@ -170,8 +170,8 @@ function generateClubEvent(){
 }
 
 function renderClubCreate(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   const name=G._clubNameDraft||'';
   const spec=G._clubSpecDraft||'mixto';
   const fil=G._clubFilDraft||'montanero';
@@ -244,8 +244,8 @@ window.doClubCreate=()=>{
 };
 
 function renderClubHub(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   const d=G.clubModeData;
   if(!d){G.screen='clubCreate';render();return;}
   const lvl=clubLevelByRep();
@@ -370,7 +370,7 @@ function renderClubHub(){
 
 
 function renderClubPlantilla(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
   const wages=clubMonthlyWage();
   const inIds=d.plantilla.map(r=>r.id);
@@ -547,7 +547,7 @@ window.doClubRelease=idx=>{
   autoSave();render();
 };
 function renderClubCalendar(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
   const assignments=d.calAssignments||{};
   const tierColors={local:'#888',regional:'#4a90d9',nacional:'#2d7a2d',elite:'#c0392b'};
@@ -684,9 +684,9 @@ window.doClubSimulateSeason=()=>{
 };
 
 function renderClubSimulate(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  hideChrome();
   const results=d.seasonResults||[];
   const idx=G._clubSimIdx||0;
   const isDone=idx>=results.length;
@@ -733,9 +733,9 @@ function renderClubSimulate(){
 
 // ── STAFF TÉCNICO (C11) ────────────────────────────────────────────────────
 function renderClubStaff(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  hideChrome();
   el.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <h2 style="margin-bottom:0">Staff Técnico</h2>
@@ -779,9 +779,9 @@ window.doClubFireStaff=(id)=>{
 
 // ── PATROCINIO DE CLUB (C13) ───────────────────────────────────────────────
 function renderClubSponsors(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  hideChrome();
   const activeIds=(d.clubSponsors||[]).map(s=>s.id);
   const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;
   // Más sponsors disponibles según filosofía comercial
@@ -836,9 +836,9 @@ window.doClubRemoveSponsor=(id)=>{
 
 // ── CLUBES RIVALES (C14) ───────────────────────────────────────────────────
 function renderClubRivals(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  hideChrome();
   const lvl=clubLevelByRep();
   // Rivales crecen con el tiempo
   const rivals=(d.rivalClubs||[]).map(r=>({
@@ -874,9 +874,9 @@ function renderClubRivals(){
 
 // ── DECISIONES MENSUALES COMPLETAS (C16) ──────────────────────────────────
 function renderClubMonthly(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  hideChrome();
   const sel=G._monthlySelections||{};
   const decDefs=[
     {id:'training',label:'Foco de entrenamiento',icon:'💪',options:[
@@ -954,8 +954,8 @@ window.doClubApplyMonthlyFull=()=>{
 };
 
 function renderClubSeasonEnd(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   const d=G.clubModeData;if(!d){G.screen='clubHub';render();return;}
   const results=d.seasonResults||[];
   const podiums=results.filter(r=>r.pos<=3&&!r.dnf).length;
@@ -1168,7 +1168,7 @@ window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
 };
 
 function renderClubEvent(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.clubModeData;if(!d||!d.pendingEvent){G.screen='clubHub';render();return;}
   const ev=d.pendingEvent;
   el.innerHTML=`

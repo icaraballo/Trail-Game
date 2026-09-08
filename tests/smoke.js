@@ -14,7 +14,9 @@
 const {build,scorer}=require('./_bundle');
 const {T}=build(['freshState','modeCfg','currentWorkPct','setWorkPct','getEffStat',
   'applyTraining','checkSponsorObjective','isDNF','finishedResults','dnfLabel','migrateState',
-  'TRAINING_BLOCKS','monthlyWorkIncome','curWorkOpt','endRaceCleanup']);
+  'TRAINING_BLOCKS','monthlyWorkIncome','curWorkOpt','endRaceCleanup',
+  'resetRaceFlags','resetRaceDayState','drain','bumpStat','raceHistoryFor',
+  'runnerCritState','screenRoutes','profBounds','serializableState']);
 const t=scorer();
 const setG=o=>{const g=T.freshState();Object.assign(g,o);T.setG(g);return g;};
 
@@ -103,5 +105,58 @@ t('las tres siguientes no hacen NADA', trasUna===trasCuatro, trasUna+' vs '+tras
 t('queda marcado como aplicado', T.getG().trainingBlockApplied===true);
 T.applyTraining(true);
 t('force:true sí reaplica (modo desarrollador)', JSON.stringify(T.getG().runner.stats)!==trasCuatro);
+
+console.log('\n── T74 (v90) · un solo reset de carrera ──');
+// Eran cuatro copias de las mismas líneas. Son DOS resets distintos a propósito:
+// resetRaceFlags no toca la condición del día ni el material, resetRaceDayState sí.
+setG({preRaceNutrition:'x',dropbagShown:true,redZoneStreak:9,_raceInitialized:true,
+  _recoveryUsed:true,dayConditionGenerated:true,dayCondition:{id:'x'},gelsCarried:3,warmedUp:true,startStrategy:'x'});
+T.resetRaceFlags();
+const g74=T.getG();
+t('resetRaceFlags limpia nutrición, dropbag y zona roja',
+  g74.preRaceNutrition==='pasta'&&g74.dropbagShown===false&&g74.redZoneStreak===0);
+t('resetRaceFlags baja las dos banderas de inicialización',
+  g74._raceInitialized===false&&g74._recoveryUsed===false);
+t('resetRaceFlags NO toca la condición del día ni el material (la divergencia es real)',
+  g74.dayConditionGenerated===true&&g74.gelsCarried===3&&g74.warmedUp===true);
+T.resetRaceDayState();
+t('resetRaceDayState sí limpia condición del día, geles y estrategia',
+  T.getG().dayConditionGenerated===false&&T.getG().dayCondition===null&&
+  T.getG().gelsCarried===0&&T.getG().warmedUp===false&&T.getG().startStrategy===null);
+
+console.log('\n── T77/T78 (v90) · drain y bumpStat con la semántica de antes ──');
+const o78={legs:50,energy:5};
+t('drain resta y devuelve el valor', T.drain(o78,'legs',12)===38&&o78.legs===38);
+t('drain corta en 0, no en negativo', T.drain(o78,'energy',12)===0);
+t('drain con undefined da NaN, como la línea que sustituye', Number.isNaN(T.drain({},'legs',3)));
+const p77={stats:{mental:97}};
+t('bumpStat respeta el techo de 100', T.bumpStat(p77,'mental',10)===100);
+t('bumpStat parte de 50 si el stat no existe', T.bumpStat({stats:{}},'mental',5)===55);
+
+console.log('\n── T62/T63 (v90) · lo que ahora se cachea ──');
+t('modeCfg devuelve el mismo objeto en dos llamadas', T.modeCfg('dificil')===T.modeCfg('dificil'));
+t('y no mezcla modos', T.modeCfg('facil').startMoney===550&&T.modeCfg('hardcore').startMoney===150);
+t('un modo inventado sigue cayendo en la config de medio', T.modeCfg('zzz').startMoney===300);
+t('el despachador de rutas se construye una sola vez', T.screenRoutes()===T.screenRoutes());
+t('y las 73 rutas apuntan a funciones',
+  Object.values(T.screenRoutes()).every(f=>typeof f==='function'), Object.keys(T.screenRoutes()).length+' rutas');
+
+console.log('\n── T80/T73 (v90) · helpers de carrera ──');
+setG({careerRaceHistory:{}});
+T.raceHistoryFor('pinar').finished++;
+T.raceHistoryFor('pinar').abandoned++;
+t('raceHistoryFor crea la ficha y deja contar', T.getG().careerRaceHistory.pinar.finished===1&&T.getG().careerRaceHistory.pinar.abandoned===1);
+setG({runner:{...T.freshState().runner,energy:5,hydration:8,legs:50}});
+t('runnerCritState cuenta los stats bajo 10', T.runnerCritState().critCount===2);
+t('y devuelve el mínimo', T.runnerCritState().minStat===5);
+
+console.log('\n── T68 · por qué NO se cambió a structuredClone ──');
+// G.coachSeasonObjective guarda un checkAll (coach.js). JSON.stringify lo tira
+// en silencio; structuredClone lanza y dejaría el modo Entrenador sin guardar.
+setG({coachSeasonObjective:{id:'win_elite',met:false,checkAll:()=>true}});
+t('serializableState sigue tragando una función dentro de G',
+  !('checkAll' in T.serializableState().coachSeasonObjective));
+let clonable=true; try{structuredClone({f:()=>1})}catch(e){clonable=false;}
+t('y structuredClone la rechazaría: el cambio de T68 rompería el guardado', clonable===false);
 
 t.done('TODO OK');

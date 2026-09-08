@@ -320,28 +320,29 @@ function applyRepDecay(cause){
   const lost=before-G.followers;
   if(lost>200)setTimeout(()=>showToast('-'+lost+' seguidores 📉','#c07a10'),400);
 }
+// T71 (v90): eran cinco bloques `if` casi idénticos donde solo cambiaban el
+// umbral, el tier y el filtro. Dos de los cinco excluían las carreras ya
+// invitadas y tres no — pero eso daba igual, porque un tier no se repite hasta
+// su propio escalón (el segundo nacional y el segundo élite eran justo los dos
+// que sí lo llevaban). Aplicarlo a los cinco es equivalente y quita el caso
+// especial. Verificado comparando la salida contra la versión anterior con
+// shuffle determinista, sobre todos los umbrales y varios calendarios.
+const REP_INVITE_TIERS=[
+  {min:5000,  tier:'regional'},
+  {min:10000, tier:'nacional'},
+  {min:15000, tier:'nacional'},
+  {min:25000, tier:'elite'},
+  {min:50000, tier:'elite'},
+];
 function calcRepInvitations(){
   const f=G.followers||0;
   const invites=[];
-  if(f>=5000){
-    const regionales=RACES_DB.filter(r=>r.tier==='regional'&&!G.selectedRaces.find(s=>s.id===r.id));
-    if(regionales.length)invites.push({...shuffle(regionales)[0],inviteType:'regional'});
-  }
-  if(f>=10000){
-    const nacionales=RACES_DB.filter(r=>r.tier==='nacional'&&!G.selectedRaces.find(s=>s.id===r.id));
-    if(nacionales.length)invites.push({...shuffle(nacionales)[0],inviteType:'nacional'});
-  }
-  if(f>=15000){
-    const nacionales2=RACES_DB.filter(r=>r.tier==='nacional'&&!G.selectedRaces.find(s=>s.id===r.id)&&!invites.find(i=>i.id===r.id));
-    if(nacionales2.length)invites.push({...shuffle(nacionales2)[0],inviteType:'nacional'});
-  }
-  if(f>=25000){
-    const elites=RACES_DB.filter(r=>r.tier==='elite'&&!G.selectedRaces.find(s=>s.id===r.id));
-    if(elites.length)invites.push({...shuffle(elites)[0],inviteType:'elite'});
-  }
-  if(f>=50000){
-    const elites2=RACES_DB.filter(r=>r.tier==='elite'&&!G.selectedRaces.find(s=>s.id===r.id)&&!invites.find(i=>i.id===r.id));
-    if(elites2.length)invites.push({...shuffle(elites2)[0],inviteType:'elite'});
+  for(const nivel of REP_INVITE_TIERS){
+    if(f<nivel.min)continue;
+    const libres=RACES_DB.filter(r=>r.tier===nivel.tier
+      &&!G.selectedRaces.find(s=>s.id===r.id)
+      &&!invites.find(i=>i.id===r.id));
+    if(libres.length)invites.push({...shuffle(libres)[0],inviteType:nivel.tier});
   }
   G.repInvitations=invites;
 }
@@ -459,8 +460,36 @@ function _tierDiffMultFor(mode){
 // T22 (v89): workIncomeMult sale de sponsorMult con los mismos valores — el
 // sueldo del trabajo no debe escalar con tus patrocinadores. Mismo balance.
 // sponsorMult en esta misma tabla — antes solo Exprés lo usaba (CR-37, v75).
+// T62 (v90): se llama al menos siete veces por tramo y cada llamada reconstruía
+// los cinco objetos de configuración más cinco _tierDiffMultFor. Todo lo que
+// hay dentro son constantes literales y _tierDiffMultFor es pura (solo lee
+// _TDM_SCALE/_TDM_BASE), así que el resultado por modo no cambia nunca en toda
+// la partida. OJO: ahora el objeto se comparte entre llamadas — nadie debe
+// mutar lo que devuelve modeCfg(); si hace falta cambiar el balance se toca
+// aquí, en la tabla, como dice la nota de T29b sobre minPay.
+const _MODE_CFG_CACHE={};
+// T77/T78 (v90): 95 repeticiones de las mismas dos operaciones con clamp
+// (26 legs, 31 energy, 5 hydration + expresiones, y 25 subidas de stat).
+//
+// Toman el objeto explícitamente en vez de asumir G.runner, al revés de lo que
+// pedía la ficha: en race.js `r` es el corredor en unos ámbitos y un rival o un
+// resultado en otros, y pasarlo hace que la sustitución sea local y no dependa
+// de razonar sobre qué hay en `r` en cada sitio. La transformación se verificó
+// aplicándole la inversa: reproduce race.js y canicross.js byte a byte.
+//
+// Hacen EXACTAMENTE lo que hacía la línea que sustituyen. En particular drain
+// no mete un `||0` de cortesía: si el campo llega undefined el resultado sigue
+// siendo NaN igual que antes, porque tapar eso aquí sería cambiar comportamiento
+// y escondería el bug de quien no inicializó el campo.
+function drain(o,k,n){o[k]=Math.max(0,o[k]-n);return o[k];}
+function bumpStat(o,k,n){o.stats[k]=Math.min(100,(o.stats[k]||50)+n);return o.stats[k];}
+
 function modeCfg(mode){
   const m=mode||G.gameMode||'medio';
+  if(_MODE_CFG_CACHE[m])return _MODE_CFG_CACHE[m];
+  return _MODE_CFG_CACHE[m]=_buildModeCfg(m);
+}
+function _buildModeCfg(m){
   return {
     facil:    {injuryRiskMult:0.4, fatigueMult:0.7, rivalMult:1.12, startMoney:550, sponsorMult:1.2, workIncomeMult:1.2, trainingMult:1.2, maxYears:99, tierDiffMult:_tierDiffMultFor('facil'),
                fisio:{floor:0.35, onset:75, decay:0.008, cap:0.85}, bankruptcy:{soft:700, hard:null, interest:0.08, minPay:0.25}},

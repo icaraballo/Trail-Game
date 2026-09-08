@@ -172,7 +172,7 @@ function cnApplyEventAuto(ev,rs){
   if(ev.bondMod)rs.bondDelta=(rs.bondDelta||0)+ev.bondMod;
   if(ev.energyBonus)rs.energyBonus=(rs.energyBonus||0)+ev.energyBonus;
   if(ev.speedBonus)rs.speedBonus=(rs.speedBonus||0)+(typeof ev.speedBonus==='number'?ev.speedBonus:3);
-  if(ev.mentalMod)G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+(ev.mentalMod||0));
+  if(ev.mentalMod)bumpStat(G.runner,'mental',(ev.mentalMod||0));
   if(ev.hydBonus)rs.runnerEnergy=Math.min(100,(rs.runnerEnergy||100)+(ev.hydBonus||0));
   if(ev.timeLoss)rs.timePenalty=(rs.timePenalty||0)+ev.timeLoss;
 }
@@ -390,7 +390,7 @@ window.cnAdvanceRestWeek=()=>{
     d.bond=Math.min(100,(d.bond||0)+bondBonus);
     d.peakBond=Math.max(d.peakBond||0,d.bond);
   }
-  if(G.runner?.stats?.mental!==undefined)G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+mentalBonus);
+  if(G.runner?.stats?.mental!==undefined)bumpStat(G.runner,'mental',mentalBonus);
   G.cnVacationUsed=(G.cnVacationUsed||0)+days;
   G.cnWeek=(G.cnWeek||0)+1;
   if((G.cnWeek||0)%4===0){
@@ -770,7 +770,7 @@ window.cnDoPreseasonAct=id=>{
   const d=G.dog;
   if(act.bondBonus&&d){d.bond=Math.min(100,(d.bond||0)+act.bondBonus);d.peakBond=Math.max(d.peakBond||0,d.bond);}
   if(act.healthBonus&&d)d.health=Math.min(100,(d.health||100)+act.healthBonus);
-  if(act.mentalBonus&&G.runner?.stats)G.runner.stats.mental=Math.min(100,(G.runner.stats.mental||50)+act.mentalBonus);
+  if(act.mentalBonus&&G.runner?.stats)bumpStat(G.runner,'mental',act.mentalBonus);
   if(act.teachFirst&&d){d.commands=d.commands||{};if(!d.commands.forward){d.commands.forward=true;showToast(esc(d.name)+' aprende "Adelante" en el entreno ✅','#4a8a2a');}}
   G.cnPreseasonDone.push(id);
   autoSave();render();
@@ -778,7 +778,7 @@ window.cnDoPreseasonAct=id=>{
 };
 
 function renderCnCreateDog(){
-  const el=document.getElementById('main');
+  const el=$main();
   const breed=G._cnDogBreed;
   const origin=G._cnAdoptionOrigin;
   const originData=CN_ADOPTION_ORIGINS.find(o=>o.id===origin);
@@ -840,7 +840,7 @@ function renderCnCreateDog(){
 
 // ── PRETEMPORADA ──────────────────────────────────────
 function renderCanicrossPreseason(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.dog;
   if(!d){G.screen='canicrossHub';render();return;}
   const done=G.cnPreseasonDone||[];
@@ -901,7 +901,7 @@ function renderCanicrossPreseason(){
 
 // ── TAB: CORREDOR ─────────────────────────────────────
 function renderCnCorredorTab(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.dog;
   const canRace=cnCanRace();
   const races=G.cnSelectedRaces||[];
@@ -1048,7 +1048,7 @@ function renderCnCorredorTab(){
 
 // ── TAB: PERRO ────────────────────────────────────────
 function renderCnPerroTab(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.dog;
   cnCheckBirthday();
   if(!d){el.innerHTML=`<div class="hint">Sin perro. Algo fue mal.</div>`;return;}
@@ -1103,7 +1103,7 @@ function renderCnPerroTab(){
 
 // ── TAB: EQUIPO ───────────────────────────────────────
 function renderCnEquipoTab(){
-  const el=document.getElementById('main');
+  const el=$main();
   const owned=G.cnOwnedEquipment||{dogHarness:['basic_harness'],humanBelt:['basic_belt'],line:['soft_line']};
   const eq=G.equipment||{dogHarness:'basic_harness',humanBelt:'basic_belt',line:'soft_line'};
 
@@ -1142,7 +1142,7 @@ function renderCnEquipoTab(){
 
 // ── SETUP: ENTRENAMIENTO + SEMANAS DESCANSO ───────────
 function renderCanicrossTrainingSetup(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.dog;
   const sel=G.cnTrainingBlock;
 
@@ -1211,7 +1211,7 @@ function renderCanicrossTrainingSetup(){
 // ── SETUP: CALENDARIO DE TEMPORADA ────────────────────
 function renderCanicrossCalendarSetup(){
   // Reutiliza renderCnCalendarioTab pero con navegación diferente
-  const el=document.getElementById('main');
+  const el=$main();
   const sel=G.cnSelectedRaces||[];
   const selIds=sel.map(r=>r.id);
   const MONTHS=[10,11,12,1,2,3];
@@ -1284,7 +1284,7 @@ function renderCanicrossCalendarSetup(){
 
 // ── TAB: CALENDARIO ───────────────────────────────────
 function renderCnCalendarioTab(){
-  const el=document.getElementById('main');
+  const el=$main();
   const sel=G.cnSelectedRaces||[];
   const selIds=sel.map(r=>r.id);
   const MONTHS=[10,11,12,1,2,3];
@@ -1365,7 +1365,7 @@ function renderCnCalendarioTab(){
 
 // ── TAB: FINANZAS ─────────────────────────────────────
 function renderCnFinanzasTab(){
-  const el=document.getElementById('main');
+  const el=$main();
   const prizeTotal=(G.cnRaceResults||[]).filter(r=>r.season===G.cnSeason).reduce((a,r)=>a+(r.prize||0),0);
   const inscCost=(G.cnSelectedRaces||[]).reduce((a,r)=>a+(r.cost||0),0);
   const dogMonthly=cnMonthlyDogCost();
@@ -1460,7 +1460,7 @@ function cnLiveClassPanel(rs){
 
 // ── RACE SCREENS ──────────────────────────────────────
 function renderCanicrossPreRace(){
-  const el=document.getElementById('main');
+  const el=$main();
   const race=(G.cnSelectedRaces||[])[G.cnCurrentRaceIdx];
   if(!race){G.screen='canicrossHub';G.activeTab='game';render();return;}
   const d=G.dog;
@@ -1531,7 +1531,7 @@ function renderCanicrossPreRace(){
 }
 
 function renderCanicrossSegment(){
-  const el=document.getElementById('main');
+  const el=$main();
   const rs=G.cnRaceState;
   if(!rs||rs.done){G.screen='canicrossHub';G.activeTab='game';render();return;}
   const race=(G.cnSelectedRaces||[])[G.cnCurrentRaceIdx];
@@ -1629,7 +1629,7 @@ function renderCanicrossSegment(){
 }
 
 function renderCanicrossPostRace(){
-  const el=document.getElementById('main');
+  const el=$main();
   const rs=G.cnRaceState;
   if(!rs||!rs.done){G.screen='canicrossHub';G.activeTab='game';render();return;}
   const d=G.dog;
@@ -1673,7 +1673,7 @@ function renderCanicrossPostRace(){
 }
 
 function renderCnSeasonBalance(){
-  const el=document.getElementById('main');
+  const el=$main();
   const results=(G.cnRaceResults||[]).filter(r=>r.season===G.cnSeason);
   const d=G.dog;
   const totalPrize=results.reduce((a,r)=>a+(r.prize||0),0);
@@ -1710,7 +1710,7 @@ function renderCnSeasonBalance(){
 }
 
 function renderCnDogRetirement(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.dog;if(!d)return;
   const seasons=(G.cnSeason||1)-(d.birthSeason||1);
 
@@ -1729,7 +1729,7 @@ function renderCnDogRetirement(){
 }
 
 function renderCnDogDeath(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.dog;
   el.innerHTML=`
     <div style="text-align:center;padding:28px 0 18px">
@@ -1744,7 +1744,7 @@ function renderCnDogDeath(){
 }
 
 function renderCnDisplasia(){
-  const el=document.getElementById('main');
+  const el=$main();
   const d=G.dog;if(!d)return;
   el.innerHTML=`
     <h2>🩺 Diagnóstico veterinario</h2>

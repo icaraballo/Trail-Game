@@ -137,8 +137,8 @@ function markNotifsRead(){
   (G._coachSlotNotifs||[]).forEach(n=>n.read=true);
 }
 function renderCoachSelect(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
   const pool=G.coachPool||[];
   el.innerHTML=`
@@ -204,8 +204,8 @@ window.doCoachSelect=id=>{
 };
 
 function renderCoachStyleSelect(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
   const sel=G._pendingTrainerStyle||null;
   el.innerHTML=`
@@ -248,7 +248,7 @@ window.doConfirmTrainerStyle=()=>{
 
 
 function renderCoachHome(){
-  const el=document.getElementById('main');
+  const el=$main();
   const a=G.coachAthlete;
   if(!a){G.screen='coachSelect';render();return;}
   const pl=PERSONALITY_LABEL[a.personality];
@@ -389,7 +389,7 @@ function renderCoachHome(){
 }
 
 function renderCoachTraining(){
-  const el=document.getElementById('main');
+  const el=$main();
   const a=G.coachAthlete;
   const pl=PERSONALITY_LABEL[a.personality];
   const nextRace=(G.coachSelectedRaces||[])[G.coachRaceIdx];
@@ -569,7 +569,7 @@ window.doCoachTraining=blockId=>{
 };
 
 function renderCoachTrainingReaction(){
-  const el=document.getElementById('main');
+  const el=$main();
   const lt=G.coachLastTraining;
   const a=G.coachAthlete;
   if(!lt){G.screen='coachHome';render();return;}
@@ -593,7 +593,7 @@ function renderCoachTrainingReaction(){
 }
 
 function renderCoachCalendar(){
-  const el=document.getElementById('main');
+  const el=$main();
   const a=G.coachAthlete;
   if(!a){G.screen='coachSelect';render();return;}
   const selIds=(G.coachSelectedRaces||[]).map(r=>r.id);
@@ -656,7 +656,7 @@ window.doCoachStartRace=()=>{
 };
 
 function renderCoachPreRace(){
-  const el=document.getElementById('main');
+  const el=$main();
   const race=(G.coachSelectedRaces||[])[G.coachRaceIdx];
   if(!race){G.screen='coachHome';render();return;}
   const a=G.coachAthlete;
@@ -929,7 +929,7 @@ window.doCoachSkipRace=()=>{
 };
 
 function renderCoachRace(){
-  const el=document.getElementById('main');
+  const el=$main();
   const data=G.coachRaceData;
   if(!data){G.screen='coachHome';render();return;}
   const race=data.race;
@@ -940,7 +940,7 @@ function renderCoachRace(){
   const currentSeg=!isDone&&!G.coachRaceAidPaused&&!midEvt&&G.coachRaceAnimIdx>0?data.segments[G.coachRaceAnimIdx-1]:null;
   const COL={climb:'#639922',descent:'#E24B4A',flat:'#888780'};
   const ICO={climb:'▲',descent:'▼',flat:'▶'};
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  hideChrome();
   const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
   const kmDone=shown.reduce((s,x)=>s+x.km,0);
   const pct=Math.round(G.coachRaceAnimIdx/data.segments.length*100);
@@ -1305,8 +1305,8 @@ window.doCoachRaceFinish=()=>{
 //  POST-CARRERA UNIFICADA (E16)
 // ══════════════════════════════════════
 function renderCoachPostRace(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   const a=G.coachAthlete;if(!a){G.screen='coachHome';render();return;}
   const r=G._lastRaceResult||{pos:0,raceName:'Carrera',prize:0,coachCut:0};
   // T45 (v89): esta pantalla asume clasificación. El camino de DNF va a
@@ -1390,8 +1390,8 @@ function renderCoachPostRace(){
 }
 
 function renderCoachSeasonEnd(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   const a=G.coachAthlete;
   const results=G.coachRaceResults||[];
   const wins=results.filter(r=>r.pos===1&&!r.dnf).length;
@@ -1684,8 +1684,8 @@ window.doCoachNewAthlete=()=>{
   G.screen='coachSelect';render();
 };
 function renderCoachHub(){
-  const el=document.getElementById('main');
-  const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
+  const el=$main();
+  hideChrome();
   saveCoachSlot();
   const roster=G.coachRoster||[];
   const rep=G.coachReputation||0;
@@ -1917,7 +1917,7 @@ window.doCoachDelegateRace=()=>{
 // ══════════════════════════════════════
 //  MODO CLUB — PANTALLAS
 function renderCoachAthleteTab(){
-  const el=document.getElementById('main');
+  const el=$main();
   const a=G.coachAthlete;
   if(!a){el.innerHTML='<div class="hint" style="margin-top:20px">Sin atleta activo.</div>';return;}
   const pl=PERSONALITY_LABEL[a.personality];
@@ -2018,7 +2018,7 @@ function renderCoachAthleteTab(){
 }
 
 function renderCoachRepTab(){
-  const el=document.getElementById('main');
+  const el=$main();
   const hist=G.coachAthleteHistory||[];
   const curResults=G.coachRaceResults||[];
   const curWins=curResults.filter(r=>r.pos===1&&!r.dnf).length;
@@ -2157,7 +2157,7 @@ function generateCoachBetweenEvent(){
 
 // ── Render between-race event (Tanda 1) ──
 function renderCoachEvent(){
-  const el=document.getElementById('main');
+  const el=$main();
   const ev=G.coachPendingEvent;
   if(!ev){G.screen='coachHome';render();return;}
   const a=G.coachAthlete;
@@ -2210,8 +2210,6 @@ function generateCoachSeasonObjective(){
   const hist=G.coachAthleteHistory||[];
   const season=G.coachSeason||1;
   const lastSeason=hist[hist.length-1];
-  const totalDnfs=(hist.reduce((s,h)=>{
-    const r=h.raceResults||[];return s+r.filter(x=>x.dnf).length;},0));
   const prevBest=lastSeason?.bestPos||999;
 
   // Pool base por personalidad
@@ -2287,7 +2285,7 @@ function generateCoachSponsorPool(){
 
 // ── Sponsors screen ──
 function renderCoachSponsors(){
-  const el=document.getElementById('main');
+  const el=$main();
   const a=G.coachAthlete;
   const pool=G.coachSponsorPool||[];
   const active=G.coachSponsors||[];
