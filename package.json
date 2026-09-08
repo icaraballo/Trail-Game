@@ -4,7 +4,9 @@
   "private": true,
   "description": "Juego de gestión de trail running — vanilla JS, sin framework. El navegador carga js/*.js como scripts clásicos: no hay bundler ni módulos.",
   "scripts": {
-    "lint": "eslint js/*.js"
+    "lint": "eslint js/*.js",
+    "test": "node tests/smoke.js",
+    "check": "npm run lint && npm test"
   },
   "devDependencies": {
     "eslint": "^9.13.0"

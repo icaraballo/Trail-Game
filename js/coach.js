@@ -1105,7 +1105,7 @@ window.doCoachAidAdvice=advice=>{
   if(advice==='abandonar'){
     const rightCall=aidSeg.energy<30||aidSeg.legs<25;
     trustDelta=rightCall?+3:-5;
-    G.coachRaceResults.push({pos:999,dnf:true,prize:0,coachCut:0,raceName:data.race.name});
+    G.coachRaceResults.push({pos:null,dnf:true,dnfReason:'abandono',prize:0,coachCut:0,raceName:data.race.name}); // T45 (v89): forma única
     G.coachTrust=Math.max(0,Math.min(100,G.coachTrust+trustDelta));
     G.coachBodyLoad=Math.max(0,G.coachBodyLoad-8);
     G.coachRaceIdx++;
@@ -1309,6 +1309,9 @@ function renderCoachPostRace(){
   const nav=document.getElementById('tab-nav');if(nav)nav.style.display='none';
   const a=G.coachAthlete;if(!a){G.screen='coachHome';render();return;}
   const r=G._lastRaceResult||{pos:0,raceName:'Carrera',prize:0,coachCut:0};
+  // T45 (v89): esta pantalla asume clasificación. El camino de DNF va a
+  // coachHome y no debería llegar aquí; la guarda evita pintar «#null».
+  if(isDNF(r)){G.screen='coachHome';render();return;}
   const es=EMOTIONAL_STATES[G.coachEmotionalState||'fresco'];
   const isAllDone=(G.coachRaceIdx>=(G.coachSelectedRaces||[]).length);
   const nextRace=!isAllDone?(G.coachSelectedRaces||[])[G.coachRaceIdx]:null;
@@ -2113,7 +2116,7 @@ window.doCoachMidRaceEvent=choiceIdx=>{
   if(choice.trust)G.coachTrust=Math.max(0,Math.min(100,G.coachTrust+(choice.trust||0)));
   if(choice.reputation)G.coachReputation=Math.min(100,(G.coachReputation||0)+(choice.reputation||0));
   if(choice.dnf){
-    G.coachRaceResults.push({pos:999,dnf:true,prize:0,coachCut:0,raceName:G.coachRaceData?.race?.name||''});
+    G.coachRaceResults.push({pos:null,dnf:true,dnfReason:'abandono',prize:0,coachCut:0,raceName:G.coachRaceData?.race?.name||''}); // T45 (v89)
     G.coachRaceIdx++;G.coachRaceData=null;G.coachRaceEventPending=null;
     generateCoachBetweenEvent();
     showToast('DNF — el atleta abandona','#c0392b');

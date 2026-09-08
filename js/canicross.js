@@ -289,7 +289,7 @@ function cnFinishRace(){
   if(!G.cnRaceResults)G.cnRaceResults=[];
   G.cnRaceResults.push({
     raceId:race.id,raceName:race.name,season:G.cnSeason||1,
-    pos:rs.retired?null:pos,time:totalTime,dnf:rs.retired||false,
+    pos:rs.retired?null:pos,time:totalTime,dnf:!!rs.retired,dnfReason:rs.retired?'abandono':null, // T45 (v89): esta era ya la forma buena; solo se le añade el motivo
     bondDelta:totalBond,prize,km:race.km||0,tier:race.tier||1,
     catPos,
   });

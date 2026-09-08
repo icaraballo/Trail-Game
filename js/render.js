@@ -164,7 +164,11 @@ function progBar(){const segs=curSegs();const done=segs.slice(0,G.seg).reduce((a
 function topBar(){const race=G.selectedRaces[G.currentRaceIdx];return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-size:12px;color:#999">${race?.name||''} · ${G.seg+1}/${curSegs().length}</span><span style="font-size:13px;font-weight:600">${fmt(G.time)}</span></div>`;}
 // T102 (v88): sin optional chaining sobre statBonus, un sponsor o club sin ese
 // campo lanzaba TypeError en una función que corre en cada tramo de carrera.
-function getEffStat(k){let b=0;Object.values(G.sponsors||{}).forEach(sp=>{if(sp?.statBonus?.[k])b+=sp.statBonus[k];});if(G.club?.statBonus?.[k])b+=G.club.statBonus[k];if(G.spending?.suplementos&&k==='nutricion')b+=3;return Math.min(100,(G.runner?.stats?.[k]||0)+b);}
+function getEffStat(k){let b=0;Object.values(G.sponsors||{}).forEach(sp=>{if(sp?.statBonus?.[k])b+=sp.statBonus[k];});if(G.club?.statBonus?.[k])b+=G.club.statBonus[k];if(G.spending?.suplementos&&k==='nutricion')b+=3;
+  // T15 (v89): calentamiento y momentum mental se suman aquí, al vuelo. El
+  // suelo de 10 replica el que aplicaba initRace() al hornearlos en el stat.
+  b+=G.raceModifiers?.[k]||0;
+  return Math.max(10,Math.min(100,(G.runner?.stats?.[k]||0)+b));}
 
 // ── Club de Clásico (bonus de entrenamiento) — no confundir con G.clubModeData ──
 // Movido aquí desde js/coach.js el 2026-09-04 (split club.js/coach.js); usa clubRepLabel()/changeClubRep()/assignClubCompanion() de este mismo archivo/state.js.
@@ -512,7 +516,7 @@ window.toggleQTab=q=>{
 // ── FINANCES TAB ───────────────────────
 function renderFinancesTab(){
   const el=document.getElementById('main');
-  const wo=WORK_OPTIONS.find(o=>o.pct===G.workPct)||WORK_OPTIONS[0];
+  const wo=WORK_OPTIONS.find(o=>o.pct===currentWorkPct())||WORK_OPTIONS[0]; // T22 (v89)
   const workM=monthlyWorkIncome();
   const sponsorM=monthlySponsorIncome();
   const brandM=monthlyBrandIncome();
@@ -1185,7 +1189,7 @@ window.doExpresPrep=choice=>{
   }
   // Go to simplified pre-race prep
   G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;
-  G._raceInitialized=false;G._warmupApplied=false;G._recoveryUsed=false;
+  G._raceInitialized=false;G._recoveryUsed=false;
   G.redZoneStreak=0;G.redZoneMax=0;G.redZoneZeroHits={energy:false,hydration:false,legs:false};
   G.dayConditionGenerated=false;G.dayCondition=null;
   G.gelsCarried=0;G.gelsUsed=0;G.warmedUp=false;G.startStrategy=null;
@@ -1249,9 +1253,9 @@ function renderExpresSeasonBalance(){
     <div style="margin-bottom:16px">
       ${G.raceResults.length===0?'<p style="font-size:13px;color:#aaa">Sin carreras completadas.</p>':
         G.raceResults.map(r=>{
-          if(r.injured)return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0ede8;font-size:14px">
+          if(isDNF(r))return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0ede8;font-size:14px">
             <div><span style="color:#c0392b;margin-right:8px">❌</span>${r.name}</div>
-            <span style="font-size:12px;color:#c0392b">Baja por lesión</span></div>`;
+            <span style="font-size:12px;color:#c0392b">${dnfLabel(r)}</span></div>`;
           return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0ede8;font-size:14px">
             <div><span style="font-weight:700;color:${r.pos===1?'#c07a10':r.pos<=3?'#4a8a2a':'#888'};margin-right:8px">${r.pos}º</span>${r.name}</div>
             <span style="font-size:13px;color:#2d7a2d">+€${r.prize}</span></div>`;
@@ -1652,7 +1656,7 @@ window.setVacQ=(q,days)=>{
 // ── SEASON START ───────────────────────
 function renderSeasonStart(){
   const el=document.getElementById('main');
-  const wo=WORK_OPTIONS.find(o=>o.pct===G.workPct);
+  const wo=WORK_OPTIONS.find(o=>o.pct===currentWorkPct()); // T22 (v89)
   const net=monthlyNet();
   const showObjectives=!G.yearObjective||G._yearObjectiveRewardPaid; // Se vuelve a ofrecer cada vez que se cobra el objetivo actual
   
@@ -1683,8 +1687,8 @@ function renderSeasonStart(){
       <div class="stat"><div class="stat-label">Neto mensual</div><div class="stat-val" style="color:${net>=0?'#2d7a2d':'#c0392b'}">${net>=0?'+':''}€${net}</div></div>
       <div class="stat"><div class="stat-label">Entreno</div><div class="stat-val">${wo?.trainingH||5}h/sem</div></div>
     </div>
-    ${G.workPct===100?`<div class="warn">Jornada completa — solo ${wo?.trainingH}h/sem de entrenamiento. Los bloques solo serán un ${Math.round(effForWork()*100)}% efectivos.</div>`:
-      G.workPct===0?`<div class="note">Profesional — entrenamiento completo. Asegúrate de que los ingresos cubran gastos.</div>`:
+    ${currentWorkPct()===100?`<div class="warn">Jornada completa — solo ${wo?.trainingH}h/sem de entrenamiento. Los bloques solo serán un ${Math.round(effForWork()*100)}% efectivos.</div>`:
+      currentWorkPct()===0?`<div class="note">Profesional — entrenamiento completo. Asegúrate de que los ingresos cubran gastos.</div>`:
       `<div class="note">${wo?.label} — ${wo?.trainingH}h/sem de entrenamiento. Eficiencia de bloque: ${Math.round(effForWork()*100)}%.</div>`}
     <div class="card" style="margin-bottom:14px">
       <div class="sec-title-sm">Plan de jornada laboral por trimestre</div>
@@ -2573,12 +2577,12 @@ function renderSeasonBalance(){
     <div class="section-label">Carreras</div>
     ${G.raceResults.length===0?'<p style="font-size:13px;color:#aaa;margin-bottom:14px">Sin carreras completadas.</p>':
       `<div style="margin-bottom:14px">${G.raceResults.map(r=>{
-        if(r.injured) return `<div style="padding:9px 0;border-bottom:1px solid #eee">
+        if(isDNF(r)) return `<div style="padding:9px 0;border-bottom:1px solid #eee">
           <div style="display:flex;justify-content:space-between;align-items:center;font-size:14px">
             <div><span style="font-size:13px;color:#c0392b;margin-right:8px;font-weight:600">❌</span>${r.name}</div>
-            <span style="font-size:12px;color:#c0392b;font-weight:600">No participó</span>
+            <span style="font-size:12px;color:#c0392b;font-weight:600">${r.dnfReason==='lesion'?'No participó':'No clasificado'}</span>
           </div>
-          <div style="font-size:12px;color:#c0392b;margin-top:3px">${r.injuryLabel||'Lesión'} — baja forzada · €0 premio</div>
+          <div style="font-size:12px;color:#c0392b;margin-top:3px">${r.dnfReason==='lesion'?(r.injuryLabel||'Lesión')+' — baja forzada':dnfLabel(r)+' — sin clasificación'} · €0 premio</div>
         </div>`;
         return `<div style="padding:9px 0;border-bottom:1px solid #eee">
           <div style="display:flex;justify-content:space-between;align-items:center;font-size:14px">
@@ -2597,7 +2601,7 @@ function renderSeasonBalance(){
     <div class="section-label">Cuenta anual</div>
     <div class="card" style="margin-bottom:16px">
       <table class="eco-table">
-        ${annualWork>0?`<tr><td>Trabajo (${G.workPct}%)</td><td class="right plus">+€${annualWork}</td></tr>`:''}
+        ${annualWork>0?`<tr><td>Trabajo (${currentWorkPct()}%)</td><td class="right plus">+€${annualWork}</td></tr>`:''}
         ${annualSponsor>0?`<tr><td>Patrocinios</td><td class="right plus">+€${annualSponsor}</td></tr>`:''}
         ${raceIncome>0?`<tr><td>Premios de carrera</td><td class="right plus">+€${raceIncome}</td></tr>`:''}
         <tr><td>Gastos fijos de vida</td><td class="right minus">-€${annualFixed}</td></tr>
@@ -2663,8 +2667,7 @@ window.setWorkQ=(q,pct)=>{
   } else {
     if(G.workChangePenalties)delete G.workChangePenalties[q];
   }
-  G.workByQuarter[q]=pct;
-  G.workPct=G.workByQuarter[G.currentQuarter||1];
+  setWorkPct(pct,q); // T22 (v89): un solo camino de escritura
   G.trainingHoursPerWeek=wo.trainingH;
   render();
 };
@@ -2675,7 +2678,7 @@ window.doStart=()=>{
   G.activeTab='game';
   if(G.gameMode==='expres'){
     // Exprés: sin jornada laboral, va al flujo exprés
-    G.workPct=60;G.trainingHoursPerWeek=16;
+    G.workByQuarter={1:60,2:60,3:60,4:60};G.workPct=60;G.trainingHoursPerWeek=16; // T22 (v89)
     G.workByQuarter={1:60,2:60,3:60,4:60};
     G._expressSponsorPool=null;
     G.screen='expresSeasonStart';
@@ -2834,6 +2837,7 @@ window.confirmBreakSponsor=(cat)=>{
 };
 window.selectTraining=id=>{
   G.trainingBlock=TRAINING_BLOCKS.find(b=>b.id===id);
+  G.trainingBlockApplied=false; // T25 (v89): bloque nuevo, sin aplicar
   G.trainingBlockHours=G.trainingBlock?.hours||8;
   if(G.trainingBlock){
     const nextRace=G.selectedRaces[0];
@@ -2876,10 +2880,9 @@ window.doStartRaces=()=>{
   if(!G.trainingBlock)return;
   G.raceResults=[];G.currentRaceIdx=0;
   G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;G.redZoneZeroHits={energy:false,hydration:false,legs:false};
-  G._raceInitialized=false;G._warmupApplied=false;G._recoveryUsed=false;
+  G._raceInitialized=false;G._recoveryUsed=false;
   if(G.selectedRaces.length===0){
-    applyTraining();
-    G.screen='seasonBalance';
+    endSeasonRaces('seasonBalance'); // T25 (v89)
   } else {
     G.screen='preRacePrep';
   }
@@ -2893,8 +2896,16 @@ function statCapMult(currentVal){
   if(currentVal<softCap)return 1.0;
   return Math.max(0.05,1.0-(currentVal-softCap)*0.09);
 }
-function applyTraining(){
+// T25 (v89): esta función no era idempotente y se llamaba desde CINCO sitios,
+// uno de ellos renderPreRace() — una función de render. Cualquier repintado con
+// el índice de carrera fuera de rango reaplicaba el bloque entero: subida de
+// stats, carga corporal y generación de eventos mensuales, otra vez. Ahora se
+// marca aplicado; la marca se limpia al elegir bloque y al empezar temporada.
+// `force` existe solo para el modo desarrollador.
+function applyTraining(force){
   if(!G.trainingBlock)return;
+  if(G.trainingBlockApplied&&!force)return;
+  G.trainingBlockApplied=true;
   const nextRace=G.selectedRaces[0];
   const curMonth=nextRace?nextRace.month:(new Date().getMonth()+1);
   const se=getSeasonEffects(curMonth);
@@ -3014,7 +3025,7 @@ window.doNextYear=yearNet=>{
   checkAndUnlockAchievements();
   generateDiaryEntry(yearNet);
   // 2a: Actualizar contador de temporadas en la misma jornada laboral
-  const _curPct=G.workPct;
+  const _curPct=currentWorkPct(); // T22 (v89)
   if(!G.workSeasonCount)G.workSeasonCount={pct:_curPct,seasons:0};
   if(G.workSeasonCount.pct!==_curPct){G.workSeasonCount={pct:_curPct,seasons:1};}
   else G.workSeasonCount.seasons++;
@@ -3084,7 +3095,7 @@ window.doNextYear=yearNet=>{
   if(!G._clubAscent&&curClubId==='elite')G._clubAscent=true;}
   // Envejecer
   // ── Decaimiento de reputación al fin de temporada ──
-  const _finishedRaces=(G.raceResults||[]).filter(r=>!r.injured).length;
+  const _finishedRaces=finishedResults(G.raceResults).length; // T45 (v89): los abandonos no contaban como lesión y sí como terminadas
   const _fameActCount=Object.values(G.fameActionsThisSeason||{}).reduce((a,v)=>a+v,0);
   if(_finishedRaces===0)applyRepDecay('no_races');
   else if(_fameActCount===0)applyRepDecay('season_inactive');
@@ -3100,13 +3111,17 @@ window.doNextYear=yearNet=>{
 
   // T23 (v88): esto bajaba la jornada del jugador en silencio. Sigue bajándola
   // (es la recompensa por vivir del trail), pero ahora se avisa.
-  if(G.year>=3&&G.ranking<200&&monthlyNet()>=0&&G.workPct>80){
-    G.workPct=80;
+  if(G.year>=3&&G.ranking<200&&monthlyNet()>=0&&currentWorkPct()>80&&!G.forcedFullTime){
+    // T22 (v89): antes tocaba solo G.workPct y dejaba workByQuarter intacto, así
+    // que la bajada se deshacía sola al cambiar de trimestre. Y con la vuelta
+    // forzosa por deuda activa no debe bajar nada.
+    G.workByQuarter={1:80,2:80,3:80,4:80};
+    G.workPct=currentWorkPct();
     if(typeof showToast==='function')showToast('Tu ranking te permite reducir la jornada al 80 % — puedes volver a subirla cuando quieras','#4a8a2a');
   }
   // Traspasar clasificación Zegama
   G.zegamaQual=G.zegamaQualNext;G.zegamaQualNext=false;
-  G.selectedRaces=[];G.trainingBlock=null;G.raceResults=[];G.currentRaceIdx=0;G.trainingEff=1.0;
+  G.selectedRaces=[];G.trainingBlock=null;G.trainingBlockApplied=false;G.raceResults=[];G.currentRaceIdx=0;G.trainingEff=1.0; // T25 (v89)
   G.activeTab='game';G.lastRaceGains=[];
   G.workByQuarter={1:G.workPct,2:G.workPct,3:G.workPct,4:G.workPct};
   G.currentQuarter=1;G.fameActionsThisSeason={};G.fameHoursUsed=0;
@@ -3345,7 +3360,7 @@ function forceAbandonCoachRace(){
   const data=G.coachRaceData;
   if(data){
     if(!Array.isArray(G.coachRaceResults))G.coachRaceResults=[];
-    G.coachRaceResults.push({pos:999,dnf:true,prize:0,coachCut:0,raceName:data.race?.name||''});
+    G.coachRaceResults.push({pos:null,dnf:true,dnfReason:'abandono',prize:0,coachCut:0,raceName:data.race?.name||''}); // T45 (v89)
     G.coachTrust=Math.max(0,Math.min(100,(G.coachTrust||50)-5));
     G.coachBodyLoad=Math.max(0,(G.coachBodyLoad||0)-8);
     G.coachRaceIdx=(G.coachRaceIdx||0)+1;
@@ -3370,9 +3385,12 @@ window.switchOverlapMode=()=>{
 };
 
 function generateDiaryEntry(yearNet){
-  const racesRun=G.raceResults.filter(r=>!r.injured&&r.pos>0).length;
-  const wins=G.raceResults.filter(r=>r.pos===1).length;
-  const best=G.raceResults.filter(r=>!r.injured&&r.pos>0).sort((a,b)=>a.pos-b.pos)[0];
+  // T45 (v89): `wins` no filtraba DNF — inofensivo con pos:0, pero ahora los
+  // tres recuentos salen de la misma función y no pueden divergir.
+  const _fin=finishedResults(G.raceResults);
+  const racesRun=_fin.length;
+  const wins=_fin.filter(r=>r.pos===1).length;
+  const best=_fin.slice().sort((a,b)=>a.pos-b.pos)[0];
   const injuries=(G.injuryHistory||[]).filter(i=>i.year===G.year);
   const sentences=[];
 
@@ -4126,7 +4144,7 @@ window.postRaceContinue=()=>{
 window.afterRace=()=>{
   G.currentRaceIdx++;
   const isExpres=G.gameMode==='expres';
-  if(G.currentRaceIdx>=G.selectedRaces.length){applyTraining();G.screen=isExpres?'expresSeasonBalance':'seasonBalance';render();return;}
+  if(G.currentRaceIdx>=G.selectedRaces.length){endSeasonRaces(isExpres?'expresSeasonBalance':'seasonBalance');render();return;} // T25 (v89)
   // In Express, cap injury blocking at 1 race
   if(isExpres&&(G.injuryRacesLeft||0)>1)G.injuryRacesLeft=1;
   // Handle injury race blocking
@@ -4135,7 +4153,7 @@ window.afterRace=()=>{
     const race=G.selectedRaces[G.currentRaceIdx];
     const injData=INJURY_TYPES[G.injuryType]||{};
     const remaining=G.injuryRacesLeft;
-    G.raceResults.push({id:race?.id,name:race?.name||'',time:0,pos:0,prize:0,all:[],statGains:[],injured:true,injuryLabel:injData.label||'Lesión'}); // T104 (v88): id
+    G.raceResults.push({id:race?.id,name:race?.name||'',time:0,pos:null,dnf:true,dnfReason:'lesion',prize:0,all:[],statGains:[],injured:true,injuryLabel:injData.label||'Lesión'}); // T104 (v88): id · T45 (v89): forma única de DNF
     const el=document.getElementById('main');
     el.innerHTML=`
       <h2>Baja por lesión</h2>
@@ -4160,7 +4178,7 @@ window.afterRace=()=>{
     applyInjuryToRaceStart();
   }
   G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;G.redZoneZeroHits={energy:false,hydration:false,legs:false};
-  G._raceInitialized=false;G._warmupApplied=false;G._recoveryUsed=false;
+  G._raceInitialized=false;G._recoveryUsed=false;
   if(isExpres){G.pendingEvent=null;G.screen='expresPrep';render();return;}
   const hasFisioVal=G.spending.fisio||G.club?.hasFisio;
   if(Math.random()<0.65){

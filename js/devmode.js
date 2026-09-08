@@ -218,7 +218,7 @@ window.devSimulateClasicoSeasons=()=>{
         finishRace();
         G.currentRaceIdx++;
       }
-      applyTraining();
+      applyTraining(true); // T25 (v89): el simulador de temporadas sí quiere reaplicar
       doNextYear(0);
     }
     showToast('DEV: '+n+' temporada(s) de Clásico simuladas','#1a1a1a');

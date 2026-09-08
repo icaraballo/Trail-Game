@@ -20,7 +20,7 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
-const GAME_BUILD=88; // incrementar con cada versión del juego
+const GAME_BUILD=89; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
@@ -113,6 +113,44 @@ function migrateState(saved){
   if(saved.trainingBlock)merged.trainingBlock={...base.trainingBlock,...saved.trainingBlock};
   // T115 (v84): saves anteriores al arquetipo
   if(merged.clubModeData&&!merged.clubModeData.archetype)merged.clubModeData.archetype='equilibrado';
+  // T45 (v89): unificar «no terminó» en los tres modos. Clásico usaba pos:0
+  // (con `injured:true` cuando era una baja), Entrenador pos:999 y Canicross
+  // pos:null. A partir de aquí: `dnf` booleano, `pos:null` y `dnfReason`.
+  const _normResults=(list,defaultReason)=>(list||[]).map(r=>{
+    if(!r||typeof r!=='object')return null;
+    const wasDNF=r.dnf===true||r.pos==null||r.pos<=0||r.pos>=999;
+    if(!wasDNF)return {...r,dnf:false,dnfReason:null};
+    return {...r,pos:null,dnf:true,
+      dnfReason:r.dnfReason||(r.injured?'lesion':defaultReason)};
+  }).filter(Boolean);
+  merged.raceResults=_normResults(merged.raceResults,'abandono');
+  merged.coachRaceResults=_normResults(merged.coachRaceResults,'abandono');
+  merged.cnRaceResults=_normResults(merged.cnRaceResults,'abandono');
+  // Los slots de Entrenador guardan su propia copia de coachRaceResults.
+  if(Array.isArray(merged.coachRoster)){
+    merged.coachRoster=merged.coachRoster.map(sl=>{
+      if(!sl||typeof sl!=='object')return sl;
+      if(!Array.isArray(sl.coachRaceResults))return sl;
+      return {...sl,coachRaceResults:_normResults(sl.coachRaceResults,'abandono')};
+    });
+  }
+  // T25 (v89): sin la marca, un save de v88 podría reaplicar su bloque una vez
+  // más al repintar. Se asume aplicado si la temporada ya tiene resultados.
+  // Ojo: hay que mirar el save ORIGINAL, no `merged` — freshState() ya aporta el
+  // booleano en el spread, así que comprobarlo sobre merged no se cumple nunca.
+  if(typeof saved.trainingBlockApplied!=='boolean'){
+    merged.trainingBlockApplied=(merged.raceResults||[]).length>0;
+  }
+  // T15 (v89): saves anteriores pueden traer el bonus horneado en runner.stats
+  // (C2). No hay forma de saber cuánto era, así que no se intenta deshacer: se
+  // garantiza que el campo existe y a cero para que a partir de aquí no vuelva
+  // a pasar. Un save guardado a mitad de carrera sí conserva sus modificadores.
+  const _rm=merged.raceModifiers;
+  merged.raceModifiers={
+    mental:Number(_rm?.mental)||0,
+    velocidad:Number(_rm?.velocidad)||0,
+    subida:Number(_rm?.subida)||0,
+  };
   // T24 (v88): seasonDiary mezclaba objetos {year,age,text,highlight} y cadenas
   // sueltas; las cadenas se pintaban como «Año undefined · undefined años».
   // Los dos pushes que las creaban ya escriben objetos; esto arregla lo guardado.

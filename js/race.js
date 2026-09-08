@@ -314,12 +314,12 @@ function initRace(){
   G.midRaceEventTriggered={};G.midRaceEvent=null;G.stormActive=false;G.stormProtected=false;
 
   // ── Mental momentum (p6) — racha de resultados recientes ─────────
-  const recentResults=(G.raceResults||[]).filter(r=>r.pos>0).slice(-4);
+  const recentResults=finishedResults(G.raceResults).slice(-4); // T45 (v89)
   let mentalMom=0;
   if(recentResults.length>=2){
     const goodCount=recentResults.filter(r=>r.pos<=Math.ceil(10+(r.all?.length||15)*0.3)).length;
     const badCount=recentResults.filter(r=>r.zeroedOut||r.pos>Math.ceil((r.all?.length||15)*0.7)).length;
-    const abandonRecent=(G.raceResults||[]).slice(-3).filter(r=>r.pos===0&&!r.injured).length;
+    const abandonRecent=(G.raceResults||[]).slice(-3).filter(r=>r.dnfReason==='abandono').length; // T45 (v89): antes `pos===0 && !injured`
     if(goodCount>=2)mentalMom=Math.min(5,goodCount);
     if(badCount>=2||abandonRecent>=1)mentalMom=Math.max(-5,-(badCount+abandonRecent*2));
   }
@@ -347,30 +347,40 @@ function initRace(){
   G.runner.hydration=injStart?injStart.hydration:Math.min(100,(G.nextRaceHydrationStart??100)+dayHydMod);
   G.runner.legs=injStart?injStart.legs:Math.min(100,(G.legsPenalty?82:100)*(G.nextRaceLegsStart!=null?G.nextRaceLegsStart/100:1)+dayLegsMod+taperL);
   G.legsPenalty=false;
-  // Mental momentum: modifica temporalmente el stat mental para la carrera
+  // T15 (v89): ni el momentum ni el calentamiento tocan ya runner.stats. Van a
+  // G.raceModifiers, que getEffStat() suma al vuelo y endRaceCleanup() limpia.
+  // Además de cerrar C2, esto arregla algo que nadie había anotado: los eventos
+  // de carrera que dan mental permanente (`+2`, `+4` en resolveMidRaceEvent)
+  // se aplicaban SOBRE el stat ya inflado por el momentum, así que el tope de
+  // 100 se comía el premio y el cleanup lo restaba igual — el jugador perdía
+  // mental por ganar un evento. Ahora el premio va al stat base y el momentum
+  // vive aparte, así que no pueden interferir.
+  G.raceModifiers={mental:0,velocidad:0,subida:0};
   if(!injStart&&G.mentalMomentum!==0){
-    const _before=G.runner.stats.mental;
-    G.runner.stats.mental=Math.max(10,Math.min(100,G.runner.stats.mental+G.mentalMomentum));
-    G._mentalMomentumApplied=G.runner.stats.mental-_before; // delta real (clamped)
+    G.raceModifiers.mental=G.mentalMomentum;
   }
   // Warmup bonus (p9) — temporal para esta carrera
   if(G.warmedUp&&!injStart){
     G.runner.energy=Math.max(10,G.runner.energy-5);
-    const _velBefore=G.runner.stats.velocidad;
-    const _subBefore=G.runner.stats.subida;
-    G.runner.stats.velocidad=Math.min(100,G.runner.stats.velocidad+4);
-    G.runner.stats.subida=Math.min(100,G.runner.stats.subida+3);
-    G._warmupApplied=true;
-    G._warmupVelDelta=G.runner.stats.velocidad-_velBefore;
-    G._warmupSubDelta=G.runner.stats.subida-_subBefore;
+    G.raceModifiers.velocidad=4;
+    G.raceModifiers.subida=3;
   }
   G.nextRaceEnergyStart=null;G.nextRaceLegsStart=null;G.nextRaceHydrationStart=null;
   G.postRaceConsequence=null;
   G.preDegradMult=1.0;
 }
+// T25 (v89): la transición «se acabaron las carreras → balance» estaba escrita
+// cuatro veces, una de ellas dentro de renderPreRace(). Ahora es una función con
+// nombre y el efecto secundario deja de vivir en el cuerpo de un render.
+function endSeasonRaces(balanceScreen){
+  applyTraining();
+  G.screen=balanceScreen||(G.gameMode==='expres'?'expresSeasonBalance':'seasonBalance');
+}
 function renderPreRace(){
   const race=G.selectedRaces[G.currentRaceIdx];
-  if(!race){applyTraining();G.screen='seasonBalance';render();return;}
+  // No debería llegarse aquí sin carrera: los tres caminos normales ya llaman a
+  // endSeasonRaces(). Se deja como red de seguridad, ahora idempotente.
+  if(!race){endSeasonRaces();render();return;}
   // Init race state only once per race (safe to re-render without side effects)
   initRace();
   const el=document.getElementById('main');
@@ -2248,18 +2258,12 @@ function calcRaceResult(race){
 // Llamado desde applyPostRaceTracking (carrera terminada) y desde doAbandonConfirmed (abandono).
 // Usa deltas guardados en initRace para revertir exactamente lo que se aplicó (evita drift por clamping).
 function endRaceCleanup(){
-  if(G._mentalMomentumApplied){
-    G.runner.stats.mental=Math.max(10,Math.min(100,G.runner.stats.mental-G._mentalMomentumApplied));
-    G._mentalMomentumApplied=0;
-  }
+  // T15 (v89): antes esto deshacía a mano las sumas metidas en runner.stats y
+  // dependía de que _warmupApplied/_mentalMomentumApplied sobrevivieran — no lo
+  // hacían a una recarga, y ahí es donde el bonus se volvía permanente. Ahora
+  // basta con vaciar los modificadores: el stat base nunca se tocó.
+  G.raceModifiers={mental:0,velocidad:0,subida:0};
   G.mentalMomentum=0;
-  if(G._warmupApplied){
-    if(G._warmupVelDelta)G.runner.stats.velocidad=Math.max(10,Math.min(100,G.runner.stats.velocidad-G._warmupVelDelta));
-    if(G._warmupSubDelta)G.runner.stats.subida=Math.max(10,Math.min(100,G.runner.stats.subida-G._warmupSubDelta));
-    G._warmupApplied=false;
-    G._warmupVelDelta=0;
-    G._warmupSubDelta=0;
-  }
   G.rivalIncidents=[];G.rivalRadio=null;G._lastRadioSeg=-99;   // T32
 }
 
@@ -2285,7 +2289,7 @@ function applyPostRaceTracking(race,res){
   G.ranking=Math.max(1,Math.min(999,(G.ranking===999?400:G.ranking)-rankPts+Math.floor(Math.random()*4)));
   G.specRanking=Math.max(1,Math.min(999,(G.specRanking===999?350:G.specRanking)-Math.round(rankPts*1.3)+Math.floor(Math.random()*3)));
 
-  G.raceResults.push({id:race.id,name:race.name,time:G.time,pos,prize,all,statGains, // T104 (v88): id, no solo nombre
+  G.raceResults.push({id:race.id,name:race.name,time:G.time,pos,dnf:false,dnfReason:null,prize,all,statGains, // T104 (v88): id · T45 (v89): dnf explícito
     catPos,catTotal,catName:playerCat.label,
     injuryType:G.injuryType||null,
     injuryLabel:G.injuryType?INJURY_TYPES[G.injuryType]?.label:null,
@@ -2492,12 +2496,12 @@ function goNextRace(){
   G.preRaceNutrition='pasta';G.dropbagItems=[];G.dropbagUsed=[];G.dropbagShown=false;G.redZoneStreak=0;G.redZoneMax=0;G.redZoneZeroHits={energy:false,hydration:false,legs:false};
   G.dayConditionGenerated=false;G.dayCondition=null;
   G.gelsCarried=0;G.gelsUsed=0;G.warmedUp=false;G.startStrategy=null;
-  G._raceInitialized=false;G._warmupApplied=false;G._recoveryUsed=false;
+  G._raceInitialized=false;G._recoveryUsed=false;
   const isExpres=G.gameMode==='expres';
   const nextScreen=isExpres?'expresPreRacePrep':'preRacePrep';
   const balanceScreen=isExpres?'expresSeasonBalance':'seasonBalance';
   if(G.skipNext){G.skipNext=false;G.currentRaceIdx++;
-    if(G.currentRaceIdx>=G.selectedRaces.length){applyTraining();G.screen=balanceScreen;}
+    if(G.currentRaceIdx>=G.selectedRaces.length){endSeasonRaces(balanceScreen);} // T25 (v89)
     else G.screen=nextScreen;
   }else G.screen=nextScreen;
   render();

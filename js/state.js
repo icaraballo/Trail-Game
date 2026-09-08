@@ -13,6 +13,15 @@ function freshState(){
     currentQuarter:1,
     vacDaysTotal:15,
     vacByQuarter:{1:0,2:0,3:0,4:0},
+    // T15 (v89): modificadores TEMPORALES de carrera (calentamiento + momentum
+    // mental). Antes se sumaban dentro de runner.stats y se restaban al acabar,
+    // con un guard (_warmupApplied) que no sobrevivía a una recarga: si algo
+    // guardaba con el bonus puesto, se volvía permanente (la clase entera de
+    // bug de C2). Ahora getEffStat() los suma al vuelo y endRaceCleanup() los
+    // pone a cero. Se persisten a propósito —son estado de la carrera en curso,
+    // como G.seg o G.time— pero nunca tocan el stat base.
+    raceModifiers:{mental:0,velocidad:0,subida:0},
+    trainingBlockApplied:false,  // T25 (v89): el bloque de esta temporada ya se aplicó
     selectedRaces:[],sponsors:{zapatillas:null,ropa:null,nutricion:null,tecnologia:null},
     club:CLUBS[0],clubReputation:0,clubCompanion:null,trainingBlock:null,trainingEff:1.0,
     spending:{fisio:false,entrenador:false,suplementos:false},
@@ -68,7 +77,6 @@ function freshState(){
     gelsUsed:0,               // geles usados
     warmedUp:false,           // calentamiento hecho esta carrera
     _raceInitialized:false,   // guard para initRace()
-    _warmupApplied:false,     // guard para revertir warmup
     // ── Tanda B/C — campos antes lazy-init ──
     unlockedAchievements:[],     // logros desbloqueados (acumulado partida)
     nemesisLog:{},               // {rivalName: {wins, gapSum, gapCount}}
@@ -215,14 +223,61 @@ function freshState(){
   };
 }
 let G=freshState();
+// T22 (v89): «jornada actual» tenía CUATRO fuentes de verdad que divergían en
+// cuanto cambiabas de jornada entre trimestres: G.workPct, G.workByQuarter[1],
+// G.workByQuarter[currentQuarter] y, desde v86, G.forcedFullTime. Esta es la
+// única que debe leerse. El orden importa: la vuelta forzosa por deuda manda
+// sobre todo lo demás, o el jugador la esquivaría cambiando de trimestre.
+// T45 (v89): «no terminó» se escribía de TRES formas — pos:0 (Clásico),
+// pos:null (Canicross) y pos:999 con dnf:true (Entrenador) — y ninguna lectura
+// las distinguía. En JavaScript `0 <= 10` y `null <= 10` son ciertos, así que
+// `races.filter(r=>r.pos<=10)` contaba los abandonos y las bajas por lesión
+// como top-10 para los objetivos de sponsor, y `races.length` los contaba como
+// carreras terminadas. Ahora los tres modos usan la forma de Canicross, que ya
+// era la correcta y la que usan bien sus 20 logros: `dnf` manda, `pos` es null.
+//
+// Un DNF no es «acabar último»: es NO ESTAR CLASIFICADO. No cuenta como carrera
+// terminada, no da posición y no entra en ningún recuento de resultados.
+function isDNF(r){
+  if(!r)return true;
+  if(r.dnf===true)return true;
+  if(r.dnf===false&&r.pos>0)return false;
+  // Formas antiguas, por si un resultado se cuela sin pasar por migrateState
+  return r.pos==null||r.pos<=0||r.pos>=999;
+}
+function finishedResults(list){return (list||[]).filter(r=>!isDNF(r));}
+function dnfLabel(r){
+  const reason=r?.dnfReason;
+  if(reason==='lesion')  return 'Baja por lesión';
+  if(reason==='abandono')return 'Abandono';
+  return 'No clasificado';
+}
+
+function currentWorkPct(){
+  if(G.forcedFullTime)return 100;
+  const q=G.currentQuarter||1;
+  const byQ=G.workByQuarter?.[q];
+  if(Number.isFinite(byQ))return byQ;
+  return Number.isFinite(G.workPct)?G.workPct:100;
+}
+// Único camino de escritura. Mantiene G.workPct como espejo del trimestre en
+// curso, que es lo único para lo que sigue existiendo.
+function setWorkPct(pct,quarter){
+  const q=quarter||G.currentQuarter||1;
+  if(!G.workByQuarter)G.workByQuarter={1:100,2:100,3:100,4:100};
+  G.workByQuarter[q]=pct;
+  G.workPct=currentWorkPct();
+}
 function monthlyWorkIncome(){
-  const pct=G.workByQuarter?G.workByQuarter[G.currentQuarter||1]:G.workPct;
-  const base=WORK_OPTIONS.find(o=>o.pct===pct)?.income||0;
-  return Math.round((base+(G.workBonus||0))*(modeCfg().sponsorMult||1));
+  const base=WORK_OPTIONS.find(o=>o.pct===currentWorkPct())?.income||0;
+  // T22 (v89): esto multiplicaba el sueldo por modeCfg().sponsorMult — el
+  // salario de tu turno no depende de tus patrocinadores. Se saca un
+  // workIncomeMult propio con los MISMOS valores, así que el balance no cambia:
+  // era la escala por dificultad que queremos, metida en el sitio equivocado.
+  return Math.round((base+(G.workBonus||0))*(modeCfg().workIncomeMult||1));
 }
 function curWorkOpt(){
-  const pct=G.workByQuarter?G.workByQuarter[G.currentQuarter||1]:G.workPct;
-  return WORK_OPTIONS.find(o=>o.pct===pct)||WORK_OPTIONS[0];
+  return WORK_OPTIONS.find(o=>o.pct===currentWorkPct())||WORK_OPTIONS[0];
 }
 function followersSponsorMult(){
   const f=G.followers||0;
@@ -340,7 +395,11 @@ function sponsorAnnual(){return Math.round(Object.values(G.sponsors).filter(Bool
 function curSegs(){return G.selectedRaces[G.currentRaceIdx]?.segs||[];}
 function checkSponsorObjective(sp){
   if(!sp)return true;
-  const races=G.raceResults||[];
+  // T45 (v89): esto leía G.raceResults en crudo, así que un abandono (pos:0) o
+  // una baja por lesión pasaban el filtro `r.pos<=10` y contaban como top-10, y
+  // `races.length` los contaba como carreras terminadas. Solo cuentan las que
+  // tienen clasificación.
+  const races=finishedResults(G.raceResults);
   const finished=races.length;
   const top10=races.filter(r=>r.pos<=10).length;
   const top5=races.filter(r=>r.pos<=5).length;
@@ -397,21 +456,23 @@ function _tierDiffMultFor(mode){
   return out;
 }
 // trainingMult (facil/dificil/hardcore) espeja la progresión ya validada de
+// T22 (v89): workIncomeMult sale de sponsorMult con los mismos valores — el
+// sueldo del trabajo no debe escalar con tus patrocinadores. Mismo balance.
 // sponsorMult en esta misma tabla — antes solo Exprés lo usaba (CR-37, v75).
 function modeCfg(mode){
   const m=mode||G.gameMode||'medio';
   return {
-    facil:    {injuryRiskMult:0.4, fatigueMult:0.7, rivalMult:1.12, startMoney:550, sponsorMult:1.2, trainingMult:1.2, maxYears:99, tierDiffMult:_tierDiffMultFor('facil'),
+    facil:    {injuryRiskMult:0.4, fatigueMult:0.7, rivalMult:1.12, startMoney:550, sponsorMult:1.2, workIncomeMult:1.2, trainingMult:1.2, maxYears:99, tierDiffMult:_tierDiffMultFor('facil'),
                fisio:{floor:0.35, onset:75, decay:0.008, cap:0.85}, bankruptcy:{soft:700, hard:null, interest:0.08, minPay:0.25}},
-    medio:    {injuryRiskMult:1.0, fatigueMult:1.0, rivalMult:1.00, startMoney:300, sponsorMult:1.0, trainingMult:1.0, maxYears:99, tierDiffMult:_tierDiffMultFor('medio'),
+    medio:    {injuryRiskMult:1.0, fatigueMult:1.0, rivalMult:1.00, startMoney:300, sponsorMult:1.0, workIncomeMult:1.0, trainingMult:1.0, maxYears:99, tierDiffMult:_tierDiffMultFor('medio'),
                fisio:{floor:0.45, onset:65, decay:0.012, cap:0.90}, bankruptcy:{soft:500, hard:null, interest:0.12, minPay:0.25}},
-    dificil:  {injuryRiskMult:1.6, fatigueMult:1.3, rivalMult:0.90, startMoney:180, sponsorMult:0.85,trainingMult:0.85, maxYears:99, tierDiffMult:_tierDiffMultFor('dificil'),
+    dificil:  {injuryRiskMult:1.6, fatigueMult:1.3, rivalMult:0.90, startMoney:180, sponsorMult:0.85,workIncomeMult:0.85, trainingMult:0.85, maxYears:99, tierDiffMult:_tierDiffMultFor('dificil'),
                fisio:{floor:0.55, onset:55, decay:0.016, cap:0.95}, bankruptcy:{soft:400, hard:2500,interest:0.18, minPay:0.25}},
-    hardcore: {injuryRiskMult:2.2, fatigueMult:1.6, rivalMult:0.85, startMoney:150, sponsorMult:0.7, trainingMult:0.7, maxYears:99, tierDiffMult:_tierDiffMultFor('hardcore'),
+    hardcore: {injuryRiskMult:2.2, fatigueMult:1.6, rivalMult:0.85, startMoney:150, sponsorMult:0.7, workIncomeMult:0.7, trainingMult:0.7, maxYears:99, tierDiffMult:_tierDiffMultFor('hardcore'),
                fisio:{floor:0.62, onset:50, decay:0.014, cap:1.00}, bankruptcy:{soft:300, hard:1800,interest:0.25, minPay:0.25}},
-    expres:   {injuryRiskMult:0.6, fatigueMult:0.8, rivalMult:0.98, startMoney:500, sponsorMult:1.1, trainingMult:1.5, maxYears:3, tierDiffMult:_tierDiffMultFor('expres'),
+    expres:   {injuryRiskMult:0.6, fatigueMult:0.8, rivalMult:0.98, startMoney:500, sponsorMult:1.1, workIncomeMult:1.1, trainingMult:1.5, maxYears:3, tierDiffMult:_tierDiffMultFor('expres'),
                fisio:{floor:0.40, onset:70, decay:0.010, cap:0.88}, bankruptcy:{soft:600, hard:null, interest:0.10, minPay:0.25}},
-  }[m]||{injuryRiskMult:1.0,fatigueMult:1.0,rivalMult:1.00,startMoney:300,sponsorMult:1.0,trainingMult:1.0,maxYears:99,tierDiffMult:_tierDiffMultFor('medio'),
+  }[m]||{injuryRiskMult:1.0,fatigueMult:1.0,rivalMult:1.00,startMoney:300,sponsorMult:1.0,workIncomeMult:1.0,trainingMult:1.0,maxYears:99,tierDiffMult:_tierDiffMultFor('medio'),
          fisio:{floor:0.45,onset:65,decay:0.012,cap:0.90}, bankruptcy:{soft:500,hard:null,interest:0.12,minPay:0.25}};
 }
 // T29 (v86): única puerta de entrada de dinero involuntario (cierre de
@@ -516,6 +577,9 @@ function checkDebtEscalation(){
 
   if(G.debt>=cfg.soft && !G.forcedFullTime){
     G.forcedFullTime=true;
+    // T22 (v89): currentWorkPct() ya devuelve 100 con forcedFullTime; estas dos
+    // líneas son redundantes a propósito, para que G.workByQuarter no mienta si
+    // alguien lo inspecciona directamente.
     G.workPct=100;
     G.workByQuarter={1:100,2:100,3:100,4:100};
     // Si no puedes pagar al fisio, el fisio se va. Sin esto la deuda no tiene
@@ -725,12 +789,12 @@ function generateMonthlyEvents(){
   const pending=(G.monthlyEvents||[]).filter(e=>e&&!e.resolved);
   G.monthlyEvents=pending;
   const hasClub=G.club&&G.club.id!=='none';
-  const hasWork=!!(WORK_OPTIONS.find(o=>o.pct===(G.workByQuarter?G.workByQuarter[G.currentQuarter||1]:G.workPct))?.income);
+  const hasWork=!!(WORK_OPTIONS.find(o=>o.pct===currentWorkPct())?.income); // T22 (v89)
   const pool=MONTHLY_EVENTS_POOL.filter(e=>(!e.requiresClub||hasClub)&&(!e.requiresWork||hasWork));
   if(Math.random()<0.6)G.monthlyEvents.push({...pool[Math.floor(Math.random()*pool.length)],resolved:false});
   // 2a: Evento de ascenso laboral si lleva 3+ temporadas en la misma jornada
   if(hasWork&&G.gameMode!=='expres'){
-    const curPct=G.workByQuarter?G.workByQuarter[1]:G.workPct;
+    const curPct=currentWorkPct(); // T22 (v89): era workByQuarter[1], no el trimestre en curso
     if(!G.workSeasonCount)G.workSeasonCount={pct:curPct,seasons:0};
     if(G.workSeasonCount.pct===curPct&&G.workSeasonCount.seasons>=3){
       if(!(G.workPromotionsUsed||[]).includes(curPct)&&!pending.some(e=>e._isPromotion)){ // T26 (v88): sin duplicar el pendiente
