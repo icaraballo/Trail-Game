@@ -51,7 +51,11 @@ module.exports=[
       // ámbito global compartido, así que marcarlas como no usadas es ruido.
       // Lo que sí interesa cazar es la variable muerta dentro de una función,
       // que es exactamente el caso de T20.
-      'no-unused-vars':['error',{vars:'local',args:'none',caughtErrors:'none',varsIgnorePattern:'^_'}],
+      // 'warn', no 'error': una variable muerta es suciedad, no un fallo, y
+      // dejarla en error hacía que `npm run check` saliera en rojo por las 15
+      // que quedan de fase 2 — y con `&&` eso impedía que los tests llegaran a
+      // ejecutarse. El error de verdad es no-undef, que sí cuelga la partida.
+      'no-unused-vars':['warn',{vars:'local',args:'none',caughtErrors:'none',varsIgnorePattern:'^_'}],
     },
   },
 ];
