@@ -9,25 +9,13 @@
 // (son scripts clásicos, no módulos), con stubs de DOM. El footer expone las
 // funciones y un setter de G, porque los `const`/`let` de nivel raíz no se
 // cuelgan del objeto global.
-const fs=require('fs'), vm=require('vm');
-const ctx={console,Math,JSON,Object,Array,Number,String,Boolean,Date,isNaN,parseInt,parseFloat,RegExp,Set,Map,
-  structuredClone,TextEncoder,TextDecoder,Uint8Array,atob:()=>'',btoa:()=>'',Infinity,NaN,
-  setTimeout:()=>{},clearTimeout:()=>{},setInterval:()=>{},clearInterval:()=>{},requestAnimationFrame:()=>{},
-  localStorage:{getItem:()=>null,setItem:()=>{},removeItem:()=>{}},
-  document:{getElementById:()=>null,querySelector:()=>null,body:{}},
-  alert:()=>{},confirm:()=>true,navigator:{},location:{search:''},getComputedStyle:()=>({}),
-};
-ctx.window=ctx; ctx.globalThis=ctx;
-vm.createContext(ctx);
-const files=['constants.js','state.js','save.js','race.js','render.js','coach.js','club.js','canicross.js','devmode.js'];
-const src=files.map(f=>'\n//#### '+f+'\n'+fs.readFileSync('js/'+f,'utf8')).join('\n')
-  +'\n;globalThis.__t={setG:v=>{G=v},getG:()=>G,freshState,modeCfg,currentWorkPct,setWorkPct,getEffStat,'
-  +'applyTraining,checkSponsorObjective,isDNF,finishedResults,dnfLabel,migrateState,TRAINING_BLOCKS,'
-  +'monthlyWorkIncome,curWorkOpt,endRaceCleanup};';
-vm.runInContext(src, ctx, {filename:'bundle.js'});
-const T=ctx.__t;
-let pass=0,fail=0;
-const t=(name,cond,extra='')=>{ if(cond){pass++;console.log('  ✓ '+name);} else {fail++;console.log('  ✗ '+name+(extra!==''?'  → '+extra:''));} };
+// El banco de pruebas (concatenar los 9 .js en un ámbito con stubs de DOM) vive
+// en _bundle.js, compartido con content.js.
+const {build,scorer}=require('./_bundle');
+const {T}=build(['freshState','modeCfg','currentWorkPct','setWorkPct','getEffStat',
+  'applyTraining','checkSponsorObjective','isDNF','finishedResults','dnfLabel','migrateState',
+  'TRAINING_BLOCKS','monthlyWorkIncome','curWorkOpt','endRaceCleanup']);
+const t=scorer();
 const setG=o=>{const g=T.freshState();Object.assign(g,o);T.setG(g);return g;};
 
 console.log('\n── T45 · isDNF / finishedResults ──');
@@ -116,5 +104,4 @@ t('queda marcado como aplicado', T.getG().trainingBlockApplied===true);
 T.applyTraining(true);
 t('force:true sí reaplica (modo desarrollador)', JSON.stringify(T.getG().runner.stats)!==trasCuatro);
 
-console.log('\n'+(fail===0?'✅ TODO OK':'❌ FALLOS: '+fail)+'  ('+pass+' comprobaciones pasadas)');
-process.exit(fail?1:0);
+t.done('TODO OK');

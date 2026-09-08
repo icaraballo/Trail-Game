@@ -1,0 +1,296 @@
+// T47 (v90) — Comprobación de cobertura de contenido.  Ejecutar con: npm run content
+//
+// La única pieza de la auditoría que no arregla un bug: detecta la familia
+// entera. T11–T14 fueron todas del mismo tipo — una condición que cita una
+// propiedad que en los datos no existe, o contenido escrito que nunca puede
+// salir — y las cuatro habrían caído aquí sin jugar una sola carrera.
+//
+// Dos severidades a propósito:
+//   ERROR  → contenido roto o inalcanzable. Rompe `npm run check`.
+//   AVISO  → incoherencia conocida con tarea abierta en el backlog (T48/T49
+//            campos sin declarar, T52 el esquema km/desnivel). Se lista para
+//            que el número baje solo según se cierren, pero no bloquea.
+const {build,sources}=require('./_bundle');
+
+const {T}=build(['freshState','ACHIEVEMENTS','RACES_DB','SPEC_RACES','SPONSORS_DB','BETWEEN_EVENTS',
+  'EXPRESS_TIMED_EVENTS','EXPRESS_NARRATIVE_EVENTS','CIRCUITS_DB','TRAINING_BLOCKS','RIVALS_POOL',
+  'CLUB_RUNNER_POOL','CLUB_ARCHETYPES','COACH_ATHLETE_POOL','COACH_BETWEEN_EVENTS','COACH_MID_RACE_EVENTS',
+  'CLUB_SPONSORS_POOL','COACH_SPONSORS_POOL','SEASON_OBJECTIVES','RACE_STRATEGIES','FAME_ACTIONS',
+  'TIER_LABEL_RACE','CLUB_OBJECTIVES','CLUB_YOUTH_POOL','LIFE_ATHLETE_POOL','RIVAL_INCIDENTS',
+  'checkSponsorObjective']);
+const SRC=sources();
+
+// Los escaneos de fuente de más abajo buscan patrones como `G.campo` o
+// `race.prop`. Sin quitar comentarios antes, un comentario que DOCUMENTA un bug
+// ya arreglado se cuenta como el bug: `race.js` explica en un comentario el T12
+// («la condición leía race.gain») y eso bastaba para que saltase la alarma.
+function sinComentarios(txt){
+  let out='', i=0, n=txt.length;
+  let cad=null;      // comilla abierta: ' " ` o null
+  while(i<n){
+    const c=txt[i], d=txt[i+1];
+    if(cad){
+      if(c==='\\'){out+=c+(d||'');i+=2;continue;}
+      if(c===cad)cad=null;
+      out+=c;i++;continue;
+    }
+    if(c==='/'&&d==='/'){ while(i<n&&txt[i]!=='\n')i++; continue; }
+    if(c==='/'&&d==='*'){ i+=2; while(i<n&&!(txt[i]==='*'&&txt[i+1]==='/'))i++; i+=2; continue; }
+    if(c==="'"||c==='"'||c==='`')cad=c;
+    out+=c;i++;
+  }
+  return out;
+}
+const LIMPIO=Object.fromEntries(Object.entries(SRC).map(([f,t])=>[f,sinComentarios(t)]));
+
+let errores=0, avisos=0;
+const bloque=n=>console.log('\n── '+n+' ──');
+const err =(m,d='')=>{errores++;console.log('  ✗ '+m+(d?'  → '+d:''));};
+const avi =(m,d='')=>{avisos++; console.log('  ⚠ '+m+(d?'  → '+d:''));};
+const ok  =m=>console.log('  ✓ '+m);
+
+// ── 1 · Ids únicos y utilizables ─────────────────────────────────────────────
+bloque('Ids');
+const TABLAS={ACHIEVEMENTS:T.ACHIEVEMENTS,RACES_DB:T.RACES_DB,SPONSORS_DB:T.SPONSORS_DB,
+  BETWEEN_EVENTS:T.BETWEEN_EVENTS,EXPRESS_TIMED_EVENTS:T.EXPRESS_TIMED_EVENTS,
+  EXPRESS_NARRATIVE_EVENTS:T.EXPRESS_NARRATIVE_EVENTS,CIRCUITS_DB:T.CIRCUITS_DB,
+  TRAINING_BLOCKS:T.TRAINING_BLOCKS,RIVALS_POOL:T.RIVALS_POOL,CLUB_RUNNER_POOL:T.CLUB_RUNNER_POOL,
+  COACH_ATHLETE_POOL:T.COACH_ATHLETE_POOL,COACH_BETWEEN_EVENTS:T.COACH_BETWEEN_EVENTS,
+  COACH_MID_RACE_EVENTS:T.COACH_MID_RACE_EVENTS,CLUB_SPONSORS_POOL:T.CLUB_SPONSORS_POOL,
+  COACH_SPONSORS_POOL:T.COACH_SPONSORS_POOL,CLUB_OBJECTIVES:T.CLUB_OBJECTIVES,
+  CLUB_YOUTH_POOL:T.CLUB_YOUTH_POOL,LIFE_ATHLETE_POOL:T.LIFE_ATHLETE_POOL,
+  RACE_STRATEGIES:T.RACE_STRATEGIES,FAME_ACTIONS:T.FAME_ACTIONS,RIVAL_INCIDENTS:T.RIVAL_INCIDENTS};
+let dups=0, noAscii=0, sinId=0;
+for(const [nom,tabla] of Object.entries(TABLAS)){
+  if(!Array.isArray(tabla)){err(nom+' no es un array (¿nombre mal expuesto en el bundle?)');continue;}
+  const vistos=new Set();
+  for(const it of tabla){
+    if(it.id===undefined){sinId++;continue;}
+    if(vistos.has(it.id)){err('id duplicado en '+nom, it.id);dups++;}
+    vistos.add(it.id);
+    // T140: los ids son claves de objeto y acaban en localStorage.
+    if(!/^[\w-]+$/.test(String(it.id))){avi('id con carácter no ASCII en '+nom, it.id);noAscii++;}
+  }
+}
+if(!dups) ok('sin ids duplicados en las '+Object.keys(TABLAS).length+' tablas');
+if(!noAscii) ok('todos los ids son ASCII');
+if(sinId) avi(sinId+' entradas sin campo id (tablas que no lo usan)');
+
+// ── 2 · Todos los logros se evalúan sin reventar ─────────────────────────────
+bloque('Logros · los '+T.ACHIEVEMENTS.length+' check() se ejecutan');
+const RAREZAS=new Set(['easy','medium','hard','legendary','joke']);
+// Estado "todo al máximo": el segundo escenario, para que un check() que solo
+// falla con datos dentro (h.pos sobre un historial vacío, etc.) también corra.
+function estadoLleno(){
+  const g=T.freshState();
+  const hist=[];
+  for(let y=1;y<=12;y++) for(const r of T.RACES_DB)
+    hist.push({name:r.name,year:y,pos:1,time:3600,km:r.km,dnf:false,prize:100,id:r.id});
+  Object.assign(g,{year:15,money:99999,followers:200000,ranking:1,specRanking:1,
+    careerHistory:hist,raceResults:hist.slice(0,6),totalCareerKm:99999,
+    injuryHistory:[{year:1,type:'fractura'},{year:2,type:'rotura'}],
+    personalBests:Object.fromEntries(T.RACES_DB.map(r=>[r.name,3600])),
+    raceFinishedCount:99,raceAbandonedCount:0,gameMode:'dificil',
+    sponsors:{1:{name:'a'},2:{name:'b'},3:{name:'c'},4:{name:'d'}},
+    _abandonsByYear:{},unlockedAchievements:[],
+    selectedRaces:T.RACES_DB.slice(0,6).map(r=>({...r})),
+    currentRaceIdx:5});
+  // Varios objKey miran el tier de la carrera del resultado, no solo la posición.
+  g.raceResults=g.raceResults.map((h,i)=>({...h,tier:'nacional',pos:1,dnf:false,
+    name:(T.RACES_DB[i]||T.RACES_DB[0]).name,raceId:(T.RACES_DB[i]||T.RACES_DB[0]).id}));
+  return g;
+}
+const escenarios=[['estado inicial',()=>T.freshState()],['estado lleno',estadoLleno]];
+let revientan=0, ciertosAlEmpezar=[], nuncaCiertos=[];
+for(const a of T.ACHIEVEMENTS){
+  if(typeof a.check!=='function'){err('logro sin check()', a.id);continue;}
+  if(!a.id||!a.label||!a.desc) err('logro con id/label/desc vacío', a.id||'(sin id)');
+  if(!RAREZAS.has(a.rarity)) err('rareza desconocida en '+a.id, a.rarity);
+  const res=[];
+  for(const [nomEsc,gen] of escenarios){
+    T.setG(gen());
+    try{ res.push(!!a.check(T.getG())); }
+    catch(e){ err('check() lanza en '+a.id+' ('+nomEsc+')', e.message); revientan++; res.push(null); }
+  }
+  if(res[0]===true) ciertosAlEmpezar.push(a.id);
+  if(res[0]===false && res[1]===false) nuncaCiertos.push(a.id);
+}
+if(!revientan) ok('ninguno lanza excepción en los dos escenarios');
+// Un logro cierto en una partida recién creada está roto: se desbloquea solo.
+if(ciertosAlEmpezar.length) err(ciertosAlEmpezar.length+' logros ya son ciertos en una partida nueva', ciertosAlEmpezar.join(', '));
+else ok('ninguno se desbloquea solo al empezar');
+// No es error: muchos dependen de datos que este escenario no simula (club,
+// entrenador, canicross). Pero la lista es el sitio donde miraría primero un
+// «este logro no sale nunca».
+if(nuncaCiertos.length) avi(nuncaCiertos.length+' logros siguen falsos con el estado lleno (revisar si son de otro modo)', nuncaCiertos.slice(0,12).join(', ')+(nuncaCiertos.length>12?'…':''));
+
+// ── 3 · Campos de G citados por los check() que freshState() no declara ──────
+bloque('Logros · campos de G citados frente a freshState()');
+const declarados=new Set(Object.keys(T.freshState()));
+const citados=new Map();
+// Recorta el bloque de ACHIEVEMENTS del fuente para no barrer todo el fichero.
+const iniAch=LIMPIO['constants.js'].indexOf('const ACHIEVEMENTS=');
+const finAch=LIMPIO['constants.js'].indexOf('const RACES_DB=');
+const txtAch=LIMPIO['constants.js'].slice(iniAch,finAch);
+for(const m of txtAch.matchAll(/\bG\.([A-Za-z_$][\w$]*)/g)){
+  citados.set(m[1],(citados.get(m[1])||0)+1);
+}
+const huerfanos=[...citados.keys()].filter(k=>!declarados.has(k)).sort();
+if(huerfanos.length){
+  // Es exactamente T48/T49: campos que se leen y se guardan pero no tienen
+  // valor por defecto. Aviso mientras esas dos tareas sigan abiertas.
+  avi(huerfanos.length+' campos citados por los logros y no declarados en freshState() (T48/T49)', huerfanos.join(', '));
+} else ok('los '+citados.size+' campos citados existen en freshState()');
+
+// ── 4 · Nombres de carrera escritos a mano dentro de los check() ─────────────
+bloque('Logros · literales que citan contenido');
+const nombresCarrera=new Set([...T.RACES_DB.map(r=>r.name),
+  ...Object.values(T.SPEC_RACES||{}).flat().map(r=>r.name)]);
+let literalesMal=0;
+// Solo los literales comparados contra .name — el resto de cadenas son textos.
+for(const m of txtAch.matchAll(/\.name\s*===\s*'([^']+)'/g)){
+  if(!nombresCarrera.has(m[1])){err('un logro compara contra una carrera que no existe', m[1]);literalesMal++;}
+}
+if(!literalesMal) ok('los nombres de carrera citados existen en los datos');
+
+// ── 5 · Coherencia interna de cada carrera ──────────────────────────────────
+bloque('Carreras · '+T.RACES_DB.length+' en RACES_DB');
+const TIPOS_SEG=new Set(['flat','climb','descent']);
+const TIERS=new Set(Object.keys(T.TIER_LABEL_RACE));
+let kmMal=0, segMal=0, desnivelMal=0, tierMal=0;
+const todasLasCarreras=[...T.RACES_DB, ...Object.values(T.SPEC_RACES||{}).flat()];
+for(const r of todasLasCarreras){
+  for(const campo of ['id','name','km','cost','prize','month','tier','segs'])
+    if(r[campo]===undefined) err('carrera sin campo obligatorio "'+campo+'"', r.id||r.name);
+  if(!TIERS.has(r.tier)){err('tier desconocido en '+r.id, r.tier);tierMal++;}
+  if(!Array.isArray(r.segs)||!r.segs.length){err('carrera sin tramos', r.id);segMal++;continue;}
+  let sumKm=0, subida=0;
+  for(const s of r.segs){
+    for(const campo of ['name','km','type','gain','base'])
+      if(s[campo]===undefined){err('tramo sin "'+campo+'" en '+r.id, s.name||'(sin nombre)');segMal++;}
+    if(!TIPOS_SEG.has(s.type)){err('tipo de tramo desconocido en '+r.id, s.type);segMal++;}
+    // Un climb con gain<=0 o un descent con gain>=0 rompe el perfil y el motor.
+    if(s.type==='climb'&&!(s.gain>0)) err('tramo climb sin desnivel positivo en '+r.id, s.name);
+    if(s.type==='descent'&&!(s.gain<0)) err('tramo descent sin desnivel negativo en '+r.id, s.name);
+    sumKm+=s.km||0;
+    if(s.gain>0) subida+=s.gain;
+  }
+  // El motor reparte el esfuerzo por tramo pero cobra la distancia de r.km.
+  if(sumKm!==r.km){err('los tramos no suman la distancia de la carrera en '+r.id, sumKm+' km de tramos vs km:'+r.km);kmMal++;}
+  // T52: `desnivel` es una cadena de presentación y no hay un gainTotal numérico,
+  // así que nada garantiza que lo que se enseña sea lo que se corre.
+  const pintado=parseInt(String(r.desnivel||'').replace(/\./g,''),10);
+  if(!isNaN(pintado)&&pintado!==subida){avi('el desnivel que se muestra no es el que suman los tramos en '+r.id, pintado+'m+ mostrado vs '+subida+'m real');desnivelMal++;}
+}
+if(!kmMal) ok('en todas, los tramos suman exactamente su km');
+if(!segMal) ok('todos los tramos tienen name/km/type/gain/base y tipo válido');
+if(!tierMal) ok('todos los tier existen en TIER_LABEL_RACE');
+if(!desnivelMal) ok('el desnivel mostrado coincide con el de los tramos');
+
+// ── 6 · Referencias cruzadas entre tablas ───────────────────────────────────
+bloque('Referencias cruzadas');
+const idsCarrera=new Set(todasLasCarreras.map(r=>r.id));
+let refsMal=0;
+for(const c of T.CIRCUITS_DB) for(const id of (c.raceIds||[]))
+  if(!idsCarrera.has(id)){err('el circuito '+c.id+' cita una carrera que no existe', id);refsMal++;}
+// T139: EXCLUSIVE_CLUB_RACE se construye a partir de un id concreto de RACES_DB.
+const usaId=(LIMPIO['constants.js'].match(/EXCLUSIVE_CLUB_RACE=\(\(\)=>\{[\s\S]{0,400}?id===['"]([^'"]+)['"]/)||[])[1];
+if(usaId&&!idsCarrera.has(usaId)){err('EXCLUSIVE_CLUB_RACE se apoya en un id que ya no existe', usaId);refsMal++;}
+else if(usaId) ok('EXCLUSIVE_CLUB_RACE apunta a "'+usaId+'", que existe');
+if(!refsMal) ok('los circuitos citan solo carreras reales');
+
+// ── 7 · Contenido que el motor nunca podría usar ────────────────────────────
+bloque('Contenido alcanzable');
+// 7a · objKey de sponsor: si el despachador no lo trata, el objetivo no se
+// cumple jamás y el contrato se pierde sin que el jugador pueda hacer nada.
+const objKeys=[...new Set([...T.SPONSORS_DB,...T.COACH_SPONSORS_POOL,...T.CLUB_SPONSORS_POOL]
+  .map(s=>s&&s.objKey).filter(Boolean))];
+let objMal=0;
+for(const k of objKeys){
+  T.setG(estadoLleno());
+  let tratado=false;
+  try{ tratado = T.checkSponsorObjective({objKey:k})===true; }catch(e){ tratado=false; }
+  if(!tratado){
+    // Segunda oportunidad: puede ser un objetivo de otro modo (coach/club), que
+    // tiene su propio despachador. Buscamos el literal en el resto del código.
+    const enCodigo=Object.entries(LIMPIO).some(([f,s])=>f!=='constants.js'&&s.includes("'"+k+"'"));
+    if(!enCodigo){err('ningún despachador trata el objetivo de sponsor', k);objMal++;}
+    else avi('objKey no cumplido con el estado lleno, pero sí aparece en el código', k);
+  }
+}
+if(!objMal) ok('los '+objKeys.length+' objKey de sponsor tienen despachador');
+// 7b · effect de los eventos entre carreras: mismo razonamiento. Un effect que
+// no aparece en ningún `case` es una opción que el jugador puede pulsar y no
+// hace nada — la familia T13/T14.
+const codigoJuego=Object.entries(LIMPIO).filter(([f])=>f!=='constants.js').map(([,s])=>s).join('\n');
+let efMal=0;
+const efectos=[...new Set(T.BETWEEN_EVENTS.flatMap(e=>(e.choices||[]).map(c=>c.effect)).filter(Boolean))];
+for(const e of efectos)
+  if(!codigoJuego.includes("'"+e+"'")){err('un evento ofrece un efecto que nadie implementa', e);efMal++;}
+if(!efMal) ok('los '+efectos.length+' efectos de BETWEEN_EVENTS tienen implementación');
+// 7c · Los eventos con contador se buscan por id (`e.id==='xp_x'`) y se
+// resuelven por id (`evId==='xp_x'`): faltar cualquiera de las dos los deja
+// mudos. Los narrativos van por pool aleatorio, así que solo se les puede
+// exigir la rama del resolutor.
+const resolutor=LIMPIO['race.js'];
+const eventosCarrera=[...T.EXPRESS_TIMED_EVENTS,...T.EXPRESS_NARRATIVE_EVENTS];
+let sinRama=0, sinDisparo=0;
+for(const e of eventosCarrera)
+  if(!resolutor.includes("evId==='"+e.id+"'")){err('evento sin rama en el resolutor: se dispara y no pasa nada', e.id);sinRama++;}
+for(const e of T.EXPRESS_TIMED_EVENTS)
+  if(!resolutor.includes("e.id==='"+e.id+"'")){err('evento con contador que nadie puede disparar', e.id);sinDisparo++;}
+if(!sinRama) ok('los '+eventosCarrera.length+' eventos de carrera tienen rama en el resolutor');
+if(!sinDisparo) ok('los '+T.EXPRESS_TIMED_EVENTS.length+' eventos con contador son disparables');
+// La cadena if/else solo nombra el id de la primera opción: con tres o más,
+// la tercera cae en el mismo `else` que la segunda y hace lo que no toca.
+let tresOps=0;
+for(const e of eventosCarrera)
+  if((e.choices||[]).length>2){avi('evento de carrera con más de dos opciones y resolutor de if/else', e.id);tresOps++;}
+if(!tresOps) ok('ninguno tiene más de dos opciones (el if/else del resolutor las cubre)');
+
+// 7e · LA FAMILIA T12. El motor condiciona eventos y cálculos a propiedades que
+// lee de la carrera en curso. Si ninguna carrera de los datos la lleva, ese
+// código está muerto y el contenido que protege no sale jamás — y no hay
+// manera de notarlo jugando, porque el síntoma es que no pasa nada.
+const propsCarrera=new Set();
+for(const m of resolutor.matchAll(/(?:selectedRaces\[G\.currentRaceIdx\]\??\.|\brace\??\.)([A-Za-z_$][\w$]*)/g))
+  propsCarrera.add(m[1]);
+const METODOS=new Set(['filter','map','find','some','every','length','forEach','slice','includes','reduce','push','join','indexOf','sort','flat','toFixed','name','id']);
+const enDatos=new Set();
+for(const r of todasLasCarreras) for(const k of Object.keys(r)) enDatos.add(k);
+const inexistentes=[...propsCarrera].filter(k=>!enDatos.has(k)&&!METODOS.has(k)).sort();
+if(inexistentes.length) err(inexistentes.length+' propiedades que race.js lee de una carrera y ninguna carrera tiene', inexistentes.join(', '));
+else ok('las '+propsCarrera.size+' propiedades de carrera que lee race.js existen en los datos');
+// Y las que existen pero en muy pocas: no es un bug, pero sí donde mirar si
+// «ese evento no me ha salido nunca».
+const raras=[...propsCarrera].filter(k=>enDatos.has(k)&&!METODOS.has(k))
+  .map(k=>[k,todasLasCarreras.filter(r=>r[k]!==undefined).length])
+  .filter(([,n])=>n>0&&n<=2);
+for(const [k,n] of raras) avi('race.js condiciona contenido a "'+k+'", que solo tienen '+n+' carrera(s)', 'raro de ver en partida');
+
+// 7d · todo evento con opciones debe tener al menos dos, o no es una decisión.
+let unaOpcion=0;
+for(const [nom,tabla] of Object.entries({BETWEEN_EVENTS:T.BETWEEN_EVENTS,
+    EXPRESS_TIMED_EVENTS:T.EXPRESS_TIMED_EVENTS,EXPRESS_NARRATIVE_EVENTS:T.EXPRESS_NARRATIVE_EVENTS,
+    COACH_BETWEEN_EVENTS:T.COACH_BETWEEN_EVENTS,COACH_MID_RACE_EVENTS:T.COACH_MID_RACE_EVENTS}))
+  for(const e of tabla){
+    const ops=e.choices||e.options;
+    if(ops&&ops.length<2){err('evento con una sola opción en '+nom, e.id);unaOpcion++;}
+    if(ops) for(const o of ops) if(!o.text){err('opción sin texto en '+nom+'/'+e.id);unaOpcion++;}
+  }
+if(!unaOpcion) ok('todos los eventos ofrecen al menos dos opciones con texto');
+
+// ── 8 · Calendario ──────────────────────────────────────────────────────────
+bloque('Calendario');
+let calMal=0;
+for(const r of T.RACES_DB){
+  if(!(r.month>=1&&r.month<=12)){err('mes fuera de rango en '+r.id, r.month);calMal++;}
+  const qEsperado=Math.floor((r.month-1)/3)+1;
+  if(r.quarter!==undefined&&r.quarter!==qEsperado){avi('el trimestre no corresponde al mes en '+r.id, 'month:'+r.month+' → Q'+qEsperado+', pero pone quarter:'+r.quarter);calMal++;}
+}
+if(!calMal) ok('meses en rango y trimestres coherentes');
+
+console.log('\n'+(errores===0
+  ? '✅ CONTENIDO OK'+(avisos?'  ('+avisos+' avisos, ninguno bloquea)':'')
+  : '❌ '+errores+' ERRORES de contenido'+(avisos?' · '+avisos+' avisos':'')));
+process.exit(errores?1:0);

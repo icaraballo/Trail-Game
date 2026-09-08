@@ -6,7 +6,8 @@
   "scripts": {
     "lint": "eslint js/*.js",
     "test": "node tests/smoke.js",
-    "check": "npm run lint && npm test"
+    "check": "npm run lint && npm test && npm run content",
+    "content": "node tests/content.js"
   },
   "devDependencies": {
     "eslint": "^9.13.0"
