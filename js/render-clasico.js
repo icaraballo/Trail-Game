@@ -395,7 +395,6 @@ function renderRunnerTab(){
     ${(()=>{
       const RARITY={easy:{c:'#4a8a2a',bg:'#eaf4ea',l:'Fácil'},medium:{c:'#4a90d9',bg:'#e8f0fb',l:'Medio'},hard:{c:'#c07a10',bg:'#fdf0e0',l:'Difícil'},legendary:{c:'#8b2252',bg:'#f8e8f2',l:'Legendario'}};
       const rb=a=>{const r=RARITY[a.rarity]||{c:'#888',bg:'#eee',l:''};return`<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${r.bg};color:${r.c}">${r.l}</span>`;};
-      const DIFF_LABEL={facil:'🟢',medio:'🟡',dificil:'🔴',hardcore:'💀',expres:'⚡',canicross:'🐕'};
       const meta=G.achievementMeta||{};
       const unlocked=G.unlockedAchievements||[];
       const normalAchs=ACHIEVEMENTS.filter(a=>!a.mode);
@@ -411,7 +410,7 @@ function renderRunnerTab(){
       ${recent.map(ach=>`<div style="padding:7px 0;border-bottom:1px solid #f0ede8;display:flex;align-items:center;gap:8px">
         <span style="font-size:15px">🏆</span>
         <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:1px"><span style="font-size:13px;font-weight:600">${esc(ach.label)}</span>${rb(ach)}${meta[ach.id]?`<span style="font-size:11px;color:#aaa">${DIFF_LABEL[meta[ach.id].difficulty]||''}</span>`:''}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:1px"><span style="font-size:13px;font-weight:600">${esc(ach.label)}</span>${rb(ach)}${meta[ach.id]?`<span style="font-size:11px;color:#aaa">${MODE_LABELS[meta[ach.id].difficulty]?modeEmoji(meta[ach.id].difficulty):''}</span>`:''}</div>
           <div style="font-size:12px;color:#888">${esc(ach.desc)}</div>
         </div>
       </div>`).join('')}
@@ -923,7 +922,7 @@ function renderSeasonStart(){
       <h2>Temporada ${G.year}</h2>
       <span style="font-size:12px;color:#999;padding-top:5px">${G.ranking<900?'Ranking #'+G.ranking:'Sin ranking'}</span>
     </div>
-    <p class="sub">${esc(G.runner.name||'Corredor')} · ${G.runner.specialty} · ${G.runner.age?G.runner.age+' años · ':''}<span style="font-size:12px;padding:1px 7px;border-radius:4px;background:${{facil:'#EAF3DE',medio:'#FAEEDA',dificil:'#FCEBEB',hardcore:'#F1EFE8',expres:'#fef9ec'}[G.gameMode||'medio']};color:${{facil:'#27500A',medio:'#633806',dificil:'#791F1F',hardcore:'#444441',expres:'#8a4a00'}[G.gameMode||'medio']}">${{facil:'Fácil',medio:'Medio',dificil:'Difícil',hardcore:'Hardcore',expres:'⚡ Exprés'}[G.gameMode||'medio']}</span>${G.gameMode==='expres'?` <span style="font-size:12px;color:#c07a10;font-weight:600">Año ${G.year}/3</span>`:''}${G.carreraVida?` <span style="font-size:11px;padding:1px 7px;border-radius:4px;background:#EEEDFE;color:#534AB7;font-weight:600">${{runner:'🏃 Corredor',overlap:'🏃 · 📋 Overlap',coach:'📋 Entrenador',club:'🏕 Club'}[G.lifecyclePhase||'runner']}</span>`:''}</p>
+    <p class="sub">${esc(G.runner.name||'Corredor')} · ${G.runner.specialty} · ${G.runner.age?G.runner.age+' años · ':''}<span style="font-size:12px;padding:1px 7px;border-radius:4px;background:${modeInfo(G.gameMode).bg};color:${modeInfo(G.gameMode).fg}">${modeLabelOf(G.gameMode)}</span>${G.gameMode==='expres'?` <span style="font-size:12px;color:#c07a10;font-weight:600">Año ${G.year}/3</span>`:''}${G.carreraVida?` <span style="font-size:11px;padding:1px 7px;border-radius:4px;background:#EEEDFE;color:#534AB7;font-weight:600">${PHASE_LABEL[G.lifecyclePhase]||PHASE_LABEL.runner}</span>`:''}</p>
     
     ${showObjectives?`
     <div style="background:#f5f4f0;border:1.5px solid #1a1a1a;border-radius:12px;padding:14px 16px;margin-bottom:16px">
@@ -1276,7 +1275,6 @@ function renderTraining(){
     <div id="nr-panel" style="display:none;margin-bottom:12px">
       ${nextRace?racePreviewCard(nextRace,'preview',0):'<p style="font-size:13px;color:#aaa">Sin carrera seleccionada.</p>'}
     </div>
-    ${nextRace?`<script>attachProfHandlers(${JSON.stringify(nextRace)},'${nextRace.id}preview','preview',0);<\/script>`:''}
     <div style="margin-bottom:16px">
       ${TRAINING_BLOCKS.map(b=>{
         const sel=G.trainingBlock&&G.trainingBlock.id===b.id;
@@ -1319,6 +1317,13 @@ function renderTraining(){
     ${G.trainingEvent?`<div class="hint" style="margin-bottom:12px">${G.trainingEvent.icon} <strong>Evento de entrenamiento:</strong> ${G.trainingEvent.title} — ${G.trainingEvent.desc}</div>`:''}
     ${G.carreraVida&&G.lifecyclePhase==='overlap'&&G.lifeAthlete?renderAthleteHoursBlock():''}
     <button class="main" onclick="doStartRaces()" ${!G.trainingBlock?'disabled':''}>¡Empezar temporada! →</button>`;
+  // T106 (v93): esto era un `<script>` interpolado dentro del innerHTML. El
+  // navegador NO ejecuta los <script> insertados por innerHTML, así que el
+  // perfil de «Ver próxima carrera» nunca ha tenido manejadores: tocar un tramo
+  // no hacía nada, y como el panel arranca plegado nadie lo notaba. Es
+  // justamente el punto ciego que ni el linter ni content.js ven. Ahora se
+  // engancha como en todas las demás pantallas, después de pintar.
+  if(nextRace)attachProfHandlers(nextRace,nextRace.id+'preview','preview',0);
 }
 
 // ── Bloque de horas al atleta (fase overlap) ──────────────────────────────────
@@ -1679,7 +1684,7 @@ window.doFameAction=id=>{
   const availH=availableFameHours();
   if(availH<a.hours){alert('Sin horas disponibles.');return;}
   G.fameHoursUsed=(G.fameHoursUsed||0)+a.hours;
-  G.followers=(G.followers||0)+a.followers;
+  addFollowers(a.followers);
   G.fameActionsThisSeason[id]=(G.fameActionsThisSeason[id]||0)+1;
   if(a.income)G.money+=a.income;
   if(a.statBonus)Object.entries(a.statBonus).forEach(([k,v])=>{G.runner.stats[k]=Math.min(100,(G.runner.stats[k]||0)+v);});
@@ -2071,7 +2076,30 @@ window.handleEv=(evId,choiceIdx)=>{
     case'train_penalty':G.trainingEff=Math.min(G.trainingEff,0.65);break;
     case'special_train':G.money=Math.max(0,G.money-150);break;
     case'change_block':G.pendingEvent=null;G.screen='training';render();return;
-    case'add_race':const extras=RACES_DB.filter(r=>!G.selectedRaces.find(s=>s.id===r.id));if(extras.length>0)G.selectedRaces.splice(G.currentRaceIdx,0,{...extras[0]});break;
+    // T109 + T110 (v93) — la misma línea escondía dos bugs.
+    // T109: `extras[0]` con RACES_DB ordenado por mes es SIEMPRE la carrera del
+    // mes libre más temprano (casi siempre `pinar`, enero). La «invitación
+    // especial» ofrecía la misma carrera en todas las partidas.
+    // T110: `splice(G.currentRaceIdx,0,…)` inserta EN el índice actual, y
+    // goNextRace() no incrementa currentRaceIdx — ya apunta a la carrera que
+    // ibas a correr. Resultado: la extra se colaba delante y desplazaba la
+    // carrera para la que ya te habías preparado.
+    // Ahora: sorteo entre las que aún caben en lo que queda de temporada e
+    // inserción por MES, detrás de la actual. Se excluye la Zegama
+    // (`zegamaSpecial`): tiene su propia vía de clasificación (G.zegamaQual) y
+    // regalarla en un evento aleatorio se saltaría ese sistema entero.
+    case'add_race':{
+      const mesActual=G.selectedRaces[G.currentRaceIdx]?.month??0;
+      const extras=RACES_DB.filter(r=>!r.zegamaSpecial&&r.month>mesActual
+        &&!G.selectedRaces.find(s=>s.id===r.id));
+      if(extras.length>0){
+        const nueva={...shuffle(extras)[0]};
+        let i=G.currentRaceIdx+1;
+        while(i<G.selectedRaces.length&&G.selectedRaces[i].month<=nueva.month)i++;
+        G.selectedRaces.splice(i,0,nueva);
+      }
+      break;
+    }
     default:break;
   }
   G.pendingEvent=null;goNextRace();

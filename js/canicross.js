@@ -290,7 +290,7 @@ function cnFinishRace(){
     d.races=(d.races||0)+1;
     d.kmTogether=(d.kmTogether||0)+(race.km||0);
     G.cnMoney=(G.cnMoney||0)+prize;
-    G.followers=(G.followers||0)+Math.round((pos<=3?150:pos<=10?80:30)*(race.tier||1));
+    addFollowers(Math.round((pos<=3?150:pos<=10?80:30)*(race.tier||1)));
   }
 
   // Last place tracking
@@ -1522,7 +1522,7 @@ function renderCanicrossPreRace(){
       return`<div class="card" style="margin-bottom:16px">
         <div style="font-size:14px;font-weight:600;margin-bottom:2px">${esc(race.name)}</div>
         <div style="font-size:12px;color:#888;margin-bottom:10px">${race.km}km · Tier ${race.tier} · ${esc(race.location)}</div>
-        <div id="prof-wrap-cn-pre">${profSvg(cnRaceObj,-1,'preview',0)}</div>
+        <div id="prof-wrap-cn-pre">${profSvg(cnRaceObj,-1,'preview',0,'cn-pre')}</div>
         <div id="prof-info-cn-pre" data-sel="-1" style="min-height:20px">${profSegInfo(cnRaceObj,null,'preview',0)}</div>
         <div style="display:flex;gap:10px;font-size:12px;color:#aaa;margin-top:8px;flex-wrap:wrap">
           <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#EAF3DE;border:1px solid #639922;margin-right:3px;vertical-align:middle"></span>Subida</span>
@@ -1591,7 +1591,7 @@ function renderCanicrossSegment(){
       if(!rs.segs?.length)return'';
       const cnRaceObj={id:'cn_race',km:rs.km,segs:rs.segs};
       return`<div class="card" style="margin-bottom:10px;padding:10px 10px 6px">
-        <div id="prof-wrap-cn-race">${profSvg(cnRaceObj,rs.currentSeg,'race',rs.currentSeg)}</div>
+        <div id="prof-wrap-cn-race">${profSvg(cnRaceObj,rs.currentSeg,'race',rs.currentSeg,'cn-race')}</div>
         <div id="prof-info-cn-race" data-sel="${rs.currentSeg}" style="min-height:20px">${profSegInfo(cnRaceObj,rs.currentSeg,'race',rs.currentSeg)}</div>
       </div>`;
     })()}

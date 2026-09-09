@@ -18,7 +18,7 @@ const {T}=build(['freshState','ACHIEVEMENTS','RACES_DB','SPEC_RACES','SPONSORS_D
   'CLUB_SPONSORS_POOL','COACH_SPONSORS_POOL','SEASON_OBJECTIVES','RACE_STRATEGIES','FAME_ACTIONS',
   'TIER_LABEL_RACE','CLUB_OBJECTIVES','CLUB_YOUTH_POOL','LIFE_ATHLETE_POOL','RIVAL_INCIDENTS',
   'CLUB_RACES','raceGainTotal','raceDesnivel','fmtGain',
-  'checkSponsorObjective']);
+  'checkSponsorObjective','MID_RACE_RESOLVERS','MODE_LABELS','PHASE_LABEL']);
 const SRC=sources();
 
 // Los escaneos de fuente de más abajo buscan patrones como `G.campo` o
@@ -125,23 +125,30 @@ else ok('ninguno se desbloquea solo al empezar');
 // «este logro no sale nunca».
 if(nuncaCiertos.length) avi(nuncaCiertos.length+' logros siguen falsos con el estado lleno (revisar si son de otro modo)', nuncaCiertos.slice(0,12).join(', ')+(nuncaCiertos.length>12?'…':''));
 
-// ── 3 · Campos de G citados por los check() que freshState() no declara ──────
-bloque('Logros · campos de G citados frente a freshState()');
+// ── 3 · Campos de G que freshState() no declara ──────────────────────────────
+// T48/T49 (v93): antes esto solo barría el bloque de ACHIEVEMENTS y avisaba.
+// Cerradas las dos tareas, barre los ONCE ficheros y es ERROR: un campo de G
+// que se escribe sin estar declarado vuelve a ser la trampa de T02/T03 — se
+// guarda en disco, migrateState() no le da valor por defecto y el siguiente
+// `undefined+1` es NaN, o el `.prop` de turno revienta el render.
+bloque('Estado · campos de G frente a freshState()');
 const declarados=new Set(Object.keys(T.freshState()));
-const citados=new Map();
-// Recorta el bloque de ACHIEVEMENTS del fuente para no barrer todo el fichero.
+// Recorte del bloque de ACHIEVEMENTS: lo usa también la comprobación 4.
 const iniAch=LIMPIO['constants.js'].indexOf('const ACHIEVEMENTS=');
 const finAch=LIMPIO['constants.js'].indexOf('const RACES_DB=');
 const txtAch=LIMPIO['constants.js'].slice(iniAch,finAch);
-for(const m of txtAch.matchAll(/\bG\.([A-Za-z_$][\w$]*)/g)){
-  citados.set(m[1],(citados.get(m[1])||0)+1);
+const citados=new Map();
+for(const [f,txt] of Object.entries(LIMPIO)){
+  for(const m of txt.matchAll(/\bG\.([A-Za-z_$][\w$]*)/g)){
+    if(!citados.has(m[1]))citados.set(m[1],new Set());
+    citados.get(m[1]).add(f);
+  }
 }
 const huerfanos=[...citados.keys()].filter(k=>!declarados.has(k)).sort();
 if(huerfanos.length){
-  // Es exactamente T48/T49: campos que se leen y se guardan pero no tienen
-  // valor por defecto. Aviso mientras esas dos tareas sigan abiertas.
-  avi(huerfanos.length+' campos citados por los logros y no declarados en freshState() (T48/T49)', huerfanos.join(', '));
-} else ok('los '+citados.size+' campos citados existen en freshState()');
+  err(huerfanos.length+' campos de G usados y no declarados en freshState() (T48/T49)',
+      huerfanos.map(k=>k+' ['+[...citados.get(k)].join(' ')+']').join(', '));
+} else ok('los '+citados.size+' campos de G usados en los 11 ficheros existen en freshState()');
 
 // ── 4 · Nombres de carrera escritos a mano dentro de los check() ─────────────
 bloque('Logros · literales que citan contenido');
@@ -254,11 +261,23 @@ if(!efMal) ok('los '+efectos.length+' efectos de BETWEEN_EVENTS tienen implement
 const resolutor=LIMPIO['race.js'];
 const eventosCarrera=[...T.EXPRESS_TIMED_EVENTS,...T.EXPRESS_NARRATIVE_EVENTS];
 let sinRama=0, sinDisparo=0;
+// T83 (v93): esto buscaba el texto "evId==='x'" en el fuente. Desde que el
+// resolutor es una tabla se pregunta al OBJETO, que además es la comprobación
+// buena: encontrar el texto no garantizaba que la rama fuese alcanzable — los
+// ocho eventos clásicos tenían su rama, se encontraba, y aun así su narración
+// la pisaba el `else` de la segunda cadena.
 for(const e of eventosCarrera)
-  if(!resolutor.includes("evId==='"+e.id+"'")){err('evento sin rama en el resolutor: se dispara y no pasa nada', e.id);sinRama++;}
+  if(typeof T.MID_RACE_RESOLVERS[e.id]!=='function'){err('evento sin resolutor: se dispara y no pasa nada', e.id);sinRama++;}
 for(const e of T.EXPRESS_TIMED_EVENTS)
   if(!resolutor.includes("e.id==='"+e.id+"'")){err('evento con contador que nadie puede disparar', e.id);sinDisparo++;}
-if(!sinRama) ok('los '+eventosCarrera.length+' eventos de carrera tienen rama en el resolutor');
+if(!sinRama) ok('los '+eventosCarrera.length+' eventos de carrera tienen resolutor en MID_RACE_RESOLVERS');
+// Y al revés: un resolutor que ningún dato puede disparar es contenido muerto.
+// Los ocho clásicos y los de modo normal no están en esas dos tablas, así que
+// solo se avisa; lo que importa es que la cifra no crezca sin motivo.
+const idsDato=new Set(eventosCarrera.map(e=>e.id));
+const huerfanosEv=Object.keys(T.MID_RACE_RESOLVERS).filter(id=>!idsDato.has(id)&&!resolutor.includes("id:'"+id+"'"));
+if(huerfanosEv.length) avi(huerfanosEv.length+' resolutores no aparecen en ninguna tabla de eventos', huerfanosEv.join(', '));
+else ok('los '+Object.keys(T.MID_RACE_RESOLVERS).length+' resolutores son disparables');
 if(!sinDisparo) ok('los '+T.EXPRESS_TIMED_EVENTS.length+' eventos con contador son disparables');
 // La cadena if/else solo nombra el id de la primera opción: con tres o más,
 // la tercera cae en el mismo `else` que la segunda y hace lo que no toca.
@@ -300,6 +319,24 @@ for(const [nom,tabla] of Object.entries({BETWEEN_EVENTS:T.BETWEEN_EVENTS,
 if(!unaOpcion) ok('todos los eventos ofrecen al menos dos opciones con texto');
 
 // ── 8 · Calendario ──────────────────────────────────────────────────────────
+// ── T54 (v93) · una sola tabla de etiquetas de modo ──────────────────────────
+// Eran seis tablas repartidas y ninguna coincidía con otra; dos ni siquiera
+// tenían los ocho modos, así que en Exprés pintaban `undefined`. Ahora
+// MODE_LABELS es la única, y esto impide que vuelva a escribirse otra a mano:
+// ningún fichero salvo constants.js puede contener un literal `facil:` o
+// `hardcore:`, que es la forma que tenían las seis.
+bloque('Interfaz · etiquetas de modo');
+const MODOS=['facil','medio','dificil','hardcore','expres','coach','club','canicross'];
+const faltan=MODOS.filter(m=>!T.MODE_LABELS[m]||!T.MODE_LABELS[m].label||!T.MODE_LABELS[m].emoji
+  ||!T.MODE_LABELS[m].bg||!T.MODE_LABELS[m].fg);
+if(faltan.length) err('modos sin entrada completa en MODE_LABELS', faltan.join(', '));
+else ok('los '+MODOS.length+' modos tienen label, emoji y colores');
+const sueltas=Object.entries(LIMPIO).filter(([f,t])=>f!=='constants.js'&&/\b(facil|hardcore):\s*'/.test(t)).map(([f])=>f);
+if(sueltas.length) err('tabla de etiquetas de modo escrita a mano fuera de constants.js (T54)', sueltas.join(', '));
+else ok('ningún fichero repite la tabla de modos');
+if(Object.keys(T.PHASE_LABEL).length!==4) err('PHASE_LABEL debería tener las 4 fases del arco narrativo');
+else ok('las 4 fases del arco narrativo tienen etiqueta única');
+
 bloque('Calendario');
 let calMal=0;
 for(const r of T.RACES_DB){

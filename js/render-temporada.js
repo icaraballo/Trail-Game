@@ -155,7 +155,12 @@ function renderRankingChart(){
 function renderSavingsChart(){
   const proj=getSavingsProjection();
   const maxMoney=Math.max(...proj.map(p=>p.money),1000);
-  const minMoney=Math.max(0,Math.min(...proj.map(p=>p.money)));
+  // T126 (v93): esto era Math.max(0, min) — el eje tenía su propio suelo de
+  // cero, además del de getSavingsProjection(). Con los dos puestos, una
+  // proyección negativa se dibujaba plana sobre el eje. Sin ellos, la línea baja
+  // de cero y se ve la caída; con proyección positiva el mínimo es el mismo de
+  // antes, así que la escala habitual no cambia.
+  const minMoney=Math.min(...proj.map(p=>p.money));
   const color=proj[proj.length-1].money>G.money?'#4a8a2a':'#c0392b';
   const w=320,h=140,padL=52,padR=10,padT=16,padB=26;
   const graphW=w-padL-padR,graphH=h-padT-padB;
@@ -164,7 +169,10 @@ function renderSavingsChart(){
   const points=proj.map((d,i)=>`${tx(i).toFixed(1)},${ty(d.money).toFixed(1)}`).join(' ');
   // Y axis ticks
   const yMid=Math.round((maxMoney+minMoney)/2);
-  const yTicksHtml=[maxMoney,yMid,minMoney].map(v=>`<text x="${padL-4}" y="${(ty(v)+4).toFixed(1)}" text-anchor="end" font-size="10" fill="#666">€${v>=1000?(v/1000).toFixed(1)+'k':v}</text>`).join('');
+  // T126: el signo va delante del €, y el umbral del «k» mira el valor absoluto
+  // para que −2.400 salga como −€2.4k y no como €-2400.
+  const fmtEur=v=>(v<0?'−€':'€')+(Math.abs(v)>=1000?(Math.abs(v)/1000).toFixed(1)+'k':Math.abs(v));
+  const yTicksHtml=[maxMoney,yMid,minMoney].map(v=>`<text x="${padL-4}" y="${(ty(v)+4).toFixed(1)}" text-anchor="end" font-size="10" fill="#666">${fmtEur(v)}</text>`).join('');
   // X ticks: hoy y mes 12
   const xTicksHtml=`
     <text x="${padL}" y="${h-6}" text-anchor="middle" font-size="10" fill="#888">Hoy</text>
@@ -175,6 +183,7 @@ function renderSavingsChart(){
     <line x1="${padL}" y1="${padT+graphH}" x2="${padL+graphW}" y2="${padT+graphH}" stroke="#e0dfd8" stroke-width="0.5"/>
     ${yTicksHtml}
     ${xTicksHtml}
+    ${minMoney<0?`<line x1="${padL}" y1="${ty(0).toFixed(1)}" x2="${padL+graphW}" y2="${ty(0).toFixed(1)}" stroke="#c0392b" stroke-width="0.8" stroke-dasharray="3 3"/>`:''}
     <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
     <circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="3.5" fill="${color}"/>
     <text x="${padL}" y="${padT-3}" font-size="11" fill="#555" font-weight="600">Proyección ahorros</text>
@@ -906,7 +915,7 @@ function renderLifeRetirement(){
   const yearsActive=G.year-1;
   const age=G.runner.age||25;
   const name=esc(G.runner.name||'El corredor');
-  const modeLabel={facil:'Fácil',medio:'Medio',dificil:'Difícil',hardcore:'Hardcore'}[G.gameMode||'medio'];
+  const modeLabel=modeLabelOf(G.gameMode);   // T54 (v93)
 
   let legacy='';
   if(totalWins>=10)legacy='Una carrera de élite. Tu nombre queda grabado en la historia del trail.';
@@ -1136,7 +1145,7 @@ function renderCareerEnd(){
   const hist=G.careerHistory||[];
   const totalWins=hist.filter(r=>r.pos===1).length;
   const totalPodiums=hist.filter(r=>r.pos<=3).length;
-  const modeLabel={facil:'Fácil',medio:'Medio',dificil:'Difícil',hardcore:'Hardcore',expres:'⚡ Exprés'}[G.gameMode||'medio'];
+  const modeLabel=modeLabelOf(G.gameMode);   // T54 (v93)
   const motivo=G.careerEnded==='bankruptcy'
     ?'Las deudas pudieron con el proyecto. Trabajando a jornada completa y sin margen para entrenar, no había forma de remontar.'
     :'La carrera deportiva ha terminado.';
@@ -1187,7 +1196,7 @@ function renderRetirement(){
   else if(totalRaces>=15)legacy='Años de kilómetros y esfuerzo. El monte siempre te esperó.';
   else legacy='Cada carrera fue un paso adelante. El trail es así de personal.';
 
-  const modeLabel={facil:'Fácil',medio:'Medio',dificil:'Difícil',hardcore:'Hardcore',expres:'⚡ Exprés'}[G.gameMode||'medio'];
+  const modeLabel=modeLabelOf(G.gameMode);   // T54 (v93)
 
   el.innerHTML=`
     <div style="text-align:center;padding:20px 0 10px">

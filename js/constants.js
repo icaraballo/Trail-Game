@@ -42,12 +42,64 @@ const SEASON_OBJECTIVES=[
   }
 ];
 
+// T69 (v93) — agregados de careerHistory, calculados UNA vez por historial.
+//
+// 38 de los ~150 logros recorrían `G.careerHistory` entero, y varios lo
+// recorrían dos y tres veces dentro del mismo check() (perfect_season saca los
+// años con un map+Set y después vuelve a filtrar el historial por cada año).
+// checkAndUnlockAchievements() los evalúa todos al terminar cada carrera, así
+// que el historial se barría más de sesenta veces seguidas. Con 50 carreras y
+// varias temporadas eso es trabajo cuadrático por una cifra que no cambia entre
+// un check y el siguiente.
+//
+// Se calcula todo en UNA pasada y se memoiza. La caché se invalida cuando
+// cambia el array (referencia distinta: cargar partida, freshState) o su
+// longitud (una carrera nueva). Las entradas no se mutan en el sitio en ningún
+// punto del código —careerHistory solo recibe push en race.js:2319— así que no
+// hay tercer camino por el que quedarse obsoleta.
+//
+// OJO con la fidelidad: se replica lo que hacía cada check, no lo que "debería".
+// En particular win_same_2 solo miraba nombres de RACES_DB (no los de
+// SPEC_RACES) y win_zegama_3 cuenta VICTORIAS, no temporadas distintas. Las dos
+// cosas se conservan; cambiarlas sería tocar la dificultad de dos logros.
+let _CAGG=null,_CAGG_REF=null,_CAGG_LEN=-1;
+function careerAgg(){
+  const h=G.careerHistory||[];
+  if(_CAGG&&_CAGG_REF===h&&_CAGG_LEN===h.length)return _CAGG;
+  const a={
+    n:h.length, wins:0, podiums:0, maxWinStreak:0, hasUltra:false,
+    racesByYear:{},      // año → carreras terminadas
+    winsByYear:{},       // año → victorias
+    winNamesByYear:{},   // año → [nombres ganados]
+    winCountByName:{},   // nombre → victorias (win_zegama_3 cuenta victorias)
+    winYearsByName:{},   // nombre → Set de años (win_same_2 cuenta años distintos)
+  };
+  let racha=0;
+  const porNombre=allRacesByName();
+  for(const r of h){
+    const y=r.year;
+    a.racesByYear[y]=(a.racesByYear[y]||0)+1;
+    if(r.pos<=3)a.podiums++;
+    if(!a.hasUltra&&porNombre.get(r.name)?.km>=40)a.hasUltra=true;
+    if(r.pos===1){
+      a.wins++;
+      a.winsByYear[y]=(a.winsByYear[y]||0)+1;
+      (a.winNamesByYear[y]||(a.winNamesByYear[y]=[])).push(r.name);
+      a.winCountByName[r.name]=(a.winCountByName[r.name]||0)+1;
+      (a.winYearsByName[r.name]||(a.winYearsByName[r.name]=new Set())).add(y);
+      if(++racha>a.maxWinStreak)a.maxWinStreak=racha;
+    } else racha=0;
+  }
+  _CAGG_REF=h; _CAGG_LEN=h.length;
+  return _CAGG=a;
+}
+
 const ACHIEVEMENTS=[
   // ══ MODO NORMAL — FÁCIL ══════════════════════════════
-  {id:'first_race',    rarity:'easy',   label:'Día uno',               desc:'Completar tu primera carrera',                        check:()=>(G.careerHistory||[]).length>=1},
-  {id:'runner_5',      rarity:'easy',   label:'Primeros pasos',        desc:'Completar 5 carreras',                                check:()=>(G.careerHistory||[]).length>=5},
-  {id:'podium_1',      rarity:'easy',   label:'Al podio',              desc:'Conseguir tu primer podio (top 3)',                   check:()=>(G.careerHistory||[]).filter(h=>h.pos<=3).length>=1},
-  {id:'win_1',         rarity:'easy',   label:'Primera victoria',      desc:'Ganar una carrera',                                   check:()=>(G.careerHistory||[]).filter(h=>h.pos===1).length>=1},
+  {id:'first_race',    rarity:'easy',   label:'Día uno',               desc:'Completar tu primera carrera',                        check:()=>careerAgg().n>=1},
+  {id:'runner_5',      rarity:'easy',   label:'Primeros pasos',        desc:'Completar 5 carreras',                                check:()=>careerAgg().n>=5},
+  {id:'podium_1',      rarity:'easy',   label:'Al podio',              desc:'Conseguir tu primer podio (top 3)',                   check:()=>careerAgg().podiums>=1},
+  {id:'win_1',         rarity:'easy',   label:'Primera victoria',      desc:'Ganar una carrera',                                   check:()=>careerAgg().wins>=1},
   {id:'first_sponsor', rarity:'easy',   label:'Primer contrato',       desc:'Firmar el primer contrato de patrocinio',             check:()=>Object.values(G.sponsors||{}).some(Boolean)},
   {id:'year_3',        rarity:'easy',   label:'En rodaje',             desc:'Completar 3 temporadas',                             check:()=>G.year>=3},
   {id:'top_100',       rarity:'easy',   label:'Top 100 nacional',      desc:'Alcanzar el ranking #100 o mejor',                   check:()=>(G.ranking||999)<=100},
@@ -56,38 +108,38 @@ const ACHIEVEMENTS=[
   {id:'survived_storm',rarity:'easy',   label:'Superviviente',         desc:'Terminar una carrera con tormenta activa',           check:()=>(G.stormSurvivedCount||0)>=1},
   {id:'fair_play',     rarity:'easy',   label:'Fair play',             desc:'Tomar 3 decisiones honestas en carrera',             check:()=>(G.fairPlayCount||0)>=3},
   // ══ MODO NORMAL — MEDIO ══════════════════════════════
-  {id:'runner_25',     rarity:'medium', label:'Maratoniano de montaña',desc:'Completar 25 carreras',                               check:()=>(G.careerHistory||[]).length>=25},
-  {id:'podium_3',      rarity:'medium', label:'Tres podios',           desc:'Lograr 3 podios (top 3)',                            check:()=>(G.careerHistory||[]).filter(h=>h.pos<=3).length>=3},
-  {id:'win_5',         rarity:'medium', label:'Campeón en serie',      desc:'Ganar 5 carreras',                                   check:()=>(G.careerHistory||[]).filter(h=>h.pos===1).length>=5},
-  {id:'podium_10',     rarity:'medium', label:'Consagrado',            desc:'Lograr 10 podios',                                   check:()=>(G.careerHistory||[]).filter(h=>h.pos<=3).length>=10},
+  {id:'runner_25',     rarity:'medium', label:'Maratoniano de montaña',desc:'Completar 25 carreras',                               check:()=>careerAgg().n>=25},
+  {id:'podium_3',      rarity:'medium', label:'Tres podios',           desc:'Lograr 3 podios (top 3)',                            check:()=>careerAgg().podiums>=3},
+  {id:'win_5',         rarity:'medium', label:'Campeón en serie',      desc:'Ganar 5 carreras',                                   check:()=>careerAgg().wins>=5},
+  {id:'podium_10',     rarity:'medium', label:'Consagrado',            desc:'Lograr 10 podios',                                   check:()=>careerAgg().podiums>=10},
   {id:'distance_500',  rarity:'medium', label:'Ultra leguas',          desc:'Acumular 500 km en carrera',                         check:()=>(G.totalCareerKm||0)>=500},
   {id:'distance_1000', rarity:'medium', label:'Mil kilómetros',        desc:'Acumular 1.000 km a lo largo de tu carrera',         check:()=>(G.totalCareerKm||0)>=1000},
-  {id:'ultra_finisher',rarity:'medium', label:'Ultra finisher',        desc:'Terminar una carrera de 40 km o más',                check:()=>(G.careerHistory||[]).some(h=>allRacesByName().get(h.name)?.km>=40)},
+  {id:'ultra_finisher',rarity:'medium', label:'Ultra finisher',        desc:'Terminar una carrera de 40 km o más',                check:()=>careerAgg().hasUltra},
   {id:'top_50',        rarity:'medium', label:'Ranking Top 50',        desc:'Alcanzar ranking #50 o mejor',                      check:()=>(G.ranking||999)<=50},
   {id:'wealthy',       rarity:'medium', label:'Financieramente estable',desc:'Ahorrar €5.000',                                   check:()=>(G.money||0)>=5000},
   {id:'year_5',        rarity:'medium', label:'Veterano',              desc:'Completar 5 temporadas',                            check:()=>G.year>=5},
   {id:'fame_10k',      rarity:'medium', label:'Referente del trail',   desc:'Llegar a 10.000 seguidores',                         check:()=>(G.followers||0)>=10000},
   {id:'sponsor_2',     rarity:'medium', label:'Bien patrocinado',      desc:'Tener 2 contratos de patrocinio simultáneos',        check:()=>Object.values(G.sponsors||{}).filter(Boolean).length>=2},
-  {id:'win_3_season',  rarity:'medium', label:'Temporada triunfal',    desc:'Ganar 3 o más carreras en la misma temporada',       check:()=>{const yrs=[...new Set((G.careerHistory||[]).map(h=>h.year))];return yrs.some(yr=>(G.careerHistory||[]).filter(h=>h.year===yr&&h.pos===1).length>=3);}},
+  {id:'win_3_season',  rarity:'medium', label:'Temporada triunfal',    desc:'Ganar 3 o más carreras en la misma temporada',       check:()=>Object.values(careerAgg().winsByYear).some(v=>v>=3)},
   {id:'no_injury',     rarity:'medium', label:'Cuerpo de hierro',      desc:'Completar una temporada completa sin lesionarse',    check:()=>{const inj=(G.injuryHistory||[]).filter(i=>i.year===G.year).length;return finishedResults(G.raceResults).length>=3&&inj===0;}}, // T45 (v89)
   {id:'no_abandon',    rarity:'medium', label:'Nunca te rindas',       desc:'Terminar 10 carreras consecutivas sin abandono',     check:()=>(G.raceFinishedCount||0)>=10&&(G.raceAbandonedCount||0)===0},
-  {id:'comeback',      rarity:'medium', label:'El regreso',            desc:'Ganar una carrera después de una lesión grave',      check:()=>{const big=(G.injuryHistory||[]).some(i=>i.type==='fractura'||i.type==='rotura');return big&&(G.careerHistory||[]).some(h=>h.pos===1);}},
+  {id:'comeback',      rarity:'medium', label:'El regreso',            desc:'Ganar una carrera después de una lesión grave',      check:()=>{const big=(G.injuryHistory||[]).some(i=>i.type==='fractura'||i.type==='rotura');return big&&careerAgg().wins>=1;}},
   {id:'record_5',      rarity:'medium', label:'Mis marcas',            desc:'Establecer récord personal en 5 carreras distintas', check:()=>Object.keys(G.personalBests||{}).length>=5},
   {id:'year_8',        rarity:'medium', label:'Leyenda local',         desc:'Completar 8 temporadas',                            check:()=>G.year>=8},
-  {id:'win_same_2',    rarity:'medium', label:'Defensor del título',   desc:'Ganar la misma carrera en 2 temporadas distintas',   check:()=>RACES_DB.some(r=>{const w=(G.careerHistory||[]).filter(h=>h.name===r.name&&h.pos===1);return new Set(w.map(x=>x.year)).size>=2;})},
+  {id:'win_same_2',    rarity:'medium', label:'Defensor del título',   desc:'Ganar la misma carrera en 2 temporadas distintas',   check:()=>RACES_DB.some(r=>(careerAgg().winYearsByName[r.name]||{size:0}).size>=2)},
   // ══ MODO NORMAL — DIFÍCIL ════════════════════════════
-  {id:'runner_50',     rarity:'hard',   label:'Veterano de verdad',    desc:'Completar 50 carreras',                              check:()=>(G.careerHistory||[]).length>=50},
-  {id:'win_10',        rarity:'hard',   label:'Habitual ganador',       desc:'Ganar 10 carreras',                                  check:()=>(G.careerHistory||[]).filter(h=>h.pos===1).length>=10},
-  {id:'podium_20',     rarity:'hard',   label:'Podio habitual',        desc:'Lograr 20 podios',                                   check:()=>(G.careerHistory||[]).filter(h=>h.pos<=3).length>=20},
+  {id:'runner_50',     rarity:'hard',   label:'Veterano de verdad',    desc:'Completar 50 carreras',                              check:()=>careerAgg().n>=50},
+  {id:'win_10',        rarity:'hard',   label:'Habitual ganador',       desc:'Ganar 10 carreras',                                  check:()=>careerAgg().wins>=10},
+  {id:'podium_20',     rarity:'hard',   label:'Podio habitual',        desc:'Lograr 20 podios',                                   check:()=>careerAgg().podiums>=20},
   {id:'top_10',        rarity:'hard',   label:'Ranking Top 10',        desc:'Alcanzar ranking #10 o mejor',                      check:()=>(G.ranking||999)<=10},
   {id:'spec_top10',    rarity:'hard',   label:'Top 10 de especialidad',desc:'Alcanzar el ranking #10 en tu especialidad',         check:()=>(G.specRanking||999)<=10},
   {id:'rich',          rarity:'hard',   label:'El corredor millonario',desc:'Ahorrar €20.000',                                    check:()=>(G.money||0)>=20000},
   {id:'sponsor_4',     rarity:'hard',   label:'Totalmente patrocinado',desc:'Tener los 4 sponsors simultáneos',                  check:()=>Object.values(G.sponsors||{}).filter(Boolean).length>=4},
-  {id:'perfect_season',rarity:'hard',   label:'Temporada perfecta',   desc:'Ganar todas las carreras de un año (mín 3) sin abandonos', check:()=>{const yrs=[...new Set((G.careerHistory||[]).map(h=>h.year))];return yrs.some(yr=>{const yr_r=(G.careerHistory||[]).filter(h=>h.year===yr);return yr_r.length>=3&&yr_r.every(h=>h.pos===1)&&((G._abandonsByYear||{})[yr]||0)===0;});}},// T11 (v82): _abandonsByYear[año] solo se crea al abandonar, así que una temporada limpia dejaba la clave en undefined y undefined===0 es falso: el logro era imposible justo al cumplirse.
-  {id:'win_20',        rarity:'hard',   label:'Veinte victorias',      desc:'Ganar 20 carreras',                                  check:()=>(G.careerHistory||[]).filter(h=>h.pos===1).length>=20},
+  {id:'perfect_season',rarity:'hard',   label:'Temporada perfecta',   desc:'Ganar todas las carreras de un año (mín 3) sin abandonos', check:()=>{const a=careerAgg();return Object.keys(a.racesByYear).some(yr=>a.racesByYear[yr]>=3&&(a.winsByYear[yr]||0)===a.racesByYear[yr]&&((G._abandonsByYear||{})[yr]||0)===0);}},// T11 (v82): _abandonsByYear[año] solo se crea al abandonar, así que una temporada limpia dejaba la clave en undefined y undefined===0 es falso: el logro era imposible justo al cumplirse.
+  {id:'win_20',        rarity:'hard',   label:'Veinte victorias',      desc:'Ganar 20 carreras',                                  check:()=>careerAgg().wins>=20},
   {id:'distance_2000', rarity:'hard',   label:'Dos mil kilómetros',    desc:'Acumular 2.000 km de carrera',                       check:()=>(G.totalCareerKm||0)>=2000},
-  {id:'consecutive_3', rarity:'hard',   label:'Racha ganadora',        desc:'Ganar 3 carreras seguidas',                          check:()=>{let s=0;for(const h of(G.careerHistory||[])){if(h.pos===1){s++;if(s>=3)return true;}else s=0;}return false;}},
-  {id:'win_zegama',    rarity:'hard',   label:'Rey del techo vasco',   desc:'Ganar la Zegama-Aizkorri',                           check:()=>(G.careerHistory||[]).some(h=>h.name==='Zegama-Aizkorri'&&h.pos===1)},
+  {id:'consecutive_3', rarity:'hard',   label:'Racha ganadora',        desc:'Ganar 3 carreras seguidas',                          check:()=>careerAgg().maxWinStreak>=3},
+  {id:'win_zegama',    rarity:'hard',   label:'Rey del techo vasco',   desc:'Ganar la Zegama-Aizkorri',                           check:()=>(careerAgg().winCountByName['Zegama-Aizkorri']||0)>=1},
   {id:'year_12',       rarity:'hard',   label:'Doce temporadas',       desc:'Completar 12 temporadas',                           check:()=>G.year>=12&&['medio','dificil','hardcore'].includes(G.gameMode||'')},
   {id:'followers_50k', rarity:'hard',   label:'Estrella del trail',    desc:'Llegar a 50.000 seguidores',                         check:()=>(G.followers||0)>=50000},
   {id:'distance_5000', rarity:'hard',   label:'Cinco mil kilómetros',  desc:'Acumular 5.000 km en carrera',                       check:()=>(G.totalCareerKm||0)>=5000&&['medio','dificil','hardcore'].includes(G.gameMode||'')},
@@ -95,11 +147,11 @@ const ACHIEVEMENTS=[
   {id:'spec_1',        rarity:'hard',   label:'El mejor en especialidad',desc:'Alcanzar el ranking #1 en tu especialidad',        check:()=>(G.specRanking||999)<=1&&['medio','dificil','hardcore'].includes(G.gameMode||'')},
   // ══ MODO NORMAL — LEGENDARIO ═════════════════════════
   {id:'top_1',         rarity:'legendary',label:'Número 1',            desc:'Alcanzar el ranking #1 mundial',                    check:()=>(G.ranking||999)<=1&&['medio','dificil','hardcore'].includes(G.gameMode||'')},
-  {id:'win_30',        rarity:'legendary',label:'Treinta victorias',   desc:'Ganar 30 carreras',                                  check:()=>(G.careerHistory||[]).filter(h=>h.pos===1).length>=30&&['medio','dificil','hardcore'].includes(G.gameMode||'')},
+  {id:'win_30',        rarity:'legendary',label:'Treinta victorias',   desc:'Ganar 30 carreras',                                  check:()=>careerAgg().wins>=30&&['medio','dificil','hardcore'].includes(G.gameMode||'')},
   {id:'distance_10k',  rarity:'legendary',label:'Diez mil kilómetros', desc:'Acumular 10.000 km de carrera',                      check:()=>(G.totalCareerKm||0)>=10000},
-  {id:'win_zegama_3',  rarity:'legendary',label:'Leyenda de Zegama',   desc:'Ganar la Zegama-Aizkorri en 3 temporadas distintas', check:()=>(G.careerHistory||[]).filter(h=>h.name==='Zegama-Aizkorri'&&h.pos===1).length>=3},
+  {id:'win_zegama_3',  rarity:'legendary',label:'Leyenda de Zegama',   desc:'Ganar la Zegama-Aizkorri en 3 temporadas distintas', check:()=>(careerAgg().winCountByName['Zegama-Aizkorri']||0)>=3},
   {id:'no_injury_5y',  rarity:'legendary',label:'Indestructible',      desc:'Completar 5 temporadas seguidas sin lesión',         check:()=>{if(G.year<5)return false;const ij=new Set((G.injuryHistory||[]).map(i=>i.year));for(let y=1;y<=G.year-4;y++){let ok=true;for(let i=0;i<5;i++)if(ij.has(y+i)){ok=false;break;}if(ok)return true;}return false;}},
-  {id:'perfect_full',  rarity:'legendary',label:'Invicto total',       desc:'Ganar todas las carreras de una temporada (mín 5)',  check:()=>{const yrs=[...new Set((G.careerHistory||[]).map(h=>h.year))];return yrs.some(yr=>{const yr_r=(G.careerHistory||[]).filter(h=>h.year===yr);return yr_r.length>=5&&yr_r.every(h=>h.pos===1);});}},
+  {id:'perfect_full',  rarity:'legendary',label:'Invicto total',       desc:'Ganar todas las carreras de una temporada (mín 5)',  check:()=>{const a=careerAgg();return Object.keys(a.racesByYear).some(yr=>a.racesByYear[yr]>=5&&(a.winsByYear[yr]||0)===a.racesByYear[yr]);}},
   // ══ CANICROSS — FÁCIL ════════════════════════════════
   {id:'cn_first_race', rarity:'easy',   mode:'cn',label:'Primera carrera juntos', desc:'Completar la primera carrera de canicross',          check:()=>(G.cnRaceResults||[]).filter(r=>!r.dnf).length>=1},
   {id:'cn_bond_50',    rarity:'easy',   mode:'cn',label:'Buen equipo',            desc:'Alcanzar vínculo 50 con tu perro',                   check:()=>(G.dog?.peakBond||0)>=50},
@@ -121,13 +173,13 @@ const ACHIEVEMENTS=[
   {id:'cn_perfect',    rarity:'legendary',mode:'cn',label:'Perfectos',            desc:'Ganar todas las carreras seleccionadas en una temporada (mín 3)',check:()=>{const ss=[...new Set((G.cnRaceResults||[]).map(r=>r.season))];return ss.some(s=>{const sr=(G.cnRaceResults||[]).filter(r=>r.season===s);return sr.length>=3&&sr.every(r=>!r.dnf&&r.pos===1);});}},
   {id:'cn_wins_15',    rarity:'legendary',mode:'cn',label:'Liga perfecta',        desc:'Ganar 15 carreras de canicross en total',             check:()=>(G.cnRaceResults||[]).filter(r=>!r.dnf&&r.pos===1).length>=15},
   // ══ DIFÍCIL / HARDCORE — EXCLUSIVOS ══════════════════
-  {id:'hc_first_win',  rarity:'hard',      excl:true, label:'Victoria en lo duro',       desc:'Ganar una carrera en modo Difícil o Hardcore',           check:()=>['dificil','hardcore'].includes(G.gameMode||'')&&(G.careerHistory||[]).some(h=>h.pos===1)},
+  {id:'hc_first_win',  rarity:'hard',      excl:true, label:'Victoria en lo duro',       desc:'Ganar una carrera en modo Difícil o Hardcore',           check:()=>['dificil','hardcore'].includes(G.gameMode||'')&&careerAgg().wins>=1},
   {id:'hc_no_injury',  rarity:'hard',      excl:true, label:'Acero en lo duro',          desc:'Completar una temporada sin lesión en Difícil o Hardcore',check:()=>{if(!['dificil','hardcore'].includes(G.gameMode||''))return false;const inj=(G.injuryHistory||[]).filter(i=>i.year===G.year).length;return finishedResults(G.raceResults).length>=3&&inj===0;}}, // T45 (v89)
   {id:'hc_top10',      rarity:'hard',      excl:true, label:'Top 10 de verdad',          desc:'Alcanzar el ranking #10 jugando en Difícil o Hardcore',  check:()=>['dificil','hardcore'].includes(G.gameMode||'')&&(G.ranking||999)<=10},
   {id:'hc_survive_3',  rarity:'hard',      excl:true, label:'Superviviente nato',        desc:'Completar 3 temporadas en modo Hardcore',                check:()=>(G.gameMode||'')==='hardcore'&&(G.year||0)>=3},
-  {id:'hc_perfect',    rarity:'legendary', excl:true, label:'Perfección en el abismo',   desc:'Ganar 3+ carreras sin lesión en una temporada en Hardcore',check:()=>{if((G.gameMode||'')!=='hardcore')return false;const sw=(G.careerHistory||[]).filter(h=>h.year===G.year&&h.pos===1).length;const si=(G.injuryHistory||[]).filter(i=>i.year===G.year).length;return sw>=3&&si===0;}},
+  {id:'hc_perfect',    rarity:'legendary', excl:true, label:'Perfección en el abismo',   desc:'Ganar 3+ carreras sin lesión en una temporada en Hardcore',check:()=>{if((G.gameMode||'')!=='hardcore')return false;const si=(G.injuryHistory||[]).filter(i=>i.year===G.year).length;return (careerAgg().winsByYear[G.year]||0)>=3&&si===0;}},
   // ══ MODO NORMAL — FÁCIL (nuevos) ════════════════════════
-  {id:'finish_10',       rarity:'easy',   label:'Ya vas en serio',        desc:'Completar 10 carreras',                                            check:()=>(G.careerHistory||[]).length>=10},
+  {id:'finish_10',       rarity:'easy',   label:'Ya vas en serio',        desc:'Completar 10 carreras',                                            check:()=>careerAgg().n>=10},
   {id:'first_dnf',       rarity:'easy',   label:'Esto también es el trail',desc:'Abandonar una carrera por primera vez',                           check:()=>(G.raceAbandonedCount||0)>=1},
   {id:'first_pb',        rarity:'easy',   label:'Récord personal',         desc:'Batir tu marca personal por primera vez',                         check:()=>Object.keys(G.personalBests||{}).length>=1},
   {id:'year_2',          rarity:'easy',   label:'Segunda temporada',       desc:'Completar 2 temporadas',                                          check:()=>(G.year||0)>=2},
@@ -149,12 +201,12 @@ const ACHIEVEMENTS=[
   {id:'club_fisio',      rarity:'medium', label:'Fisio incluido',          desc:'Usar el fisio del club por primera vez',                         check:()=>!!(G._clubFisioUsed)},
   {id:'club_loyalty',    rarity:'medium', label:'Leal a los colores',      desc:'Permanecer en el mismo club 3 temporadas seguidas',              check:()=>(G._clubLoyaltyStreak||0)>=3},
   // ══ MODO NORMAL — DIFÍCIL (nuevos) ════════════════════════
-  {id:'win_15',          rarity:'hard',   label:'Quince victorias',        desc:'Ganar 15 carreras',                                              check:()=>(G.careerHistory||[]).filter(h=>h.pos===1).length>=15},
-  {id:'consecutive_5',   rarity:'hard',   label:'Racha imparable',         desc:'Ganar 5 carreras seguidas',                                      check:()=>{let s=0;for(const h of(G.careerHistory||[])){if(h.pos===1){s++;if(s>=5)return true;}else s=0;}return false;}},
+  {id:'win_15',          rarity:'hard',   label:'Quince victorias',        desc:'Ganar 15 carreras',                                              check:()=>careerAgg().wins>=15},
+  {id:'consecutive_5',   rarity:'hard',   label:'Racha imparable',         desc:'Ganar 5 carreras seguidas',                                      check:()=>careerAgg().maxWinStreak>=5},
   {id:'money_25k',       rarity:'hard',   label:'Patrocinado de verdad',   desc:'Ahorrar €25.000',                                               check:()=>(G.money||0)>=25000},
   {id:'year_9',          rarity:'hard',   label:'Nueve temporadas',        desc:'Completar 9 temporadas',                                         check:()=>(G.year||0)>=9},
-  {id:'age_40_podium',   rarity:'hard',   label:'Veterano en el podio',    desc:'Conseguir un podio con el corredor con más de 40 años',          check:()=>(G.runner?.age||0)>=40&&(G.careerHistory||[]).some(h=>h.pos<=3)},
-  {id:'grand_slam_spec', rarity:'hard',   label:'Grand Slam',              desc:'Ganar las 3 carreras de tu especialidad en el mismo año',        check:()=>{const specR=SPEC_RACES[G.runner?.specialty]||[];const ids=specR.map(r=>r.name);const yrs=[...new Set((G.careerHistory||[]).map(h=>h.year))];return yrs.some(yr=>(G.careerHistory||[]).filter(h=>h.year===yr&&h.pos===1&&ids.includes(h.name)).length>=3);}},
+  {id:'age_40_podium',   rarity:'hard',   label:'Veterano en el podio',    desc:'Conseguir un podio con el corredor con más de 40 años',          check:()=>(G.runner?.age||0)>=40&&careerAgg().podiums>=1},
+  {id:'grand_slam_spec', rarity:'hard',   label:'Grand Slam',              desc:'Ganar las 3 carreras de tu especialidad en el mismo año',        check:()=>{const ids=(SPEC_RACES[G.runner?.specialty]||[]).map(r=>r.name);return Object.values(careerAgg().winNamesByYear).some(ns=>ns.filter(n=>ids.includes(n)).length>=3);}},
   {id:'spec_top5',       rarity:'hard',   label:'Especialista de élite',   desc:'Alcanzar el top 5 en el ranking de tu especialidad',            check:()=>(G.specRanking||999)<=5},
   {id:'sponsor_3_active',rarity:'hard',   label:'Tres frentes',            desc:'Tener 3 sponsors activos al mismo tiempo',                       check:()=>Object.values(G.sponsors||{}).filter(Boolean).length>=3},
   {id:'sponsor_tier4',   rarity:'hard',   label:'Patrocinio élite',        desc:'Firmar con un sponsor de tier 4',                               check:()=>Object.values(G.sponsors||{}).filter(Boolean).some(s=>(s.tier||0)>=4)},
@@ -164,17 +216,17 @@ const ACHIEVEMENTS=[
   {id:'club_full_service',rarity:'hard',  label:'Todo incluido',           desc:'Usar fisio y entrenador del club en la misma temporada',         check:()=>!!(G._clubFisioUsed&&G._clubEntrenadorUsed)},
   {id:'club_ascent',     rarity:'hard',   label:'Ascenso social',          desc:'Pasar de Sin Club a Club Élite a lo largo de la carrera',        check:()=>!!(G._clubAscent)},
   // ══ MODO NORMAL — LEGENDARIO (nuevos) ═════════════════════
-  {id:'win_25',          rarity:'legendary',label:'Veinticinco victorias', desc:'Ganar 25 carreras',                                             check:()=>(G.careerHistory||[]).filter(h=>h.pos===1).length>=25},
+  {id:'win_25',          rarity:'legendary',label:'Veinticinco victorias', desc:'Ganar 25 carreras',                                             check:()=>careerAgg().wins>=25},
   {id:'top_3_world',     rarity:'legendary',label:'El podio del mundo',    desc:'Alcanzar el ranking #3 mundial',                                check:()=>(G.ranking||999)<=3},
   {id:'km_3000',         rarity:'legendary',label:'Tres mil kilómetros',   desc:'Acumular 3.000 km de carrera',                                  check:()=>(G.totalCareerKm||0)>=3000},
   {id:'decade_runner',   rarity:'legendary',label:'Una década corriendo',  desc:'Completar 10 temporadas',                                       check:()=>(G.year||0)>=10},
   {id:'money_100k',      rarity:'legendary',label:'Independencia económica',desc:'Ahorrar €100.000',                                            check:()=>(G.money||0)>=100000},
-  {id:'win_after_retire',rarity:'legendary',label:'Última bala',           desc:'Ganar una carrera en tu año de retirada',                       check:()=>!!(G._retireYear&&G._retireYear===G.year&&(G.careerHistory||[]).some(h=>h.year===G.year&&h.pos===1))},
-  {id:'ironman_year',    rarity:'legendary',label:'Máquina',               desc:'Completar 8 o más carreras en una sola temporada',              check:()=>{const yrs=[...new Set((G.careerHistory||[]).map(h=>h.year))];return yrs.some(yr=>(G.careerHistory||[]).filter(h=>h.year===yr).length>=8);}},
+  {id:'win_after_retire',rarity:'legendary',label:'Última bala',           desc:'Ganar una carrera en tu año de retirada',                       check:()=>!!(G._retireYear&&G._retireYear===G.year&&(careerAgg().winsByYear[G.year]||0)>=1)},
+  {id:'ironman_year',    rarity:'legendary',label:'Máquina',               desc:'Completar 8 o más carreras en una sola temporada',              check:()=>Object.values(careerAgg().racesByYear).some(v=>v>=8)},
   {id:'own_brand',       rarity:'legendary',label:'Tu propia marca',       desc:'Crear tu marca de ropa propia',                                 check:()=>!!(G.ownBrand)},
   {id:'empire',          rarity:'legendary',label:'Imperio del trail',     desc:'Tener activa tu marca propia más 3 sponsors de tier 3 o superior',check:()=>!!(G.ownBrand)&&Object.values(G.sponsors||{}).filter(s=>s&&(s.tier||0)>=3).length>=3},
   // ══ MODO NORMAL — JOKE ══════════════════════════════════
-  {id:'joke_broke',          rarity:'joke',label:'Ruina total',            desc:'Llegar a €0 de dinero',                                          check:()=>(G.money||0)<=0&&(G.careerHistory||[]).length>=1},
+  {id:'joke_broke',          rarity:'joke',label:'Ruina total',            desc:'Llegar a €0 de dinero',                                          check:()=>(G.money||0)<=0&&careerAgg().n>=1},
   {id:'joke_max_load',       rarity:'joke',label:'Cuerpo de sacrificio',   desc:'Llegar al 100% de carga corporal',                              check:()=>(G.bodyLoad||0)>=100},
   {id:'joke_3injuries',      rarity:'joke',label:'Imán de lesiones',       desc:'Sufrir 3 lesiones en la misma temporada',                       check:()=>(G.injuryHistory||[]).filter(i=>i.year===G.year).length>=3},
   {id:'joke_last_place',     rarity:'joke',label:'El farolillo rojo',      desc:'Terminar último en una carrera',                                check:()=>(G._lastPlaceCount||0)>=1},
@@ -187,23 +239,23 @@ const ACHIEVEMENTS=[
   {id:'joke_rival_always_wins',rarity:'joke',label:'Mi nemesis me odia',   desc:'Perder contra tu rival nemesis 5 veces seguidas',               check:()=>(G._rivalLossStreak||0)>=5},
   {id:'joke_retire_early',   rarity:'joke',label:'No era para mí',         desc:'Retirarte en el año 1 o 2',                                     check:()=>!!(G._retireYear&&G._retireYear<=2)},
   // ══ MODO EXPRÉS — FÁCIL ══════════════════════════════════
-  {id:'xp_first_race',  rarity:'easy',   mode:'expres',label:'Sin tiempo que perder',desc:'Completar tu primera carrera en modo Exprés',              check:()=>(G.gameMode==='expres')&&(G.careerHistory||[]).length>=1},
+  {id:'xp_first_race',  rarity:'easy',   mode:'expres',label:'Sin tiempo que perder',desc:'Completar tu primera carrera en modo Exprés',              check:()=>(G.gameMode==='expres')&&careerAgg().n>=1},
   {id:'xp_finish',      rarity:'easy',   mode:'expres',label:'Superviviente',         desc:'Completar las 3 temporadas del modo Exprés',               check:()=>(G.gameMode==='expres')&&(G.year||0)>=3},
   {id:'xp_timed_response',rarity:'easy', mode:'expres',label:'Reflejos de corredor',  desc:'Responder a un evento temporizado antes de que expire',    check:()=>(G._xpTimerAnsweredCareer||0)>=1},
   // ══ MODO EXPRÉS — MEDIO ═══════════════════════════════════
-  {id:'xp_win_y1',      rarity:'medium', mode:'expres',label:'Rápido y directo',      desc:'Ganar una carrera en la primera temporada de Exprés',      check:()=>(G.gameMode==='expres')&&(G.year||0)<=1&&(G.careerHistory||[]).filter(h=>h.pos===1&&h.year===1).length>=1},
-  {id:'xp_podium_5',    rarity:'medium', mode:'expres',label:'Sprint al podio',       desc:'Conseguir 5 podios a lo largo de las 3 temporadas',        check:()=>(G.gameMode==='expres')&&(G.careerHistory||[]).filter(h=>h.pos<=3).length>=5},
+  {id:'xp_win_y1',      rarity:'medium', mode:'expres',label:'Rápido y directo',      desc:'Ganar una carrera en la primera temporada de Exprés',      check:()=>(G.gameMode==='expres')&&(G.year||0)<=1&&(careerAgg().winsByYear[1]||0)>=1},
+  {id:'xp_podium_5',    rarity:'medium', mode:'expres',label:'Sprint al podio',       desc:'Conseguir 5 podios a lo largo de las 3 temporadas',        check:()=>(G.gameMode==='expres')&&careerAgg().podiums>=5},
   {id:'xp_all_timed',   rarity:'medium', mode:'expres',label:'Siempre alerta',        desc:'Responder a todos los eventos temporizados de una carrera antes de que expiren',check:()=>!!(G._xpAllTimedInARace)},
   {id:'xp_top50',       rarity:'medium', mode:'expres',label:'En tiempo récord',      desc:'Alcanzar el ranking #50 antes de terminar las 3 temporadas', check:()=>(G.gameMode==='expres')&&(G.ranking||999)<=50},
   {id:'xp_sponsor',     rarity:'medium', mode:'expres',label:'Sponsor express',       desc:'Firmar un contrato de patrocinio dentro del modo Exprés',  check:()=>(G.gameMode==='expres')&&Object.values(G.sponsors||{}).some(Boolean)},
   // ══ MODO EXPRÉS — DIFÍCIL ══════════════════════════════════
-  {id:'xp_win_3',       rarity:'hard',   mode:'expres',label:'Tres victorias en tres años',desc:'Ganar al menos una carrera en cada una de las 3 temporadas',check:()=>(G.gameMode==='expres')&&[1,2,3].every(yr=>(G.careerHistory||[]).some(h=>h.year===yr&&h.pos===1))},
+  {id:'xp_win_3',       rarity:'hard',   mode:'expres',label:'Tres victorias en tres años',desc:'Ganar al menos una carrera en cada una de las 3 temporadas',check:()=>(G.gameMode==='expres')&&[1,2,3].every(yr=>(careerAgg().winsByYear[yr]||0)>=1)},
   {id:'xp_top25',       rarity:'hard',   mode:'expres',label:'Meteoro',               desc:'Alcanzar el ranking #25 o mejor en 3 temporadas',           check:()=>(G.gameMode==='expres')&&(G.ranking||999)<=25},
   {id:'xp_no_dnf',      rarity:'hard',   mode:'expres',label:'Sin fisuras',           desc:'Completar las 3 temporadas sin un solo abandono',           check:()=>(G.gameMode==='expres')&&(G.year||0)>=3&&(G.raceAbandonedCount||0)===0},
   {id:'xp_timed_perfect',rarity:'hard',  mode:'expres',label:'Instinto puro',         desc:'Tomar la decisión óptima en todos los eventos temporizados de una misma carrera',check:()=>!!(G._xpPerfectTimedRace)},
   // ══ MODO EXPRÉS — LEGENDARIO ═══════════════════════════════
   {id:'xp_top10',       rarity:'legendary',mode:'expres',label:'Relámpago',           desc:'Alcanzar el ranking #10 o mejor en solo 3 temporadas',     check:()=>(G.gameMode==='expres')&&(G.ranking||999)<=10},
-  {id:'xp_win_season',  rarity:'legendary',mode:'expres',label:'Temporada perfecta express',desc:'Ganar 3 o más carreras en una misma temporada dentro del modo Exprés',check:()=>(G.gameMode==='expres')&&[1,2,3].some(yr=>(G.careerHistory||[]).filter(h=>h.year===yr&&h.pos===1).length>=3)},
+  {id:'xp_win_season',  rarity:'legendary',mode:'expres',label:'Temporada perfecta express',desc:'Ganar 3 o más carreras en una misma temporada dentro del modo Exprés',check:()=>(G.gameMode==='expres')&&[1,2,3].some(yr=>(careerAgg().winsByYear[yr]||0)>=3)},
   // ══ MODO EXPRÉS — JOKE ══════════════════════════════════
   {id:'joke_xp_slow',        rarity:'joke',mode:'expres',label:'Lento o vago',        desc:'No responder a ningún evento temporizado antes de que expire en una carrera',check:()=>!!(G._xpNoAnswerRace)},
   {id:'joke_xp_dnf_y1',      rarity:'joke',mode:'expres',label:'Ni arrancó',          desc:'Abandonar en la primera temporada del modo Exprés',        check:()=>(G.gameMode==='expres')&&(G.year||0)<=1&&(G.raceAbandonedCount||0)>=1},
@@ -712,6 +764,47 @@ const TIER_LABEL_RACE={local:'Local',regional:'Regional',nacional:'Nacional',eli
 const TIER_COLOR_SPONSOR={1:'#888',2:'#4a90d9',3:'#4a8a2a',4:'#c07a10'};
 const TIER_LABEL_SPONSOR={1:'Local',2:'Regional',3:'Nacional',4:'Élite'};
 const SPEC_LABEL={fondista:'Fondista',montanero:'Montañero',tecnico:'Técnico',todoterreno:'Todoterreno'};
+
+// T54 (v93): había SEIS tablas de etiquetas de modo repartidas por el código y
+// ninguna coincidía con otra — render-core (8 con emoji), render-clasico (solo
+// emoji), render-clasico otra vez (tres tablas paralelas de fondo/color/texto,
+// 5 modos), render-temporada dos veces (5, texto plano) y save.js (8 con
+// emoji). Añadir un modo obligaba a acordarse de seis sitios; añadir el modo
+// Canicross se olvidó en cuatro de ellos. Fuente única, con las tres formas que
+// el código pedía: emoji suelto, texto plano y emoji+texto.
+//   bg/fg son los colores de la insignia del encabezado de Clásico. Los tres
+// modos que no la tenían (coach, club, canicross) pintaban `background:undefined`
+// si alguna vez llegaban ahí; ahora tienen paleta propia.
+const MODE_LABELS={
+  facil:    {label:'Fácil',     emoji:'🟢', bg:'#EAF3DE', fg:'#27500A'},
+  medio:    {label:'Medio',     emoji:'🟡', bg:'#FAEEDA', fg:'#633806'},
+  dificil:  {label:'Difícil',   emoji:'🔴', bg:'#FCEBEB', fg:'#791F1F'},
+  hardcore: {label:'Hardcore',  emoji:'💀', bg:'#F1EFE8', fg:'#444441'},
+  expres:   {label:'Exprés',    emoji:'⚡', bg:'#fef9ec', fg:'#8a4a00'},
+  coach:    {label:'Entrenador',emoji:'📋', bg:'#EEEDFE', fg:'#534AB7'},
+  club:     {label:'Club',      emoji:'🏕', bg:'#EAF3DE', fg:'#27500A'},
+  canicross:{label:'Canicross', emoji:'🐕', bg:'#e8f0fb', fg:'#2a5d8f'},
+};
+const modeInfo     =m=>MODE_LABELS[m]||MODE_LABELS.medio;
+const modeEmoji    =m=>modeInfo(m).emoji;
+const modeLabelOf  =m=>modeInfo(m).label;
+const modeLabelFull=m=>modeInfo(m).emoji+' '+modeInfo(m).label;
+
+// T54 (v93): la fase del arco narrativo también estaba escrita dos veces, y
+// divergía: render-clasico decía «Overlap» y save.js «Solapamiento» para la
+// misma fase. Se queda la castellana, que es la del resto del juego.
+const PHASE_LABEL={
+  runner: '🏃 Corredor',
+  overlap:'🏃 · 📋 Solapamiento',
+  coach:  '📋 Entrenador',
+  club:   '🏕 Club',
+};
+
+// T51 (v93): el terreno neutro estaba escrito solo dentro de getTerrainCondition()
+// como valor de salida, así que freshState() no podía declararlo y cada lectura
+// de G.terrainCondition se protegía a su manera (sin nada, con `||{...}` y con
+// `?.`). Ahora es un dato, freshState() arranca con él y los accesos son directos.
+const TERRAIN_BUENO={id:'bueno',label:'Terreno en buen estado',icon:'✅',descentMult:1.0,climbMult:1.0,color:'#4a8a2a'};
 
 // ══════════════════════════════════════
 //  CONSTANTES DE BALANCE (E2)

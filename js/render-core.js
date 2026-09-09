@@ -52,7 +52,6 @@ function renderAchievements(){
   let globalAchs={};
   try{globalAchs=JSON.parse(LS.get('globalAchs')||'{}');}catch(e){}
   const RARITY={easy:{c:'#4a8a2a',bg:'#eaf4ea',l:'Fácil'},medium:{c:'#4a90d9',bg:'#e8f0fb',l:'Medio'},hard:{c:'#c07a10',bg:'#fdf0e0',l:'Difícil'},legendary:{c:'#8b2252',bg:'#f8e8f2',l:'Legendario'},joke:{c:'#b8860b',bg:'#fffbea',l:'😄 Secreto'}};
-  const DIFF_LABEL={facil:'🟢 Fácil',medio:'🟡 Medio',dificil:'🔴 Difícil',hardcore:'💀 Hardcore',expres:'⚡ Exprés',canicross:'🐕 Canicross'};
   const rb=a=>{const r=RARITY[a.rarity]||{c:'#888',bg:'#eee',l:''};return`<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${r.bg};color:${r.c}">${r.l}</span>`;};
   const totalUnlocked=Object.keys(globalAchs).length;
   // Tab filtering
@@ -108,7 +107,7 @@ function renderAchievements(){
               ${ach.excl?`<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#f0e8f8;color:#6b3fa0">Exclusivo</span>`:''}
             </div>
             <div style="font-size:12px;color:#888">${unlocked||!isJoke?esc(ach.desc):'???'}</div>
-            ${meta?`<div style="font-size:12px;color:#888;margin-top:2px">Conseguido en ${DIFF_LABEL[meta.difficulty]||meta.difficulty} · Año ${meta.year}</div>`:''}
+            ${meta?`<div style="font-size:12px;color:#888;margin-top:2px">Conseguido en ${MODE_LABELS[meta.difficulty]?modeLabelFull(meta.difficulty):meta.difficulty} · Año ${meta.year}</div>`:''}
           </div>
         </div>`;
       }).join('')}

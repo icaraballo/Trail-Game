@@ -444,7 +444,7 @@ function renderCoachTraining(){
     </div>
     <div class="card" style="margin-bottom:14px">
       <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Perfil — ${esc(nextRace.name)}</div>
-      <div id="coach-train-prof-wrap">${profSvg(nextRace,-1,'preview',0)}</div>
+      <div id="coach-train-prof-wrap">${profSvg(nextRace,-1,'preview',0,'coach-train')}</div>
       <div id="coach-train-prof-info" data-sel="-1" style="min-height:16px">${profSegInfo(nextRace,null,'preview',0)}</div>
       <div style="display:flex;gap:8px;font-size:11px;color:#aaa;margin-top:6px;flex-wrap:wrap">
         <span><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#EAF3DE;border:1px solid #639922;margin-right:2px;vertical-align:middle"></span>Subida</span>
@@ -503,7 +503,7 @@ function renderCoachTraining(){
   // Attach profile tap handlers after render
   if(nextRace){
     setTimeout(()=>{
-      const svg=document.getElementById(`prof-${nextRace.id}`);
+      const svg=document.getElementById('prof-svg-coach-train');   // T106 (v93)
       if(!svg)return;
       svg.querySelectorAll('rect[data-seg]').forEach(r=>{
         const h=()=>{
@@ -515,7 +515,7 @@ function renderCoachTraining(){
           const next=cur==si?-1:si;
           info.dataset.sel=next;
           info.innerHTML=profSegInfo(nextRace,next>=0?next:null,'preview',0);
-          wrap.innerHTML=profSvg(nextRace,next>=0?next:-1,'preview',0);
+          wrap.innerHTML=profSvg(nextRace,next>=0?next:-1,'preview',0,'coach-train');
           // re-attach
           renderCoachTraining._reattach&&renderCoachTraining._reattach();
         };
@@ -686,7 +686,7 @@ function renderCoachPreRace(){
 
     <div class="card" style="margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Perfil de la carrera</div>
-      <div id="coach-pre-prof-wrap">${profSvg(race,-1,'preview',0)}</div>
+      <div id="coach-pre-prof-wrap">${profSvg(race,-1,'preview',0,'coach-pre')}</div>
       <div id="coach-pre-prof-info" data-sel="-1" style="min-height:16px">${profSegInfo(race,null,'preview',0)}</div>
       <div style="display:flex;gap:8px;font-size:11px;color:#aaa;margin-top:6px;flex-wrap:wrap">
         <span><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#EAF3DE;border:1px solid #639922;margin-right:2px;vertical-align:middle"></span>Subida</span>
@@ -745,7 +745,7 @@ function renderCoachPreRace(){
 
   // Attach profile touch handlers
   setTimeout(()=>{
-    const svg=document.getElementById(`prof-${race.id}`);
+    const svg=document.getElementById('prof-svg-coach-pre');   // T106 (v93)
     if(!svg)return;
     svg.querySelectorAll('rect[data-seg]').forEach(r=>{
       const h=()=>{
@@ -756,8 +756,8 @@ function renderCoachPreRace(){
         const cur=info.dataset.sel;const next=cur==si?-1:si;
         info.dataset.sel=next;
         info.innerHTML=profSegInfo(race,next>=0?next:null,'preview',0);
-        wrap.innerHTML=profSvg(race,next>=0?next:-1,'preview',0);
-        setTimeout(()=>{const s2=document.getElementById(`prof-${race.id}`);if(s2)s2.querySelectorAll('rect[data-seg]').forEach(r2=>{r2.addEventListener('click',h);r2.addEventListener('touchend',e=>{e.preventDefault();h();});});},0);
+        wrap.innerHTML=profSvg(race,next>=0?next:-1,'preview',0,'coach-pre');
+        setTimeout(()=>{const s2=document.getElementById('prof-svg-coach-pre');if(s2)s2.querySelectorAll('rect[data-seg]').forEach(r2=>{r2.addEventListener('click',h);r2.addEventListener('touchend',e=>{e.preventDefault();h();});});},0);
       };
       r.addEventListener('click',h);r.addEventListener('touchend',e=>{e.preventDefault();h();});
     });

@@ -4,11 +4,15 @@
 //  G._devMode no está activo. No forma parte del juego real.
 // ══════════════════════════════════════════════════════════════════
 
-// Lista completa de pantallas del dispatcher de render() (js/render-core.js), para
-// el salto libre. Mantener a mano si se añaden pantallas nuevas al juego —
-// no se genera dinámicamente para no acoplar devmode.js al objeto interno
-// del dispatcher.
-const DEV_ALL_SCREENS=['achievements','aid','betweenManage','betweenRace','calendar','canicrossCalendarSetup','canicrossCreateDog','canicrossDisplasia','canicrossDogDeath','canicrossDogRetirement','canicrossHub','canicrossPostRace','canicrossPreRace','canicrossPreseason','canicrossSeasonBalance','canicrossSegment','canicrossTrainingSetup','circuits','clubCalendar','clubCreate','clubEvent','clubHub','clubIntro','clubMonthly','clubOffer','clubPlantilla','clubRivals','clubSeasonEnd','clubSetup','clubSimulate','clubSponsors','clubStaff','coachCalendar','coachEvent','coachHome','coachHub','coachIntro','coachPostRace','coachPreRace','coachRace','coachSeasonEnd','coachSelect','coachSponsors','coachStyleSelect','coachTraining','coachTrainingReaction','expresCalendar','expresPreRacePrep','expresPrep','expresSeasonBalance','expresSeasonStart','expresSponsors','intro','lifeAthleteOffer','lifeRetirement','midRaceEvent','midSeasonCalendar','modeSelect','overlapHub','preRace','preRacePrep','raceResult','retirement','saveScreen','seasonBalance','seasonStart','segment','sponsors','startStrategy','training','workSetup'];
+// T146 (v93): esto eran 70 pantallas mantenidas a mano «para no acoplar
+// devmode.js al objeto interno del dispatcher». El acoplamiento ya existía —
+// era una copia— y como toda copia se había desincronizado: faltaban careerEnd
+// y debtCrisis desde v86, así que el salto libre no podía llegar a ninguna de
+// las dos. Desde T63 el despachador es una constante perezosa (screenRoutes()),
+// así que se deriva de ahí y no puede volver a divergir. Se llama al pintar, no
+// al cargar: render-core.js va antes en index.html, pero atarlo al orden de
+// carga es justo lo que T63 decidió no hacer.
+function devAllScreens(){return Object.keys(screenRoutes()).sort();}
 
 // ── Saltos directos de modo ──
 window.devJumpToCoach=()=>{
@@ -649,7 +653,7 @@ function renderDevPanel(){
       <div style="font-size:11px;color:#888;margin-bottom:6px">Sin garantías — algunas pantallas esperan estado previo (una carrera en curso, un club fundado...) y pueden salir vacías o rotas si faltan esos datos. Útil para revisar UI puntual sin jugar hasta ahí.</div>
       <div style="display:flex;gap:6px">
         <select id="dev-screen-jump" style="flex:1;min-width:0;padding:6px;border:1px solid #e0dfd8;border-radius:6px">
-          ${DEV_ALL_SCREENS.map(s=>`<option value="${s}" ${G.screen===s?'selected':''}>${s}</option>`).join('')}
+          ${devAllScreens().map(s=>`<option value="${s}" ${G.screen===s?'selected':''}>${s}</option>`).join('')}
         </select>
         <button class="secondary" style="margin-top:0" onclick="devJumpToScreen()">Ir →</button>
       </div>

@@ -11,7 +11,14 @@ const PROF_COL_LIGHT={climb:'#EAF3DE',descent:'#FCEBEB',flat:'#F1EFE8'};
 // bounds[i] = km de inicio del tramo i · bounds[i+1] = km de su final.
 function profBounds(segs){const b=[0];let c=0;for(const s of segs){c+=s.km;b.push(c);}return b;}
 
-function profSvg(race, activeSeg, mode, raceProgress){
+// T106 (v93): el <svg> se identificaba como `prof-${race.id}`, sin contexto. Dos
+// perfiles de la MISMA carrera en pantalla (la vista previa y la de carrera, o
+// el perfil de Entrenador junto al de Clásico) comparten id, y
+// getElementById devuelve el primero: los clics de uno redibujan el otro. Los
+// contenedores ya iban por contexto (`prof-wrap-${containerId}`); lo que
+// faltaba era que el svg usara el mismo. containerId es opcional para no romper
+// ninguna llamada suelta: sin él se comporta como antes.
+function profSvg(race, activeSeg, mode, raceProgress, containerId){
   // T39 (v88): sin tramos, Math.min(...[]) devuelve Infinity y el SVG sale corrupto
   if(!race||!Array.isArray(race.segs)||!race.segs.length||!race.km)return '';
   const W=560,H=100,PT=8,PB=18,PL=4,PR=4;
@@ -114,7 +121,7 @@ function profSvg(race, activeSeg, mode, raceProgress){
     html+=`<rect x="${x1.toFixed(1)}" y="${PT}" width="${(x2-x1).toFixed(1)}" height="${cH+2}" fill="transparent" data-seg="${si}" style="cursor:pointer"/>`;
   });
 
-  const svgId=`prof-${race.id}`;
+  const svgId=`prof-svg-${containerId||race.id}`;   // T106 (v93)
   return `<svg id="${svgId}" viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;display:block;overflow:visible;cursor:pointer">${html}</svg>`;
 }
 
@@ -143,7 +150,7 @@ function profSegInfo(race, si, mode, raceProgress){
 
 function attachProfHandlers(race, containerId, mode, raceProgress){
   setTimeout(()=>{
-    const svg=document.getElementById(`prof-${race.id}`);
+    const svg=document.getElementById(`prof-svg-${containerId}`);   // T106 (v93)
     if(!svg)return;
     svg.querySelectorAll('rect[data-seg]').forEach(r=>{
       const handler=()=>{
@@ -156,7 +163,7 @@ function attachProfHandlers(race, containerId, mode, raceProgress){
         infoEl.innerHTML=profSegInfo(race,next>=0?next:null,mode,raceProgress);
         // Redraw with new selection
         const svgWrap=document.getElementById(`prof-wrap-${containerId}`);
-        if(svgWrap)svgWrap.innerHTML=profSvg(race,next>=0?next:-1,mode,raceProgress);
+        if(svgWrap)svgWrap.innerHTML=profSvg(race,next>=0?next:-1,mode,raceProgress,containerId);
         attachProfHandlers(race,containerId,mode,raceProgress);
       };
       r.addEventListener('click',handler);
@@ -170,7 +177,7 @@ function racePreviewCard(race, mode, raceProgress){
   return `<div class="card">
     <div style="font-size:14px;font-weight:600;margin-bottom:2px">${race.name}</div>
     <div style="font-size:12px;color:#888;margin-bottom:10px">${race.type} · ${race.km}km · ${raceDesnivel(race)}</div>
-    <div id="prof-wrap-${cid}">${profSvg(race,-1,mode||'preview',raceProgress||0)}</div>
+    <div id="prof-wrap-${cid}">${profSvg(race,-1,mode||'preview',raceProgress||0,cid)}</div>
     <div id="prof-info-${cid}" data-sel="-1" style="min-height:20px">${profSegInfo(race,null,mode||'preview',raceProgress||0)}</div>
     <div style="display:flex;gap:10px;font-size:12px;color:#aaa;margin-top:8px;flex-wrap:wrap">
       <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#EAF3DE;border:1px solid #639922;margin-right:3px;vertical-align:middle"></span>Subida</span>
@@ -197,7 +204,7 @@ function getTerrainCondition(race){
   if(s==='invierno'&&roll<0.7)return {id:'barro',label:'Barro',icon:'🟫',descentMult:1.2,climbMult:1.1,color:'#8B5E3C'};
   if(s==='verano'&&roll<0.3)return {id:'seco',label:'Polvo seco',icon:'🌵',descentMult:1.15,climbMult:1.0,color:'#c07a10'};
   if(race.weather_risk>0.25&&roll<0.3)return {id:'barro',label:'Barro (lluvia reciente)',icon:'🟫',descentMult:1.25,climbMult:1.1,color:'#8B5E3C'};
-  return {id:'bueno',label:'Terreno en buen estado',icon:'✅',descentMult:1.0,climbMult:1.0,color:'#4a8a2a'};
+  return {...TERRAIN_BUENO};   // T51 (v93): mismo objeto que el de freshState()
 }
 function getAltitudePenalty(race){
   if(!race.altitude)return 0;
@@ -426,7 +433,7 @@ function renderPreRace(){
       <span class="terrain-badge" style="background:${G.terrainCondition.color}22;color:${G.terrainCondition.color}">${G.terrainCondition.icon} ${G.terrainCondition.label}</span>
       ${race.altitude?`<span class="terrain-badge" style="background:#4a90d922;color:#4a90d9">⛰ Alta altitud</span>`:''}
       ${rep?`<span class="terrain-badge" style="background:#c07a1022;color:#c07a10">🏆 ${rep.label}</span>`:''}
-      <span class="terrain-badge" style="background:var(--color-background-secondary);color:var(--color-text-secondary)">${{facil:'🟢 Fácil',medio:'🟡 Medio',dificil:'🔴 Difícil',hardcore:'💀 Hardcore'}[G.gameMode||'medio']}</span>
+      <span class="terrain-badge" style="background:var(--color-background-secondary);color:var(--color-text-secondary)">${modeLabelFull(G.gameMode)}</span>
       ${G.startStrategy&&G.startStrategy!=='equilibrado'?`<span class="terrain-badge" style="background:${G.startStrategy==='conservador'?'#4a8a2a22':'#c0392b22'};color:${G.startStrategy==='conservador'?'#4a8a2a':'#c0392b'}">${G.startStrategy==='conservador'?'🐢 Conservador':'🔥 A tope'}</span>`:''}
     </div>
     ${pbHtml}
@@ -576,7 +583,7 @@ function renderSegment(){
     ${liveClassPanel()}
     ${G.rivalRadio?`<div class="race-radio">📻 ${G.rivalRadio.txt} <span style="color:${G.rivalRadio.delta>0?'#4a8a2a':'#c0392b'}">${G.rivalRadio.delta>0?'+':'−'}${fmt(Math.abs(G.rivalRadio.delta))}</span></div>`:''}
     ${race?`<div style="margin-bottom:10px">
-      <div id="prof-wrap-race">${profSvg(race,G.seg,'race',G.seg)}</div>
+      <div id="prof-wrap-race">${profSvg(race,G.seg,'race',G.seg,'race')}</div>
       <div id="prof-info-race" data-sel="${G.seg}">${profSegInfo(race,G.seg,'race',G.seg)}</div>
     </div>`:''}
     ${G.raceEvent?`<div class="event-box">${G.raceEvent}</div>`:''}
@@ -763,7 +770,7 @@ function calcPaceCosts(p,seg,paceLog){
   const sv=getEffStat('velocidad'),ss=getEffStat('subida'),sb=getEffStat('bajada'),sr=getEffStat('resistencia');
   const race=G.selectedRaces[G.currentRaceIdx];
   const hydMult=seasonWeatherMultiplier(race?.month||6);
-  const terrain=G.terrainCondition||{descentMult:1.0,climbMult:1.0};
+  const terrain=G.terrainCondition;   // T51 (v93): freshState() ya lo declara
   const altPenalty=race?getAltitudePenalty(race):0;
   const degradMult=G.preDegradMult||1.0;
 
@@ -1038,7 +1045,7 @@ function checkTerrainNavigationEvents(ctx){
   }
 
   // 🟫 CAÍDA EN EL BARRO — terreno barro o invierno, 1 vez
-  if(!G.midRaceEventTriggered.mud&&(G.terrainCondition?.id==='barro'||G.terrainCondition?.id==='nieve')&&pct>=0.3&&pct<0.8){
+  if(!G.midRaceEventTriggered.mud&&(G.terrainCondition.id==='barro'||G.terrainCondition.id==='nieve')&&pct>=0.3&&pct<0.8){
     if(Math.random()<0.22){
       G.midRaceEventTriggered.mud=true;
       return{id:'mud_fall',
@@ -1085,7 +1092,7 @@ function checkTerrainNavigationEvents(ctx){
   }
 
   // 🥾 BARRO HASTA EL TOBILLO — bajada lluviosa, 1 vez
-  if(!G.midRaceEventTriggered.ankle_mud&&(G.terrainCondition?.id==='barro'||G.weather==='extremo')&&pct>=0.3&&pct<0.8){
+  if(!G.midRaceEventTriggered.ankle_mud&&(G.terrainCondition.id==='barro'||G.weather==='extremo')&&pct>=0.3&&pct<0.8){
     if(Math.random()<0.15){
       G.midRaceEventTriggered.ankle_mud=true;
       return{id:'ankle_mud',
@@ -1161,7 +1168,7 @@ function checkInjuryAndFallEvents(ctx){
   }
 
   // 😬 RESBALÓN SIN CAÍDA — terreno técnico o húmedo, tramo 20%-75%, 1 vez
-  if(!G.midRaceEventTriggered.slip_nf&&(G.terrainCondition?.id==='barro'||G.terrainCondition?.id==='tecnico'||G.terrainCondition?.id==='nieve')&&pct>=0.2&&pct<0.75){
+  if(!G.midRaceEventTriggered.slip_nf&&(G.terrainCondition.id==='barro'||G.terrainCondition.id==='tecnico'||G.terrainCondition.id==='nieve')&&pct>=0.2&&pct<0.75){
     if(Math.random()<0.18){
       G.midRaceEventTriggered.slip_nf=true;
       return{id:'slip_nf',
@@ -1176,7 +1183,7 @@ function checkInjuryAndFallEvents(ctx){
   }
 
   // 💥 CAÍDA GRAVE — barro/nieve/técnico, tramo 30%-70%, 1 vez
-  if(!G.midRaceEventTriggered.bad_fall&&(G.terrainCondition?.id==='barro'||G.terrainCondition?.id==='nieve'||G.terrainCondition?.id==='tecnico')&&pct>=0.3&&pct<0.7){
+  if(!G.midRaceEventTriggered.bad_fall&&(G.terrainCondition.id==='barro'||G.terrainCondition.id==='nieve'||G.terrainCondition.id==='tecnico')&&pct>=0.3&&pct<0.7){
     if(Math.random()<0.08){
       G.midRaceEventTriggered.bad_fall=true;
       return{id:'bad_fall',
@@ -1481,7 +1488,7 @@ function checkExpressTimedEvents(ctx){
         }
       }
       // Bajada técnica: terreno técnico o piernas bajas
-      if(!G.midRaceEventTriggered.xp_descent&&pct>=0.2&&pct<0.75&&(r.legs<45||G.terrainCondition?.id==='tecnico')){
+      if(!G.midRaceEventTriggered.xp_descent&&pct>=0.2&&pct<0.75&&(r.legs<45||G.terrainCondition.id==='tecnico')){
         if(Math.random()<0.55){
           G.midRaceEventTriggered.xp_descent=true;
           G.midRaceEventTriggered._xpTimedCount=(xpTimed+1);
@@ -1515,7 +1522,7 @@ function checkExpressTimedEvents(ctx){
         }
       }
       // Paso resbaladizo: barro/nieve
-      if(!G.midRaceEventTriggered.xp_slippery&&pct>=0.2&&pct<0.75&&(G.terrainCondition?.id==='barro'||G.terrainCondition?.id==='nieve')){
+      if(!G.midRaceEventTriggered.xp_slippery&&pct>=0.2&&pct<0.75&&(G.terrainCondition.id==='barro'||G.terrainCondition.id==='nieve')){
         if(Math.random()<0.5){
           G.midRaceEventTriggered.xp_slippery=true;
           G.midRaceEventTriggered._xpTimedCount=(xpTimed+1);
@@ -1649,16 +1656,32 @@ function renderMidRaceEvent(){
     </div>`;
   if(isTimed)startExpressTimer(ev.defaultChoice||0);
 }
-window.resolveMidRaceEvent=(evId,choiceId)=>{
-  const r=G.runner;
-  // T01 (v81): 'mental' se declaraba solo dentro del bloque else de la rama
-  // 'lost', pero la rama 'gut_fork' (confusing_fork) también lo lee ~200 líneas
-  // más abajo. Fuera de ámbito → ReferenceError que abortaba la función antes
-  // de limpiar G.midRaceEvent y volver a 'segment': partida congelada.
-  const mental=getEffStat('mental');
-  // Si el temporizador de Exprés seguía corriendo, el jugador respondió a tiempo
-  if(G._xpTimerInterval)G._xpTimerAnsweredCareer=(G._xpTimerAnsweredCareer||0)+1;
-  if(evId==='storm'){
+// T83 (v93) — el resolutor de eventos a mitad de carrera, de 406 líneas de
+// if/else-if a una tabla de resolutores.
+//
+// La ficha lo pedía como limpieza («el 70 % son variaciones de tres gestos; con
+// T77-T79 hechos, la función se reduce sola»), pero al partirla aparece que NO
+// era una cadena: eran DOS cadenas independientes, separadas por el
+// `clearExpressTimer()` que dividía los eventos clásicos de los de Exprés. Y la
+// segunda cadena termina en el `else` que T36 (v88) añadió para avisar de un
+// evId sin rama.
+//
+// Consecuencia: los OCHO eventos clásicos —storm, injured_runner, friends_cheer,
+// hat_blown, sock_adjust, mud_fall, sabotage, lost— se resolvían en la primera
+// cadena, caían igualmente en el `else` de la segunda, y ese else SOBRESCRIBÍA
+// su narración con «La situación se resuelve sin consecuencias.» y soltaba un
+// console.warn. Los efectos mecánicos sí se aplicaban (el tiempo, el clima, el
+// chubasquero de la tormenta), pero el jugador leía que no había pasado nada
+// justo después de elegir. Con una sola tabla y una sola búsqueda eso no puede
+// repetirse: o hay resolutor, o se ejecuta el aviso; nunca los dos.
+//
+// Cada resolutor recibe (r, mental, choiceId): `r` es G.runner y `mental` el
+// getEffStat('mental') que veinte de las ramas leen. Los cuerpos van byte a
+// byte como estaban; la extracción se verificó reconstruyendo la cadena
+// original desde la tabla y comparándola con la de v92.
+const MID_RACE_RESOLVERS={
+  // ── Eventos clásicos de carrera ───────────────────────────────────
+  storm:(r,mental,choiceId)=>{
     G.stormActive=true;
     if(choiceId==='shelter'){
       G.stormProtected=true;
@@ -1670,11 +1693,12 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       G.weather='tormenta';
       G.raceEvent='Atraviesas la tormenta a cuerpo descubierto. Rápido, pero la hidratación se resentirá en los tramos siguientes.';
     }
-  } else if(evId==='injured_runner'){
+  },
+  injured_runner:(r,mental,choiceId)=>{
     if(choiceId==='help'){
       G.time+=120; // +2 min
       bumpStat(G.runner,'mental',2);
-      G.followers=(G.followers||0)+200;
+      addFollowers(200);
       G.raceEvent='Ayudas al corredor hasta que llega un voluntario. Pierdes 2 minutos pero el gesto te da alas. +2 Mental.';
     } else if(choiceId==='warn'){
       G.raceEvent='Le dices que avisarás en el siguiente puesto y continúas. Una decisión razonable.';
@@ -1682,7 +1706,8 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       drain(r,'energy',5);
       G.raceEvent='Sigues adelante. La imagen del corredor en el suelo te acompaña los siguientes kilómetros. -5 energía.';
     }
-  } else if(evId==='friends_cheer'){
+  },
+  friends_cheer:(r,mental,choiceId)=>{
     if(choiceId==='sprint'){
       G.time+=180; // se van 3 min extra de "pérdida" por acelerar demasiado
       drain(G.runner,'energy',3);
@@ -1690,10 +1715,11 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       G.raceEvent='¡Tus amigos te dan alas! Aceleras a tope durante 200m. +4 Mental, pero el cuerpo lo nota. 🔥';
     } else {
       bumpStat(G.runner,'mental',4);
-      G.followers=(G.followers||0)+120;
+      addFollowers(120);
       G.raceEvent='Saludas con la mano y sigues. La energía del grupo te lleva hasta el siguiente avituallamiento. +4 Mental 🙌';
     }
-  } else if(evId==='hat_blown'){
+  },
+  hat_blown:(r,mental,choiceId)=>{
     if(choiceId==='get_hat'){
       G.time+=90;
       G.raceEvent='Vuelves a por la gorra. 90 segundos perdidos pero la cabeza protegida para el resto de la carrera.';
@@ -1702,7 +1728,8 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       drain(G.runner,'hydration',6);
       G.raceEvent='Sigues sin gorra. El viento y el sol pican el resto de la carrera. −6 hidratación.';
     }
-  } else if(evId==='sock_adjust'){
+  },
+  sock_adjust:(r,mental,choiceId)=>{
     if(choiceId==='fix_sock'){
       G.time+=60;
       G.raceEvent='Un minuto parado recolocando el calcetín. Bien hecho — ninguna ampolla molestará el resto del camino.';
@@ -1711,7 +1738,8 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       drain(G.runner,'legs',8);
       G.raceEvent='Aguantas el roce. Las piernas pagarán el precio en los últimos kilómetros. −8 piernas.';
     }
-  } else if(evId==='mud_fall'){
+  },
+  mud_fall:(r,mental,choiceId)=>{
     if(choiceId==='get_up_fast'){
       drain(G.runner,'legs',5);
       drain(G.runner,'energy',2);
@@ -1721,21 +1749,23 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       drain(G.runner,'legs',3);
       G.raceEvent='Treinta segundos para asegurarte de que todo está bien. Nada roto, sigues. −3 piernas.';
     }
-  } else if(evId==='sabotage'){
+  },
+  sabotage:(r,mental,choiceId)=>{
     if(choiceId==='honest'){
       bumpStat(G.runner,'mental',2);
-      G.followers=(G.followers||0)+80;
+      addFollowers(80);
       G.fairPlayCount=(G.fairPlayCount||0)+1;
       G.raceEvent='Haces lo correcto. El fair play define quién eres en el monte, no solo el tiempo. +2 Mental.';
     } else {
       // Engañas: ganas tiempo pero pierdes reputación y mental
       G.time=Math.max(0,G.time-300); // ~5 min de ventaja
       G.runner.stats.mental=Math.max(1,(G.runner.stats.mental||50)-3);
-      G.followers=Math.max(0,(G.followers||0)-150);
+      addFollowers(-150);
       G._sabotageCount=(G._sabotageCount||0)+1;
       G.raceEvent='El rival toma el camino equivocado. Ganas posición, pero algo te pesa dentro. −3 Mental, −popularidad.';
     }
-  } else if(evId==='lost'){
+  },
+  lost:(r,mental,choiceId)=>{
     if(choiceId==='gps'){
       G.time+=150; // +2:30 min
       G.raceEvent='El GPS te saca del laberinto de niebla. Pierdes 2:30 pero llegas al tramo correcto.';
@@ -1751,113 +1781,118 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
         G.raceEvent='Te pierdes más de lo esperado. Pierdes 4:40 y llegas a la senda exhausto. -8 energía.';
       }
     }
-  }
-  // ── EXPRESS TIMED EVENTS resolution ─────────────────────────────
-  clearExpressTimer();
-  if(evId==='xp_descent'){
+  },
+  // ── EXPRESS · eventos con temporizador ────────────────────────────
+  xp_descent:(r,mental,choiceId)=>{
     if(choiceId==='safe_descent'){r.legs=Math.min(100,r.legs+3);G.time+=45;G.raceEvent='Aseguras la bajada. +45 seg pero las piernas te lo agradecen.';}
     else{const risk=r.legs<40||r.energy<30;if(risk){drain(r,'legs',8);drain(r,'energy',5);G.raceEvent='Mantienes el ritmo en la bajada pero el cuerpo está justo. -8 piernas.';}else{G.time=Math.max(0,G.time-30);G.raceEvent='La bajada sale bien. Ganas 30 seg.';}}
-  } else if(evId==='xp_rival'){
+  },
+  xp_rival:(r,mental,choiceId)=>{
     if(choiceId==='follow_rival'){const ok=r.legs>50&&r.energy>40;if(ok){G.time=Math.max(0,G.time-25);G.raceEvent='Le sigues y aguantas. Ganas 25 seg al pelotón.';}else{drain(r,'energy',10);drain(r,'legs',8);G.raceEvent='Le sigues pero el cuerpo no responde. -10 energía, -8 piernas.';}}
     else{bumpStat(r,'mental',2);G.raceEvent='Mantienes tu plan. +2 Mental — la cabeza manda.';}
-  } else if(evId==='xp_cramp'){
+  },
+  xp_cramp:(r,mental,choiceId)=>{
     if(choiceId==='ease_cramp'){r.legs=Math.min(100,r.legs+4);G.time+=60;G.raceEvent='Bajas el ritmo. El calambre se va. +1 min pero llegas bien.';}
     else{const ok=Math.random()<0.45;if(ok){G.time=Math.max(0,G.time-20);G.raceEvent='Fuerzas y el cuerpo responde. Ganas 20 seg.';}else{drain(r,'legs',14);G.raceEvent='El calambre se dispara. -14 piernas.';}}
-  } else if(evId==='xp_final'){
+  },
+  xp_final:(r,mental,choiceId)=>{
     if(choiceId==='sprint_finish'){G.time=Math.max(0,G.time-55);drain(r,'energy',15);G.raceEvent='¡Rematas a tope! -55 seg. Las piernas piden parar pero la meta está cerca.';}
     else{r.energy=Math.min(100,r.energy+4);G.raceEvent='Llegas sólido y con margen. Buen final controlado.';}
-  } else if(evId==='xp_storm_timed'){
+  },
+  xp_storm_timed:(r,mental,choiceId)=>{
     if(choiceId==='shelter_storm'){G.stormProtected=true;G.stormActive=true;G.weather='tormenta';G.raceEvent='Guardas posición. La tormenta castiga menos.';}
     else{G.stormProtected=false;G.stormActive=true;G.weather='tormenta';G.time=Math.max(0,G.time-40);drain(r,'hydration',15);G.raceEvent='Aprietas bajo la tormenta. Ganas 40 seg pero la hidratación se resiente. -15 hidratación.';}
-  } else if(evId==='xp_fork'){
+  },
+  xp_fork:(r,mental,choiceId)=>{
     const ok=Math.random()<0.6;
     if(ok){G.raceEvent='¡Acertaste la bifurcación! Camino correcto, sin perder tiempo.';}
     else{G.time+=150;drain(r,'energy',6);G.raceEvent='Camino equivocado. Vuelves atrás. +2:30 min, -6 energía.';}
-  }
-  // ── 6 nuevos timed ──────────────────────────────────────────────
-  else if(evId==='xp_rival_wheel'){
+  },
+  // ── EXPRESS · 6 nuevos con temporizador ───────────────────────────
+  xp_rival_wheel:(r,mental,choiceId)=>{
     if(choiceId==='shake_rival'){drain(r,'energy',10);G.time=Math.max(0,G.time-20);G.raceEvent='Le sacudes de tu rueda. Ganas 20s pero pagas 10 de energía.';}
     else{bumpStat(r,'mental',2);G.raceEvent='Mantienes el ritmo. Él viene fresquito, tú también. +2 Mental.';}
-  }
-  else if(evId==='xp_climb_attack'){
+  },
+  xp_climb_attack:(r,mental,choiceId)=>{
     if(choiceId==='respond_climb'){drain(r,'energy',8);G.time=Math.max(0,G.time-15);G.raceEvent='Respondes al ataque. -8 energía pero mantienes la posición.';}
     else{G.raceEvent='Dejas ir el ataque. El gap crece pero llegas fresco al collado.';}
-  }
-  else if(evId==='xp_last_descent'){
+  },
+  xp_last_descent:(r,mental,choiceId)=>{
     if(choiceId==='full_descent'){const risk=r.legs<40;if(risk){drain(r,'legs',12);G.raceEvent='Caída en el último descenso. -12 piernas, llegas cojeando.'}else{G.time=Math.max(0,G.time-45);G.raceEvent='¡Vuelas en el descenso! -45s. Llegada espectacular.';}}
     else{G.time+=20;G.raceEvent='Desciendes seguro. +20s pero sin sustos. Llegas de una pieza.';}
-  }
-  else if(evId==='xp_slippery'){
+  },
+  xp_slippery:(r,mental,choiceId)=>{
     if(choiceId==='careful_slip'){G.time+=10;G.raceEvent='Buscas la trazada. +10s pero el pie aguanta.';}
-    else{const risk=r.legs<40;if(risk){drain(r,'legs',8);G.time+=8;G.raceEvent='El pie se va. Te recuperas pero -8 piernas.';}else{G.raceEvent='Aguantas el equilibrio. Sin perder tiempo.';}}}
-  else if(evId==='xp_heat_cold'){
+    else{const risk=r.legs<40;if(risk){drain(r,'legs',8);G.time+=8;G.raceEvent='El pie se va. Te recuperas pero -8 piernas.';}else{G.raceEvent='Aguantas el equilibrio. Sin perder tiempo.';}}},
+  xp_heat_cold:(r,mental,choiceId)=>{
     if(choiceId==='adjust_temp'){r.hydration=Math.min(100,r.hydration+8);G.raceEvent='Ajustas el ritmo. +8 hidratación, el cuerpo lo agradece.';}
     else{drain(r,'energy',8);r.stats.resistencia=Math.max(10,(r.stats.resistencia||50)-5);G.raceEvent='El golpe de temperatura te castiga. -8 energía, -5 Resistencia.';}
-  }
-  else if(evId==='xp_double_cramp'){
+  },
+  xp_double_cramp:(r,mental,choiceId)=>{
     if(choiceId==='stretch_double'){G.time+=25;r.legs=Math.min(100,r.legs+6);G.raceEvent='Estiras 25s. Los calambres ceden. +6 piernas.';}
-    else{const risk=(G.bodyLoad||0)>70;if(risk){drain(r,'legs',20);if(Math.random()<Math.min(0.95,0.3*modeCfg().injuryRiskMult))G.injuryType='tendinitis';G.raceEvent='Los dos cuádriceps explotan. -20 piernas'+(!G.injuryType?'':' y tendinitis')+'.';}else{G.raceEvent='Aguantas. Llegas al límite pero de pie.';}}}
-  // ── 12 narrativos ───────────────────────────────────────────────
-  else if(evId==='xn_public_final'){
+    else{const risk=(G.bodyLoad||0)>70;if(risk){drain(r,'legs',20);if(Math.random()<Math.min(0.95,0.3*modeCfg().injuryRiskMult))G.injuryType='tendinitis';G.raceEvent='Los dos cuádriceps explotan. -20 piernas'+(!G.injuryType?'':' y tendinitis')+'.';}else{G.raceEvent='Aguantas. Llegas al límite pero de pie.';}}},
+  // ── EXPRESS · 12 narrativos ───────────────────────────────────────
+  xn_public_final:(r,mental,choiceId)=>{
     if(choiceId==='show_public'){bumpStat(r,'mental',10);drain(r,'energy',5);G.raceEvent='¡La gente te enloquece! +10 Mental, -5 energía. Llegas con el puño en alto.';}
     else{G.raceEvent='Llegas sereno. Sin explosiones, sin regalar energía.';}
-  }
-  else if(evId==='xn_rival_position'){
+  },
+  xn_rival_position:(r,mental,choiceId)=>{
     if(choiceId==='chase_rival'){drain(r,'energy',10);const caught=Math.random()<0.55;if(caught){G.time=Math.max(0,G.time-18);G.raceEvent='¡Le atrapas! Ganas posición. -10 energía pero merece la pena.';}else{G.raceEvent='No llegas a alcanzarle. -10 energía sin resultado.';}}
     else{G.raceEvent='Mantienes tu ritmo. Llegas más fresco al final.';}
-  }
-  else if(evId==='xn_heat_wave'){
+  },
+  xn_heat_wave:(r,mental,choiceId)=>{
     if(choiceId==='drink_more'){r.hydration=Math.min(100,r.hydration+10);G.raceEvent='Bebes bien en el avituallamiento. +10 hidratación.';}
     else{drain(r,'hydration',12);G.raceEvent='El calor se lleva la hidratación. -12 hidratación.';}
-  }
-  else if(evId==='xn_breathing'){
+  },
+  xn_breathing:(r,mental,choiceId)=>{
     if(choiceId==='pause_breath'){G.time+=20;bumpStat(r,'resistencia',3);G.raceEvent='20s de pausa. La respiración se regulariza. +3 Resistencia.';}
     else{r.stats.resistencia=Math.max(10,(r.stats.resistencia||50)-5);G.raceEvent='Fuerzas la respiración. -10% Resistencia en este tramo.';}
-  }
-  else if(evId==='xn_terrain_bump'){
+  },
+  xn_terrain_bump:(r,mental,choiceId)=>{
     if(choiceId==='check_bump'){G.time+=10;G.raceEvent='Evalúas el tobillo. Está bien. +10s pero sin riesgo.';}
     else{drain(r,'legs',5);G.raceEvent='Sigues sin parar. -5 piernas pero ahorras el tiempo.';}
-  }
-  else if(evId==='xn_fog'){
+  },
+  xn_fog:(r,mental,choiceId)=>{
     if(choiceId==='gps_fog'){G.time+=15;G.raceEvent='GPS y cautela. +15s pero camino correcto.';}
-    else{const ok=Math.random()<0.55;if(ok){G.raceEvent='El instinto no falla. Sendero correcto.';}else{G.time+=40;drain(r,'energy',5);G.raceEvent='Te desvías en la niebla. +40s, -5 energía.';}}}
-  else if(evId==='xn_goat'){
+    else{const ok=Math.random()<0.55;if(ok){G.raceEvent='El instinto no falla. Sendero correcto.';}else{G.time+=40;drain(r,'energy',5);G.raceEvent='Te desvías en la niebla. +40s, -5 energía.';}}},
+  xn_goat:(r,mental,choiceId)=>{
     if(choiceId==='go_around'){G.time+=10;G.raceEvent='Rodeo por la ladera. +10s. La cabra ni se inmuta.';}
-    else{const ok=Math.random()<0.6;if(ok){G.time+=5;G.raceEvent='La cabra se aparta. Solo +5s.'}else{r.stats.mental=Math.max(10,(r.stats.mental||50)-3);G.time+=15;G.raceEvent='El susto te descoloca. +15s, -3 Mental.';}}}
-  else if(evId==='xn_dog'){
-    if(choiceId==='enjoy_dog'){bumpStat(r,'mental',8);G.time+=5;G.followers=(G.followers||0)+150;G.raceEvent='El perro se hace viral en redes. +8 Mental, +150 seguidores 🐕';}
+    else{const ok=Math.random()<0.6;if(ok){G.time+=5;G.raceEvent='La cabra se aparta. Solo +5s.'}else{r.stats.mental=Math.max(10,(r.stats.mental||50)-3);G.time+=15;G.raceEvent='El susto te descoloca. +15s, -3 Mental.';}}},
+  xn_dog:(r,mental,choiceId)=>{
+    if(choiceId==='enjoy_dog'){bumpStat(r,'mental',8);G.time+=5;addFollowers(150);G.raceEvent='El perro se hace viral en redes. +8 Mental, +150 seguidores 🐕';}
     else{G.raceEvent='El perro desiste. Sigues al ritmo.';}
-  }
-  else if(evId==='xn_sign_down'){
+  },
+  xn_sign_down:(r,mental,choiceId)=>{
     if(choiceId==='fix_sign'){G.time+=10;bumpStat(r,'mental',3);G.raceEvent='Corriges la señal. +10s, +3 Mental. Los de atrás te lo agradecerán.';}
-    else{const ok=Math.random()<0.65;if(ok){G.raceEvent='Tu instinto es correcto. Sin pérdida de tiempo.'}else{G.time+=30;G.raceEvent='Te equivocas. +30s para retomar el camino.';}}}
-  else if(evId==='xn_retired_rival'){
-    if(choiceId==='help_retired'){G.time+=20;bumpStat(r,'mental',4);G.followers=(G.followers||0)+200;G.raceEvent='Te paras a ayudar. +20s pero +4 Mental y +200 seguidores.';}
+    else{const ok=Math.random()<0.65;if(ok){G.raceEvent='Tu instinto es correcto. Sin pérdida de tiempo.'}else{G.time+=30;G.raceEvent='Te equivocas. +30s para retomar el camino.';}}},
+  xn_retired_rival:(r,mental,choiceId)=>{
+    if(choiceId==='help_retired'){G.time+=20;bumpStat(r,'mental',4);addFollowers(200);G.raceEvent='Te paras a ayudar. +20s pero +4 Mental y +200 seguidores.';}
     else{G.time=Math.max(0,G.time-10);G.raceEvent='Aprovechas el hueco. Ganas 10s y subes posiciones.';}
-  }
-  else if(evId==='xn_endless_climb'){
+  },
+  xn_endless_climb:(r,mental,choiceId)=>{
     if(choiceId==='manage_climb'){G.raceEvent='Gestionas la subida. Llegas al collado con reservas.';}
     else{drain(r,'energy',18);G.time=Math.max(0,G.time-30);G.raceEvent='Empujas la subida. -18 energía pero llegas 30s antes.';}
-  }
-  else if(evId==='xn_runner_fallen'){
+  },
+  xn_runner_fallen:(r,mental,choiceId)=>{
     if(choiceId==='help_fallen'){G.time+=20;bumpStat(r,'mental',4);G.raceEvent='Le ayudas a levantarse. +20s, +4 Mental.';}
     else{G.time+=5;G.raceEvent='Compruebas que puede seguir y continúas. +5s.';}
-  }
-  else if(evId==='slip_nf'){
+  },
+  // ── 12 eventos de modo normal ─────────────────────────────────────
+  slip_nf:(r,mental,choiceId)=>{
     if(choiceId==='ease_slip'){
       drain(r,'legs',4);G.raceEvent='Bajas un poco el ritmo. El pie ha aprendido la lección. −4 piernas, nada más.';
     } else {
       drain(r,'legs',6);G.raceEvent='Sigues igual. El terreno sigue resbaladizo y las piernas compensan cada paso. −6 piernas.';
     }
-  }
-  else if(evId==='mid_trap'){
+  },
+  mid_trap:(r,mental,choiceId)=>{
     if(choiceId==='manage_trap'){
       drain(r,'energy',5);G.raceEvent='Gestionas el esfuerzo. La montaña te engañó, pero tú no la engañaste a ti mismo. −5 energía bien administrada.';
     } else {
       drain(r,'energy',15);G.raceEvent='Sigues empujando cumbre a cumbre. La montaña gana la partida — llegas al plano completamente vaciado. −15 energía.';
     }
-  }
-  else if(evId==='heavy_legs'){
+  },
+  heavy_legs:(r,mental,choiceId)=>{
     if(choiceId==='stretch_legs'){
       G.time+=60;drain(r,'legs',3);G.raceEvent='Un minuto de estiramiento activa la circulación. Las piernas responden un poco mejor. +1 min, −3 piernas.';
     } else if(choiceId==='shuffle_legs'){
@@ -1867,19 +1902,19 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       if((G.bodyLoad||0)>70&&Math.random()<Math.min(0.95,0.35*modeCfg().injuryRiskMult)){G.injuryType=G.injuryType||'tendinitis';G.raceEvent='Las piernas explotan. −15 piernas. La tensión acumulada deriba en tendinitis.';}
       else{G.raceEvent='Aguantas a duras penas. −15 piernas. Llegas al avituallamiento arrastrando los pies.';}
     }
-  }
-  else if(evId==='nickname_shout'){
+  },
+  nickname_shout:(r,mental,choiceId)=>{
     if(choiceId==='fist_pump'){
       bumpStat(r,'mental',6);drain(r,'energy',5);
       G.raceEvent='¡El puño en alto y a volar! +6 Mental. Las piernas no saben que están cansadas. −5 energía.';
     } else {
-      bumpStat(r,'mental',4);G.followers=(G.followers||0)+150;
+      bumpStat(r,'mental',4);addFollowers(150);
       G.raceEvent='Sonríes y sigues. Ese +4 Mental te lleva al siguiente avituallamiento casi gratis. +150 seguidores.';
     }
-  }
-  else if(evId==='lent_pole'){
+  },
+  lent_pole:(r,mental,choiceId)=>{
     if(choiceId==='give_pole'){
-      G.time+=120;bumpStat(r,'mental',3);G.followers=(G.followers||0)+200;G.fairPlayCount=(G.fairPlayCount||0)+1;G._helpingCount=(G._helpingCount||0)+1;
+      G.time+=120;bumpStat(r,'mental',3);addFollowers(200);G.fairPlayCount=(G.fairPlayCount||0)+1;G._helpingCount=(G._helpingCount||0)+1;
       G.raceEvent='Le llevas el bastón. Dos minutos perdidos, pero el corredor sigue. +3 Mental, +200 seguidores, y fair play anotado.';
     } else if(choiceId==='point_pole'){
       G.raceEvent='Le señalas el bastón y sigues. Él puede volver. Hiciste lo mínimo sin perder el ritmo.';
@@ -1887,16 +1922,16 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       G.time+=60;bumpStat(r,'mental',1);
       G.raceEvent='Llevas el bastón hasta el avituallamiento. +1 min. Queda allí para cuando él llegue.';
     }
-  }
-  else if(evId==='dog_fan'){
+  },
+  dog_fan:(r,mental,choiceId)=>{
     if(choiceId==='enjoy_dog'){
-      bumpStat(r,'mental',5);G.time+=5;G.followers=(G.followers||0)+180;
+      bumpStat(r,'mental',5);G.time+=5;addFollowers(180);
       G.raceEvent='¡El perro se hace viral! Corréis juntos 400m más. +5 Mental, +180 seguidores 🐕';
     } else {
       G.time+=10;G.raceEvent='El perro entiende el mensaje y da media vuelta. +10 seg. Ya puedes concentrarte.';
     }
-  }
-  else if(evId==='bad_fall'){
+  },
+  bad_fall:(r,mental,choiceId)=>{
     if(choiceId==='check_fall'){
       G.time+=120;drain(r,'legs',8);
       G.raceEvent='Dos minutos de evaluación. Nada roto, solo arañazos y orgullo herido. −8 piernas. Sigues con cabeza.';
@@ -1905,15 +1940,16 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       if(Math.random()<Math.min(0.95,0.25*modeCfg().injuryRiskMult)){G.injuryType=G.injuryType||'tendinitis';G.raceEvent='Te levantas y corres. −14 piernas, −8 energía. El cuerpo lo pagará — y aparece tendinitis.';}
       else{G.raceEvent='Te levantas y corres. La adrenalina tapa el dolor 2 km. −14 piernas, −8 energía. Sobrevives.';}
     }
-  }
-  else if(evId==='endless_climb'){
+  },
+  // ── 12 eventos nuevos de modo normal ──────────────────────────────
+  endless_climb:(r,mental,choiceId)=>{
     if(choiceId==='manage_climb'){
       drain(r,'energy',8);G.raceEvent='Marchas rápido y llegas al collado con algo en el depósito. −8 energía. Ahí estaba la cima.';
     } else {
       G.time=Math.max(0,G.time-120);drain(r,'energy',20);G.raceEvent='Empujas y llegas 2 min antes. −20 energía. La bajada será otra historia.';
     }
-  }
-  else if(evId==='stone_legs'){
+  },
+  stone_legs:(r,mental,choiceId)=>{
     if(choiceId==='walk_descents'){
       drain(r,'legs',5);G.raceEvent='Caminas las bajadas. El ego sufre pero los cuádriceps aguantan hasta la meta. −5 piernas.';
     } else if(choiceId==='run_descents'){
@@ -1921,9 +1957,8 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
     } else {
       G.time+=60;drain(r,'legs',6);G.raceEvent='La trazada suave absorbe algo del impacto. +1 min, −6 piernas. La mejor opción posible.';
     }
-  }
-  // ── 12 NUEVOS EVENTOS MODO NORMAL ────────────────────────────────
-  else if(evId==='empty_aid'){
+  },
+  empty_aid:(r,mental,choiceId)=>{
     if(choiceId==='ration'){
       drain(r,'hydration',5);drain(r,'energy',4);
       G.raceEvent='Te racionas. Llegas al siguiente puesto con reservas justas, pero de una pieza. −5 hidratación, −4 energía.';
@@ -1935,8 +1970,8 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       drain(r,'hydration',12);drain(r,'energy',10);
       G.raceEvent='Fuerzas sin recargar. Los kilómetros siguientes son un calvario. −12 hidratación, −10 energía.';
     }
-  }
-  else if(evId==='bad_gel'){
+  },
+  bad_gel:(r,mental,choiceId)=>{
     if(choiceId==='eat_gel'){
       r.energy=Math.min(100,r.energy+5);
       if(Math.random()<0.45){drain(r,'energy',14);G.raceEvent='+5 energía del gel… pero el estómago se rebela a los 200m. −14 energía neta.';}
@@ -1944,18 +1979,18 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
     } else {
       G.raceEvent='Tiras el gel. No vale la pena el riesgo. Sigues con lo que tienes.';
     }
-  }
-  else if(evId==='trail_blocked'){
+  },
+  trail_blocked:(r,mental,choiceId)=>{
     if(choiceId==='wait_herd'){
       G.time+=90;G.raceEvent='Las cabras pasan a su ritmo. Usas el minuto y medio para estirarte un poco. +1:30 min.';
     } else if(choiceId==='detour_herd'){
       G.time+=120;drain(r,'legs',4);G.raceEvent='Rodeas por la ladera. +2 min y −4 piernas por el desnivel extra, pero sin perder ritmo mental.';
     } else {
-      G.time+=40;bumpStat(r,'mental',1);G.followers=(G.followers||0)+80;
+      G.time+=40;bumpStat(r,'mental',1);addFollowers(80);
       G.raceEvent='Las cabras se apartan curiosas. Imagen para el recuerdo. +40 seg, +1 Mental, +seguidores 🐐';
     }
-  }
-  else if(evId==='confusing_fork'){
+  },
+  confusing_fork:(r,mental,choiceId)=>{
     if(choiceId==='gps_fork'){
       G.time+=45;G.raceEvent='GPS confirmado. Camino correcto. +45 seg pero sin margen de error.';
     } else if(choiceId==='gut_fork'){
@@ -1965,8 +2000,8 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
     } else {
       G.time+=30;G.raceEvent='El corredor que llega también duda, pero entre dos la lógica gana. +30 seg. Camino correcto.';
     }
-  }
-  else if(evId==='rival_pass'){
+  },
+  rival_pass:(r,mental,choiceId)=>{
     if(choiceId==='give_way'){
       G.time+=20;bumpStat(r,'mental',2);G.fairPlayCount=(G.fairPlayCount||0)+1;G._helpingCount=(G._helpingCount||0)+1;
       G.raceEvent='Le cedes el paso. El gesto te da la razón y +2 Mental. Recuperarás esa posición más adelante. +20 seg.';
@@ -1978,8 +2013,8 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       if(Math.random()<0.5){G.time=Math.max(0,G.time-15);G.raceEvent='¡Aguantas su rueda y tiras de él! Ganas 15 seg netos. −8 energía bien invertida.'}
       else{G.raceEvent='Intentas seguirle pero la diferencia de forma se nota. −8 energía sin beneficio.'}
     }
-  }
-  else if(evId==='temp_change'){
+  },
+  temp_change:(r,mental,choiceId)=>{
     if(choiceId==='put_jacket'){
       G.time+=90;r.hydration=Math.min(100,r.hydration+4);
       G.raceEvent='Te pones el cortavientos. +1:30 min pero el cuerpo agradece la protección térmica los siguientes km.';
@@ -1987,20 +2022,20 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       drain(r,'hydration',5);drain(r,'legs',4);
       G.raceEvent='Aprietas para entrar en calor. El frío pasa antes de lo esperado pero −5 hidratación y −4 piernas por el esfuerzo extra.';
     }
-  }
-  else if(evId==='crowd_cameras'){
+  },
+  crowd_cameras:(r,mental,choiceId)=>{
     if(choiceId==='wave_crowd'){
-      bumpStat(r,'mental',3);G.followers=(G.followers||0)+100;
+      bumpStat(r,'mental',3);addFollowers(100);
       G.raceEvent='¡La gente te anima! Saludas y sigues fuerte. +3 Mental, +100 seguidores 📸';
     } else if(choiceId==='show_off'){
-      G.time=Math.max(0,G.time-50);drain(r,'energy',6);G.followers=(G.followers||0)+250;
+      G.time=Math.max(0,G.time-50);drain(r,'energy',6);addFollowers(250);
       G.raceEvent='Aceleras para la cámara. −50 seg y +250 seguidores, pero −6 energía. Las redes lo adorarán.';
     } else {
       bumpStat(r,'mental',1);
       G.raceEvent='Foco total. El ruido de fondo desaparece. +1 Mental por la concentración.';
     }
-  }
-  else if(evId==='bottleneck'){
+  },
+  bottleneck:(r,mental,choiceId)=>{
     if(choiceId==='wait_jam'){
       G.time+=90;G.raceEvent='Esperas. Noventa segundos de pausa forzada. Al menos las piernas descansan un poco.';
     } else if(choiceId==='alt_line'){
@@ -2011,8 +2046,8 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       if(Math.random()<0.55){G.time+=30;G.raceEvent='Pides paso con educación y alguno se aparta. +30 seg y problema resuelto.'}
       else{G.time+=90;G.raceEvent='Nadie cede. Esperas a que el sendero se ensanche. +1:30 min como el plan A.'}
     }
-  }
-  else if(evId==='hunger_crisis'){
+  },
+  hunger_crisis:(r,mental,choiceId)=>{
     if(choiceId==='use_gel_now'){
       r.energy=Math.min(100,r.energy+12);G.raceEvent='El gel hace efecto en dos minutos. +12 energía. Llegas al siguiente avituallamiento bien.';
     } else if(choiceId==='slow_hunger'){
@@ -2021,8 +2056,8 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
       r.energy=Math.min(100,r.energy+5);
       G.raceEvent='La barrita tarda más en hacer efecto pero es sostenida. +5 energía gradual. Una buena decisión.';
     }
-  }
-  else if(evId==='frozen_hands'){
+  },
+  frozen_hands:(r,mental,choiceId)=>{
     if(choiceId==='warm_hands'){
       G.time+=120;r.legs=Math.min(100,r.legs+2);
       G.raceEvent='Dos minutos frotándote las manos contra el pecho. Recuperas el agarre y el bastón vuelve a ser un aliado.';
@@ -2032,21 +2067,34 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
     } else {
       drain(r,'legs',8);G.raceEvent='Aguantas el frío. Los bastones resbalan en los apoyos y −8 piernas compensando el mal agarre.';
     }
-  }
-  else if(evId==='ankle_mud'){
+  },
+  ankle_mud:(r,mental,choiceId)=>{
     if(choiceId==='rock_line'){
       G.time+=30;G.raceEvent='Tomas la trazada de roca. +30 seg pero las piernas llegan al fondo sin extra de fatiga.';
     } else {
       drain(r,'legs',10);G.raceEvent='Atraviesas el lodazal a trompicones. −10 piernas por el esfuerzo muscular de sacar el pie en cada paso.';
     }
-  }
-  else if(evId==='false_flat'){
+  },
+  false_flat:(r,mental,choiceId)=>{
     if(choiceId==='read_terrain'){
       drain(r,'energy',6);G.raceEvent='Lees el terreno y ajustas el esfuerzo. −6 energía absorbida correctamente — sin colapso posterior.';
     } else {
       drain(r,'energy',14);G.raceEvent='Mantienes el ritmo de "llano" en un repecho real. −14 energía de golpe. El cuerpo tarda tres kilómetros en recuperarse.';
     }
-  }
+  },
+};
+window.resolveMidRaceEvent=(evId,choiceId)=>{
+  const r=G.runner;
+  // T01 (v81): 'mental' se declaraba solo dentro del bloque else de la rama
+  // 'lost', pero la rama 'gut_fork' (confusing_fork) también lo lee ~200 líneas
+  // más abajo. Fuera de ámbito → ReferenceError que abortaba la función antes
+  // de limpiar G.midRaceEvent y volver a 'segment': partida congelada.
+  const mental=getEffStat('mental');
+  // Si el temporizador de Exprés seguía corriendo, el jugador respondió a tiempo
+  if(G._xpTimerInterval)G._xpTimerAnsweredCareer=(G._xpTimerAnsweredCareer||0)+1;
+  clearExpressTimer();
+  const resolutor=MID_RACE_RESOLVERS[evId];
+  if(resolutor) resolutor(r,mental,choiceId);
   else {
     // T36 (v88): evId sin rama. Antes se limpiaba el evento en silencio y el
     // jugador perdía la elección sin enterarse. Ahora se avisa en consola y se
@@ -2055,7 +2103,7 @@ window.resolveMidRaceEvent=(evId,choiceId)=>{
     G.raceEvent='La situación se resuelve sin consecuencias.';
   }
   // T13 (v82): aquí había un segundo bloque `else if(evId==='lost')` inalcanzable
-  // por partida doble — la cadena if/else if ya resuelve 'lost' mucho antes, y
+  // por partida doble — la cadena if/else if ya resolvía 'lost' mucho antes, y
   // además manejaba choiceId==='wait_gps', un id que no existe entre las opciones
   // del evento (son 'gps' y 'find_trail'). Eliminado.
   G.midRaceEvent=null;
@@ -2185,11 +2233,11 @@ function resolveRedZoneConsequence(zeroCount, redZoneMax, stormActive){
       {id:'hospitalizacion', label:'Hospitalización',
        desc:'El cuerpo dijo basta. Semana en urgencias, rehidratación IV. Pierdes €150 y un mes completo de competición.',
        icon:'🏥', color:'#c0392b',
-       apply:(G)=>{G.money=Math.max(0,G.money-150);G.injuryRacesLeft=(G.injuryRacesLeft||0)+2;G.postRaceRestWeeks=(G.postRaceRestWeeks||0)+3;G.followers=(G.followers||0)+1200;},fameBonus:1200},
+       apply:(G)=>{G.money=Math.max(0,G.money-150);G.injuryRacesLeft=(G.injuryRacesLeft||0)+2;G.postRaceRestWeeks=(G.postRaceRestWeeks||0)+3;addFollowers(1200);},fameBonus:1200},
       {id:'colapso_muscular', label:'Colapso muscular',
        desc:'Rotura de fibras múltiples. El fisio dice que no corras en 6 semanas. Las piernas tardarán en volver.',
        icon:'💢', color:'#c0392b',
-       apply:(G)=>{G.runner.stats.resistencia=Math.max(10,(G.runner.stats.resistencia||50)-8);G.injuryRacesLeft=(G.injuryRacesLeft||0)+2;G.postRaceRestWeeks=(G.postRaceRestWeeks||0)+2;G.followers=(G.followers||0)+900;},fameBonus:900},
+       apply:(G)=>{G.runner.stats.resistencia=Math.max(10,(G.runner.stats.resistencia||50)-8);G.injuryRacesLeft=(G.injuryRacesLeft||0)+2;G.postRaceRestWeeks=(G.postRaceRestWeeks||0)+2;addFollowers(900);},fameBonus:900},
     ];
     return opts[Math.floor(roll*opts.length)];
   } else if(zeroCount>=2||(zeroCount>=1&&redZoneMax>=4)||(stormActive&&redZoneMax>=3)){
@@ -2198,15 +2246,15 @@ function resolveRedZoneConsequence(zeroCount, redZoneMax, stormActive){
       {id:'gripe', label:'Bajón inmune — gripe',
        desc:'El esfuerzo extremo dejó las defensas por los suelos. Tres semanas en casa, sin entrenar ni competir.',
        icon:'🤒', color:'#c07a10',
-       apply:(G)=>{G.injuryRacesLeft=(G.injuryRacesLeft||0)+1;G.postRaceRestWeeks=(G.postRaceRestWeeks||0)+2;G.followers=(G.followers||0)+500;},fameBonus:500},
+       apply:(G)=>{G.injuryRacesLeft=(G.injuryRacesLeft||0)+1;G.postRaceRestWeeks=(G.postRaceRestWeeks||0)+2;addFollowers(500);},fameBonus:500},
       {id:'sobrecarga', label:'Sobrecarga muscular crónica',
        desc:'Las piernas han pagado el precio. Este año entrenarás un 20% menos efectivo en todo lo que sea de piernas.',
        icon:'🦵', color:'#c07a10',
-       apply:(G)=>{G.seasonLegsPenalty=(G.seasonLegsPenalty||0)+0.20;G.followers=(G.followers||0)+350;},fameBonus:350},
+       apply:(G)=>{G.seasonLegsPenalty=(G.seasonLegsPenalty||0)+0.20;addFollowers(350);},fameBonus:350},
       {id:'deshidratacion', label:'Deshidratación severa',
        desc:'La siguiente carrera la empiezas al 60% de hidratación. El cuerpo aún no ha recuperado el equilibrio electrolítico.',
        icon:'💧', color:'#c07a10',
-       apply:(G)=>{G.nextRaceHydrationStart=60;G.followers=(G.followers||0)+250;},fameBonus:250},
+       apply:(G)=>{G.nextRaceHydrationStart=60;addFollowers(250);},fameBonus:250},
     ];
     return opts[Math.floor(roll*opts.length)];
   } else if(redZoneMax>=2||(zeroCount>=1)){
@@ -2215,11 +2263,11 @@ function resolveRedZoneConsequence(zeroCount, redZoneMax, stormActive){
       {id:'fatiga_residual', label:'Fatiga residual',
        desc:'El cuerpo no se ha recuperado del todo. La siguiente carrera empieza al 65% de energía y piernas.',
        icon:'😮‍💨', color:'#888',
-       apply:(G)=>{G.nextRaceEnergyStart=65;G.nextRaceLegsStart=65;G.followers=(G.followers||0)+120;},fameBonus:120},
+       apply:(G)=>{G.nextRaceEnergyStart=65;G.nextRaceLegsStart=65;addFollowers(120);},fameBonus:120},
       {id:'descanso_forzado', label:'Semana de descanso obligatorio',
        desc:'El médico recomienda no entrenar esta semana. Pierdes un bloque de entrenamiento.',
        icon:'🛌', color:'#888',
-       apply:(G)=>{G.postRaceRestWeeks=(G.postRaceRestWeeks||0)+1;G.followers=(G.followers||0)+80;},fameBonus:80},
+       apply:(G)=>{G.postRaceRestWeeks=(G.postRaceRestWeeks||0)+1;addFollowers(80);},fameBonus:80},
     ];
     return opts[Math.floor(roll*opts.length)];
   }
@@ -2399,7 +2447,7 @@ function applyPostRaceTracking(race,res){
     }
   });
   const raceFollowers=followersFromRaceResult(pos,race.tier,false);
-  G.followers=(G.followers||0)+raceFollowers;
+  addFollowers(raceFollowers);
   if(raceFollowers>0)setTimeout(()=>showToast('+'+raceFollowers+' seguidores 📱','#4a90d9'),400);
   checkFollowerThresholds();
 

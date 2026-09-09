@@ -20,7 +20,7 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
-const GAME_BUILD=92; // incrementar con cada versión del juego
+const GAME_BUILD=93; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
@@ -47,6 +47,10 @@ const PERSISTENT_UNDERSCORE_KEYS=[
   // en cada recarga y su logro era directamente inalcanzable.
   '_coachClubOfferReceived','_coachBeatNemesis','_coachPerfectSeason',
   '_clubCanteraPromoted','_clubObjectivesMet',
+  // T107 (v93): el comentario de freshState() dice «para no repetir toasts»,
+  // pero al no persistir se vaciaba en cada recarga y los cinco avisos de
+  // umbral volvían a salir en la siguiente carrera. Mismo caso que _yearObjectiveRewardPaid.
+  '_thresholdsSeen',
 ];
 
 // Devuelve una copia de G sin las claves transitorias (timers, flags de un solo
@@ -119,8 +123,15 @@ function migrateState(saved){
    'dropbagItems','workPromotionsUsed','repInvitations',
    'coachSelectedRaces','coachRaceResults','coachAthleteHistory','coachDecisionLog',
    'coachEventLog','coachRoster','coachSponsors','unlockedAchievements',
-   'cnVetHistory','cnRaceResults','cnSelectedRaces','rivalIncidents']
+   'cnVetHistory','cnRaceResults','cnSelectedRaces','rivalIncidents',
+   // T48 (v93): los cuatro arrays que se guardaban sin estar declarados
+   'dropbagUsed','cnPreseasonDone','cnOpenMonths','cnOpenSeasonMonths']
     .forEach(k=>{if(!Array.isArray(merged[k]))merged[k]=Array.isArray(base[k])?[...base[k]]:[];});
+  // T48/T51 (v93): race.js ya lee G.terrainCondition sin guarda, así que un save
+  // con la clave a null (nada la escribe hoy, pero `{...base,...saved}` deja
+  // ganar al save) reventaría el render de la carrera. Se restituye el neutro.
+  if(!merged.terrainCondition||typeof merged.terrainCondition!=='object')merged.terrainCondition={...TERRAIN_BUENO};
+  if(!merged.achievementMeta||typeof merged.achievementMeta!=='object')merged.achievementMeta={};
   // Deep-merge de objetos anidados adicionales
   // T125 (v92): estos cinco hacían {...null, ...saved.x} porque los cinco valen
   // null en freshState(): aparentaban dar valores por defecto a saves antiguos y
@@ -415,17 +426,11 @@ function slotLabel(data){
   const specRanking=s.specRanking&&s.specRanking<900?'#'+s.specRanking:'—';
   const specLabel=SPEC_LABEL;
   const spec=specLabel[s.runner?.specialty]||'—';
-  const mode={facil:'🟢 Fácil',medio:'🟡 Medio',dificil:'🔴 Difícil',hardcore:'💀 Hardcore',
-    expres:'⚡ Exprés',coach:'📋 Entrenador',club:'🏕 Club',canicross:'🐕 Canicross'}[s.gameMode||'medio']||'🟡 Medio';
+  const mode=modeLabelFull(s.gameMode);   // T54 (v93)
   const totalKm=s.totalCareerKm||0;
   const date=new Date(data.ts).toLocaleDateString('es-ES',{day:'2-digit',month:'short'});
   // Fase del arco narrativo
-  const phase=s.carreraVida?{
-    runner:  '🏃 Corredor',
-    overlap: '🏃 · 📋 Solapamiento',
-    coach:   '📋 Entrenador',
-    club:    '🏕 Club',
-  }[s.lifecyclePhase||'runner']:null;
+  const phase=s.carreraVida?(PHASE_LABEL[s.lifecyclePhase]||PHASE_LABEL.runner):null;   // T54 (v93)
   return {name,runName,year,ranking,specRanking,spec,mode,totalKm,date,phase,
           ended:s.careerEnded||null};   // T29 (v86)
 }

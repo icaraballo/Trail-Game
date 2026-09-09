@@ -77,6 +77,33 @@ function freshState(){
     gelsUsed:0,               // geles usados
     warmedUp:false,           // calentamiento hecho esta carrera
     _raceInitialized:false,   // guard para initRace()
+    // ── T48 (v93) · los 17 campos que se guardaban en disco sin valor por defecto ──
+    // Se escribían durante la partida y viajaban dentro del save, pero no
+    // existían aquí: tras migrateState() un guardado antiguo los dejaba
+    // `undefined` y cada lector se protegía a su manera (`||`, `??`, `?.`) o no
+    // se protegía en absoluto. Los valores de abajo son EXACTAMENTE los que hoy
+    // producen esas protecciones, así que declararlos no cambia nada — solo
+    // quita la trampa. Es la misma familia de T02/T03.
+    terrainCondition:{...TERRAIN_BUENO}, // T51: neutro; race.js ya no necesita guardas
+    achievementMeta:{},          // {achId:{difficulty,year}} — en qué modo/año se logró
+    dropbagUsed:[],              // ids de la bolsa de avituallamiento ya consumidos
+    zeroedOutThisRace:false,     // llegó a 0 en alguna barra → media eficacia de entreno
+    preDegradMult:1.0,           // multiplicador de degradación previo a la carrera
+    nextRaceEnergyStart:null,    // null = arrancar al 100 %; número = % forzado
+    nextRaceLegsStart:null,
+    nextRaceHydrationStart:null, // se lee con `?? 100`, así que null equivale a 100
+    // ⚠ Estos dos se ESCRIBEN y nadie los lee (ver CR de T48 y Bugs-Activos):
+    // las secuelas que dicen guardar no se aplican en ninguna parte.
+    postRaceRestWeeks:0,         // semanas de descanso obligado tras una secuela
+    seasonLegsPenalty:0,         // penalización de piernas arrastrada toda la temporada
+    // ── Canicross ──
+    cnPreseasonDone:[],          // ids de actividades de pretemporada hechas (es array, pese al nombre)
+    cnOpenMonths:[],             // meses desplegados en el calendario mensual
+    cnOpenSeasonMonths:[],       // meses desplegados en el calendario de temporada
+    cnVacationDays:15,           // total de días de vacaciones de la temporada
+    cnVacationUsed:0,
+    cnVacationPlanned:0,
+    cnVacationThisSeason:0,      // ⚠ también write-only (ver la misma ficha)
     // ── Tanda B/C — campos antes lazy-init ──
     unlockedAchievements:[],     // logros desbloqueados (acumulado partida)
     nemesisLog:{},               // {rivalName: {wins, gapSum, gapCount}}
@@ -189,6 +216,16 @@ function freshState(){
     _seasonTrainingDone:false,
     _retireYear:null,
     _rivalLossStreak:0,
+    // T49 (v93): estos cinco SÍ persisten —están en PERSISTENT_UNDERSCORE_KEYS
+    // de save.js y los leen logros reales— pero no estaban declarados aquí, que
+    // es exactamente el agujero de T02/T03. _clubObjectivesMet es un contador
+    // acumulado, así que sin valor por defecto un save antiguo lo dejaba
+    // undefined y `undefined+1` es NaN.
+    _coachClubOfferReceived:false,
+    _coachBeatNemesis:false,
+    _coachPerfectSeason:false,
+    _clubCanteraPromoted:false,
+    _clubObjectivesMet:0,
     // ── Express tracking ─────────────────────────────────────────
     _xpTimerAnsweredCareer:0,
     _xpTimerExpiredCareer:0,
@@ -220,6 +257,67 @@ function freshState(){
     cnDogFoodPremium:false, cnDogSupplements:false,
     cnVetHistory:[], cnBirthdayToastShown:{}, cnRaceState:null,
     dog:null,
+    // ── T49 (v93) · los 46 campos `_` transitorios ───────────────────────────
+    // No se guardan (serializableState() los descarta por no estar en
+    // PERSISTENT_UNDERSCORE_KEYS) y por eso nadie los había declarado. El
+    // problema no era el guardado sino la INVISIBILIDAD: eran 46 campos de
+    // estado vivo que solo existían dentro del `onclick` que los creaba, sin un
+    // sitio donde mirar qué hay en G. Los valores son los mismos que hoy
+    // producen sus guardas (`||`, `??`), así que declararlos no cambia nada.
+    // Se reordenan por dueño; el nombre del fichero es el que los escribe.
+    // render-core / render-clasico — navegación y filtros de la pantalla de logros
+    _achF:null,                  // {mode,rarity,status,tab} filtros activos
+    _achPrev:null,               // pantalla desde la que se entró a logros
+    _achPrevTab:null,            // pestaña a la que volver
+    _prevScreen:null,            // pantalla previa a abrir el guardado
+    _saveFailed:false,           // el último autoSave() no cupo en localStorage
+    _devMode:false,              // ?dev=1 en la URL
+    // race — estado de la carrera en curso
+    _lastRadioSeg:-99,           // último tramo con mensaje de radio (se lee con ??-99)
+    _raceResultHTML:null,        // T122: markup de la pantalla de resultado (no se persiste)
+    _recoveryUsed:false,         // ya se usó la recuperación de esta carrera
+    // state — Exprés y deuda
+    _xpTimerVal:7,               // segundos que quedan en el temporizador
+    _xpTimerDefault:null,        // opción que se elige sola si expira
+    _debtCrisisPending:false,    // crisis de deuda pendiente de mostrar
+    // coach
+    _pendingTrainerStyle:null,   // estilo elegido antes de confirmar
+    _prevCoachRep:null,          // reputación previa, para animar el delta
+    _skipMaturityThisSeason:false, // T114: la renovación entusiasta ya subió stats
+    _taperUsedThisRace:false,
+    _slot1Celebrated:false,      // ya se celebró desbloquear el 2.º/3.º atleta
+    _slot2Celebrated:false,
+    _coachUnlockedHint:false,
+    // club — borradores de la pantalla de creación
+    _clubNameDraft:null,
+    _clubSpecDraft:null,
+    _clubFilDraft:null,
+    _clubArqDraft:null,
+    _clubSimIdx:0,               // índice de la simulación de jornada
+    _monthlySelections:null,     // {decisionId:opcionId} del consejo mensual
+    _clubFromBetween:false,      // se entró al club desde la pantalla de gestión
+    _clubUnlockedHint:false,
+    // canicross
+    _cnDogBreed:null,            // raza elegida antes de crear el perro
+    _cnDogName:null,
+    _cnAdoptionOrigin:null,      // 'cachorro'|'retirado'|…
+    _cnAgingWarned:false,        // ya se avisó de que el perro envejece
+    _cnDislasiaEvent:false,      // el evento de displasia ya saltó
+    _cnHadInjuryLastRace:false,
+    // devmode — solo con ?dev=1, ninguno llega a un guardado
+    _devAchievementsBackup:null, // respaldo real de unlockedAchievements
+    _devAchievementsDirty:false, // hay desbloqueo de prueba en memoria
+    _devInspectorOpen:false,
+    _devBalancePreviewMode:null,
+    _devEvtMode:null,
+    _devEvtType:null,
+    _devGodMode:false,
+    _devGodModeCoach:false,
+    _devGodModeClub:false,
+    _devGodModeCn:false,
+    _devForceDescentFall:false,
+    _devForceCoachMidEvent:false,
+    _devForceCnEvent:false,
   };
 }
 let G=freshState();
@@ -346,17 +444,30 @@ function calcRepInvitations(){
   }
   G.repInvitations=invites;
 }
+// T107 (v93): el aviso nombraba una carrera que no era la del umbral cruzado.
+// Hacía `.find(i=>['regional','nacional','elite'].includes(i.inviteType))`, o
+// sea: cogía la PRIMERA invitación de la lista, que es siempre la del escalón
+// más bajo. Cruzar los 50.000 anunciaba la regional de los 5.000.
+//
+// Al arreglarlo aparece el motivo de fondo, que la ficha no veía:
+// calcRepInvitations() solo se llama desde doNextYear(), así que a mitad de
+// temporada la invitación del umbral recién cruzado TODAVÍA NO EXISTE — no es
+// que se nombrase la equivocada, es que no había ninguna que nombrar. Por eso
+// el aviso ya no promete una carrera concreta: anuncia el nivel conseguido y
+// dice cuándo llega. Mover la generación a mitad de temporada sería cambio de
+// balance (adelanta una carrera de tier alto), y eso se decide jugando.
+//
+// De paso desaparece la séptima tabla duplicada: `invThresholds` repetía a mano
+// los cinco `min` de REP_INVITE_TIERS.
 function checkFollowerThresholds(){
   const f=G.followers||0;
   if(!G._thresholdsSeen)G._thresholdsSeen=[];
-  const invThresholds=[5000,10000,15000,25000,50000];
-  invThresholds.forEach(th=>{
-    if(f>=th&&!G._thresholdsSeen.includes(th)){
-      G._thresholdsSeen.push(th);
-      const race=(G.repInvitations||[]).find(i=>['regional','nacional','elite'].includes(i.inviteType));
-      if(race)setTimeout(()=>showToast('Tu presencia en redes te abre una puerta: '+race.name+' te invita 📩','#4a8a2a'),1200);
-    }
-  });
+  for(const nivel of REP_INVITE_TIERS){
+    if(f<nivel.min||G._thresholdsSeen.includes(nivel.min))continue;
+    G._thresholdsSeen.push(nivel.min);
+    const tier=TIER_LABEL_RACE[nivel.tier]||nivel.tier;
+    setTimeout(()=>showToast('Tu presencia en redes te abre una puerta: invitación '+tier+' la próxima temporada 📩','#4a8a2a'),1200);
+  }
 }
 function monthlyClubCost(){return G.club?.cost||0;}
 function monthlyBrandIncome(){
@@ -368,8 +479,12 @@ function brandHoursPerWeek(){
   if(!G.ownBrand || G.ownBrand.hasEmployee) return 0;
   return 6;
 }
+// T127 (v93): el nivel de 100.000 seguidores promete en su texto «marca propia
+// se desbloquea antes» (FOLLOWER_LEVELS, constants.js) y la condición no miraba
+// los seguidores por ninguna parte: solo ranking y año. Promesa rota en la
+// interfaz. Se conecta la condición, que es lo que la interfaz ya decía.
 function canLaunchBrand(){
-  return !G.ownBrand && (G.ranking<=30 || G.year>=3);
+  return !G.ownBrand && (G.ranking<=30 || G.year>=3 || (G.followers||0)>=100000);
 }
 
 // ── REPUTACIÓN DE CLUB ──────────────────
@@ -483,6 +598,13 @@ const _MODE_CFG_CACHE={};
 // y escondería el bug de quien no inicializó el campo.
 function drain(o,k,n){o[k]=Math.max(0,o[k]-n);return o[k];}
 function bumpStat(o,k,n){o.stats[k]=Math.min(100,(o.stats[k]||50)+n);return o.stats[k];}
+// T79 (v93): `G.followers=(G.followers||0)+n` estaba escrito 21 veces (la ficha
+// decía ~12) y una vigesimosegunda con el signo cambiado y un suelo:
+// `Math.max(0,(G.followers||0)-150)`. El helper lleva el suelo siempre, que en
+// las 21 sumas es un no-op (n>0 y followers>=0) y en la resta hace justo lo que
+// hacía la línea. La caída porcentual de applyRepDecay() se queda aparte: no es
+// un delta, es una proporción, y ya tiene su propio aviso.
+function addFollowers(n){G.followers=Math.max(0,(G.followers||0)+n);return G.followers;}
 
 function modeCfg(mode){
   const m=mode||G.gameMode||'medio';
@@ -902,6 +1024,13 @@ function getRankingHistory(){
   return history;
 }
 
+// T126 (v93): `current` acumulaba el negativo de verdad pero se pintaba
+// Math.max(0,current), así que una economía en caída libre se dibujaba como una
+// línea que baja y se PEGA al cero y ahí se queda plana. Justo la trayectoria
+// que el jugador necesita ver, tapada. Relacionado con T29: desde v86 la
+// quiebra existe, el dinero puede ser negativo y la gráfica seguía sin poder
+// representarlo. Ahora devuelve el número real; el suelo de cero se quita
+// también en renderSavingsChart(), que lo repetía en su eje.
 function getSavingsProjection(){
   const monthly=monthlyNet();
   const months=12;
@@ -910,7 +1039,7 @@ function getSavingsProjection(){
   projection.push({month:'Hoy',money:current});
   for(let m=1;m<=months;m++){
     current+=monthly;
-    projection.push({month:`M${m}`,money:Math.max(0,current)});
+    projection.push({month:`M${m}`,money:current});
   }
   return projection;
 }
