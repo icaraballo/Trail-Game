@@ -2,8 +2,10 @@
 //
 // T105 (v89) — segunda pieza, después del linter. No cubre el juego entero: son
 // las invariantes de las tareas que más fácil se rompen al refactorizar (T15,
-// T22, T25, T45). Si una de estas falla, algo que ya estaba arreglado se ha
-// vuelto a romper.
+// T22, T25, T45 y las de la auditoría v80 que se fueron sumando). Si una de
+// estas falla, algo que ya estaba arreglado se ha vuelto a romper.
+// v94: sin partidas guardadas, ya no se prueban migraciones de formatos
+// históricos — T25 y T45 se cubren en ejecución (applyTraining, isDNF).
 
 // Banco de pruebas: concatena los .js en UN solo ámbito, igual que el navegador
 // (son scripts clásicos, no módulos), con stubs de DOM. El footer expone las
@@ -46,21 +48,11 @@ t('1 terminada + 2 DNF no cumplen «terminar 2»', T.checkSponsorObjective({objK
 T.getG().raceResults.push({pos:9,dnf:false,prize:0});
 t('2 terminadas sí cumplen «terminar 2»', T.checkSponsorObjective({objKey:'finish2'})===true);
 
-console.log('\n── T45 · migración de saves viejos ──');
-const viejo={runner:{name:'Txiki',age:30,stats:{resistencia:50,velocidad:50,subida:50,bajada:50,nutricion:50,mental:50}},year:2,money:100,
-  raceResults:[{name:'A',pos:4},{name:'B',pos:0},{name:'C',pos:0,injured:true}],
-  coachRaceResults:[{raceName:'X',pos:999,dnf:true},{raceName:'Y',pos:2,dnf:false}],
-  cnRaceResults:[{raceName:'Z',pos:null,dnf:true}],
-  coachRoster:[{coachAthlete:{name:'Ane'},coachRaceResults:[{raceName:'W',pos:999,dnf:true}]}]};
+console.log('\n── T15 · raceModifiers garantizado ──');
+// v94: las aserciones de T45 y T25 que vivían aquí probaban migraciones de
+// formatos históricos, retiradas de migrateState() (fase sin partidas guardadas).
+const viejo={runner:{name:'Txiki',age:30,stats:{resistencia:50,velocidad:50,subida:50,bajada:50,nutricion:50,mental:50}},year:2,money:100};
 const mig=T.migrateState(viejo);
-t('Clásico: el 4.º sobrevive', mig.raceResults[0].pos===4&&mig.raceResults[0].dnf===false);
-t('Clásico: pos:0 → abandono', mig.raceResults[1].dnf===true&&mig.raceResults[1].pos===null&&mig.raceResults[1].dnfReason==='abandono');
-t('Clásico: pos:0+injured → lesión', mig.raceResults[2].dnfReason==='lesion');
-t('Entrenador: 999 → null', mig.coachRaceResults[0].pos===null&&mig.coachRaceResults[0].dnf===true);
-t('Entrenador: el 2.º real sobrevive', mig.coachRaceResults[1].pos===2&&mig.coachRaceResults[1].dnf===false);
-t('Entrenador: también dentro de coachRoster', mig.coachRoster[0].coachRaceResults[0].pos===null);
-t('Canicross: se queda como estaba', mig.cnRaceResults[0].dnf===true&&mig.cnRaceResults[0].pos===null);
-t('T25: trainingBlockApplied deducido de la temporada en curso', mig.trainingBlockApplied===true);
 t('T15: raceModifiers garantizado a cero', mig.raceModifiers.mental===0&&mig.raceModifiers.velocidad===0);
 
 console.log('\n── T22 · una sola «jornada actual» ──');
@@ -185,17 +177,10 @@ t('un save de un formato futuro ya NO entra como si nada', T.loadFromSlot(9)===n
 almacen[T.SAVE_KEY+'9']=JSON.stringify({ts:1,state:estadoMin()});
 t('un save antiguo sin campo v sigue cargando (lo migra migrateState)', T.loadFromSlot(9)!==null);
 
-console.log('\n── T140 (v92) · el id del circuito pasa a ASCII, con migración ──');
+console.log('\n── T140 (v92) · el id del circuito pasa a ASCII ──');
+// v94: la migración de saves con el id viejo se retiró; queda fijado el dato.
 t('CIRCUITS_DB ya no tiene ids con ñ', T.CIRCUITS_DB.every(c=>/^[\w-]+$/.test(c.id)));
 t('y el circuito de montaña existe con el id nuevo', T.CIRCUITS_DB.some(c=>c.id==='circuito_montana'));
-almacen[T.SAVE_KEY+'8']=JSON.stringify({v:T.SAVE_VERSION,ts:1,state:{...estadoMin(),
-  joinedCircuits:['circuito_montaña'],circuitCompleted:['circuito_montaña'],
-  circuitPoints:{'circuito_montaña':42}}});
-const migT140=T.loadFromSlot(8);
-t('un save viejo migra joinedCircuits', migT140&&migT140.state.joinedCircuits[0]==='circuito_montana', migT140&&migT140.state.joinedCircuits[0]);
-t('y circuitCompleted', migT140&&migT140.state.circuitCompleted[0]==='circuito_montana');
-t('y conserva los puntos bajo la clave nueva', migT140&&migT140.state.circuitPoints.circuito_montana===42);
-t('sin dejar la clave vieja detrás', migT140&&!('circuito_montaña' in migT140.state.circuitPoints));
 T.LS.get=LSreal; T.LS.set=LSrealSet; T.LS.del=LSrealDel;
 
 console.log('\n── T119/T120 (v92) · bordes de canicross ──');
@@ -239,14 +224,6 @@ t('CLUB_RACES usa km y ninguna conserva dist', T.CLUB_RACES.every(r=>typeof r.km
 t('clubRaceKm lee un save nuevo', T.clubRaceKm({km:35})===35);
 t('y uno viejo, que trae dist', T.clubRaceKm({dist:21})===21);
 t('y no pinta undefined con basura', T.clubRaceKm(null)===0&&T.clubRaceKm({})===0);
-// La migración: clubModeData.seasonResults guarda copias de las carreras.
-const viejoClub={runner:{name:'Txiki',age:30,stats:{resistencia:50,velocidad:50,subida:50,bajada:50,nutricion:50,mental:50}},
-  year:2,money:100,
-  clubModeData:{seasonResults:[{race:{id:'clr1',name:'Trail Local',dist:21},runner:{name:'A'},pos:3}]}};
-const migClub=T.migrateState(viejoClub);
-const rc=migClub.clubModeData.seasonResults[0].race;
-t('migrateState convierte dist en km dentro de seasonResults', rc.km===21, JSON.stringify(rc));
-t('y no deja dist detrás', rc.dist===undefined);
 
 console.log('\n── v92 · interfaz que se calculaba y no se pintaba ──');
 // Esta tanda salió de revisar los 13 avisos de variables muertas del linter.

@@ -20,7 +20,7 @@ const LS={
     localStorage.setItem(LS_PREFIX+'migrated_v41','1');
   }catch(e){}
 })();
-const GAME_BUILD=93; // incrementar con cada versión del juego
+const GAME_BUILD=94; // incrementar con cada versión del juego
 const SAVE_KEY='save_slot_';
 const SAVE_VERSION='TRAIL_SAVE_V2';
 const NUM_SLOTS=5;
@@ -72,27 +72,12 @@ function serializableState(){
 // Fusiona un save con freshState() para añadir campos nuevos que no existían
 // cuando se creó el save. Garantiza que cargar una partida vieja no deja
 // propiedades undefined que revienten el render.
+// v94: fase de desarrollo sin partidas guardadas. Se retiraron las conversiones
+// de formatos históricos (T140, T52, v65, T115, T45, T25, T24) y no se escriben
+// migraciones nuevas: lo que queda es el merge estructural, que protege la
+// partida guardada ayer cuando hoy se añade un campo a freshState(). Esta regla
+// se invierte con la primera publicación pública.
 function migrateState(saved){
-  // T140 (v92): el circuito de montaña tenía la ñ en el id, y ese id se guarda en
-  // joinedCircuits, circuitCompleted y como clave de circuitPoints. Renombrado a
-  // ASCII; los saves anteriores traen el viejo en los tres sitios.
-  if(saved){
-    const viejo='circuito_monta\u00f1a', nuevo='circuito_montana';
-    for(const k of ['joinedCircuits','circuitCompleted'])
-      if(Array.isArray(saved[k]))saved[k]=saved[k].map(x=>x===viejo?nuevo:x);
-    if(saved.circuitPoints&&Object.prototype.hasOwnProperty.call(saved.circuitPoints,viejo)){
-      saved.circuitPoints[nuevo]=saved.circuitPoints[viejo];
-      delete saved.circuitPoints[viejo];
-    }
-  }
-  // T52 (v92): CLUB_RACES pasó de `dist` a `km`. Las carreras se copian dentro de
-  // clubModeData.seasonResults, así que los saves anteriores las traen con dist.
-  if(saved&&saved.clubModeData&&Array.isArray(saved.clubModeData.seasonResults)){
-    for(const r of saved.clubModeData.seasonResults)
-      if(r&&r.race&&r.race.km===undefined&&r.race.dist!==undefined){
-        r.race.km=r.race.dist; delete r.race.dist;
-      }
-  }
   const base=freshState();
   const merged={...base,...saved};
   // Merge profundo en las estructuras anidadas críticas
@@ -111,11 +96,6 @@ function migrateState(saved){
   merged.circuitPoints={...(saved.circuitPoints||{})};
   merged.rivalRetirements={...(saved.rivalRetirements||{})};
   merged.midRaceEventTriggered={...(saved.midRaceEventTriggered||{})};
-  // v65: 'basic_line' nunca existió en CANICROSS_EQUIPMENT.line — migrar a 'soft_line'
-  if(merged.equipment&&merged.equipment.line==='basic_line')merged.equipment.line='soft_line';
-  if(merged.cnOwnedEquipment&&Array.isArray(merged.cnOwnedEquipment.line)){
-    merged.cnOwnedEquipment.line=merged.cnOwnedEquipment.line.map(id=>id==='basic_line'?'soft_line':id);
-  }
   // Asegurar arrays
   ['selectedRaces','raceResults','careerHistory','rivals','lastRaceGains',
    'injuryHistory','monthlyEvents','sponsorPenalties','joinedCircuits','circuitCompleted',
@@ -147,36 +127,6 @@ function migrateState(saved){
   if(saved.lifeAthlete)  merged.lifeAthlete={...base.lifeAthlete,...saved.lifeAthlete};
   if(saved.trainingMomentum) merged.trainingMomentum={...base.trainingMomentum,...saved.trainingMomentum};
   if(saved.trainingBlock)merged.trainingBlock={...base.trainingBlock,...saved.trainingBlock};
-  // T115 (v84): saves anteriores al arquetipo
-  if(merged.clubModeData&&!merged.clubModeData.archetype)merged.clubModeData.archetype='equilibrado';
-  // T45 (v89): unificar «no terminó» en los tres modos. Clásico usaba pos:0
-  // (con `injured:true` cuando era una baja), Entrenador pos:999 y Canicross
-  // pos:null. A partir de aquí: `dnf` booleano, `pos:null` y `dnfReason`.
-  const _normResults=(list,defaultReason)=>(list||[]).map(r=>{
-    if(!r||typeof r!=='object')return null;
-    const wasDNF=r.dnf===true||r.pos==null||r.pos<=0||r.pos>=999;
-    if(!wasDNF)return {...r,dnf:false,dnfReason:null};
-    return {...r,pos:null,dnf:true,
-      dnfReason:r.dnfReason||(r.injured?'lesion':defaultReason)};
-  }).filter(Boolean);
-  merged.raceResults=_normResults(merged.raceResults,'abandono');
-  merged.coachRaceResults=_normResults(merged.coachRaceResults,'abandono');
-  merged.cnRaceResults=_normResults(merged.cnRaceResults,'abandono');
-  // Los slots de Entrenador guardan su propia copia de coachRaceResults.
-  if(Array.isArray(merged.coachRoster)){
-    merged.coachRoster=merged.coachRoster.map(sl=>{
-      if(!sl||typeof sl!=='object')return sl;
-      if(!Array.isArray(sl.coachRaceResults))return sl;
-      return {...sl,coachRaceResults:_normResults(sl.coachRaceResults,'abandono')};
-    });
-  }
-  // T25 (v89): sin la marca, un save de v88 podría reaplicar su bloque una vez
-  // más al repintar. Se asume aplicado si la temporada ya tiene resultados.
-  // Ojo: hay que mirar el save ORIGINAL, no `merged` — freshState() ya aporta el
-  // booleano en el spread, así que comprobarlo sobre merged no se cumple nunca.
-  if(typeof saved.trainingBlockApplied!=='boolean'){
-    merged.trainingBlockApplied=(merged.raceResults||[]).length>0;
-  }
   // T15 (v89): saves anteriores pueden traer el bonus horneado en runner.stats
   // (C2). No hay forma de saber cuánto era, así que no se intenta deshacer: se
   // garantiza que el campo existe y a cero para que a partir de aquí no vuelva
@@ -187,18 +137,6 @@ function migrateState(saved){
     velocidad:Number(_rm?.velocidad)||0,
     subida:Number(_rm?.subida)||0,
   };
-  // T24 (v88): seasonDiary mezclaba objetos {year,age,text,highlight} y cadenas
-  // sueltas; las cadenas se pintaban como «Año undefined · undefined años».
-  // Los dos pushes que las creaban ya escriben objetos; esto arregla lo guardado.
-  if(Array.isArray(merged.seasonDiary)){
-    merged.seasonDiary=merged.seasonDiary.map(e=>{
-      if(e&&typeof e==='object')return e;
-      if(typeof e!=='string')return null;
-      const m=e.match(/^Año\s+(\d+)\s*·\s*(.*)$/);   // «Año N · resto»
-      return {year:m?Number(m[1]):(merged.year||1), age:merged.runner?.age||25,
-              text:m?m[2]:e, highlight:'—'};
-    }).filter(Boolean);
-  }
   // T43 (v88): vacByQuarter[q] existía como número y como {amount}. vacDaysUsed()
   // trataba las dos formas pero vacTrainingHBonus() solo la numérica: con la otra
   // devolvía NaN y contaminaba las horas de entrenamiento. Se normaliza a número.
@@ -313,11 +251,6 @@ function loadFromSlot(slot){
     // sanea el resultado — que es lo que de verdad se carga en G.
     const safe=sanitizeState(data.state);
     if(!safe)return null;
-    // v62 Migration Guard: Purgar saves de Ultratrail/Backyard (fase testing)
-    if(safe.gameMode==='ultratrail'||safe.gameMode==='backyard'){
-      LS.del(SAVE_KEY+slot);
-      return null;
-    }
     const migrated=migrateState(safe);
     data.state=sanitizeState(migrated)||migrated;
     return data;
