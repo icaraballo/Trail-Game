@@ -100,7 +100,7 @@ function renderCalendarTab(){
   // uses global QUARTERS
   const tierColor=TIER_COLOR_RACE;
   const tierLabel=TIER_LABEL_RACE;
-  const canAccess=r=>r.zegamaSpecial?(G.ranking<=20||G.zegamaQual):((G.repInvitations||[]).find(i=>i.id===r.id)||(G.year===1?r.reqRanking===999:r.reqRanking>=G.ranking||r.reqRanking===999));
+  const canAccess=canAccessRace;   // DS08 (v95)
 
   // Calcula qué carreras dan puntos de circuito y cuántos
   function circuitBadge(raceId){
@@ -193,6 +193,7 @@ function renderFinancesTab(){
   const sponsorM=monthlySponsorIncome();
   const brandM=monthlyBrandIncome();
   const clubM=G.club?.cost||0;
+  const staffM=monthlyStaffCost();   // H19 (v95): va dentro de monthlyNet()
   const netM=monthlyNet();
   const workA=workM*12;
   const sponsorA=sponsorAnnual();
@@ -201,8 +202,8 @@ function renderFinancesTab(){
   const clubA=clubM*12;
   const netA=netM*12;
   const raceCosts=G.selectedRaces.reduce((a,r)=>a+r.cost,0);
-  const staffCosts=(G.spending.fisio?200:0)+(G.spending.entrenador?250:0)+(G.spending.suplementos?100:0);
-  const netAfterRaces=netA-raceCosts-staffCosts;
+  const staffA=staffM*12;
+  const netAfterRaces=netA-raceCosts;
   const savingsEnd=Math.max(0,G.money+netAfterRaces);
   const savingsPct=Math.min(100,Math.round(savingsEnd/(G.money+Math.abs(netAfterRaces)+1)*100));
 
@@ -253,6 +254,7 @@ function renderFinancesTab(){
       ${brandM>0?`<div class="fin-row"><span>Tu marca 👟</span><span class="plus">+€${brandM}</span></div>`:''}
       <div class="fin-row"><span>Gastos fijos de vida</span><span class="minus">-€${FIXED_COSTS.total}</span></div>
       ${clubM>0?`<div class="fin-row"><span>Club (${G.club?.name})</span><span class="minus">-€${clubM}</span></div>`:''}
+      ${staffM>0?`<div class="fin-row"><span>Staff (fisio/entrenador/suplem.)</span><span class="minus">-€${staffM}</span></div>`:''}
       <div class="fin-row tot"><span>Neto mensual</span><span class="${netM>=0?'plus':'minus'}">${netM>=0?'+':''}€${netM}</span></div>
     </div>
 
@@ -264,7 +266,7 @@ function renderFinancesTab(){
       <div class="fin-row"><span>Gastos fijos (12 meses)</span><span class="minus">-€${fixedA}</span></div>
       ${clubA>0?`<div class="fin-row"><span>Club</span><span class="minus">-€${clubA}</span></div>`:''}
       ${raceCosts>0?`<div class="fin-row"><span>Inscripciones carreras</span><span class="minus">-€${raceCosts}</span></div>`:''}
-      ${staffCosts>0?`<div class="fin-row"><span>Staff (fisio/entrenador/suplem.)</span><span class="minus">-€${staffCosts}</span></div>`:''}
+      ${staffA>0?`<div class="fin-row"><span>Staff (12 meses)</span><span class="minus">-€${staffA}</span></div>`:''}
       <div class="fin-row tot"><span>Resultado del año</span><span class="${netAfterRaces>=0?'plus':'minus'}">${netAfterRaces>=0?'+':''}€${netAfterRaces}</span></div>
     </div>
 
@@ -564,7 +566,7 @@ function renderExpresSeasonStart(){
 function renderExpresCalendar(){
   const el=$main();
   const selIds=G.selectedRaces.map(r=>r.id);
-  const canAccess=r=>r.zegamaSpecial?(G.ranking<=20||G.zegamaQual):(r.reqRanking>=G.ranking||r.reqRanking===999);
+  const canAccess=canAccessRace;   // DS08 (v95)
   const allRaces=[...RACES_DB,...getSpecRaces()];
   const tierColor=TIER_COLOR_RACE;
   const MAX=5;
@@ -886,8 +888,8 @@ function renderWorkSetup(){
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
-      <button class="main" onclick="G.screen='seasonStart';render()">← Volver</button>
-      <button class="main" onclick="G.screen='calendar';render()">Confirmar →</button>
+      <button class="main" onclick="G.screen='seasonStart';autoSave();render()">← Volver</button>
+      <button class="main" onclick="G.screen='calendar';autoSave();render()">Confirmar →</button>
     </div>
     ${[2,3,4].includes(q)?`<div style="margin-top:12px">
       <div style="font-size:12px;font-weight:600;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Otros trimestres</div>
@@ -971,13 +973,13 @@ function renderSeasonStart(){
     <button class="main" onclick="G.currentQuarter=1;G.screen='workSetup';render()">Planificar jornada laboral →</button>
     <button class="main" onclick="G.screen='clubSetup';render()" style="margin-top:6px">${G.club&&G.club.id!=='none'?'🏃 Club: '+G.club.name+' →':'🏃 Unirse a un club →'}</button>
     <button class="main" onclick="G.screen='circuits';render()" style="margin-top:6px">Unirse a circuitos / ligas →</button>
-    <button class="main" onclick="G.screen='calendar';render()" style="margin-top:6px">Planificar calendario →</button>`;
+    <button class="main" onclick="G.screen='calendar';autoSave();render()" style="margin-top:6px">Planificar calendario →</button>`;
 }
 
 // ── CALENDAR ───────────────────────────
 function renderCalendar(){
   const el=$main();
-  const canAccess=r=>r.zegamaSpecial?(G.ranking<=20||G.zegamaQual):(r.reqRanking>=G.ranking||r.reqRanking===999);
+  const canAccess=canAccessRace;   // DS08 (v95)
   const selIds=G.selectedRaces.map(r=>r.id);
   const spent=G.selectedRaces.reduce((a,r)=>a+r.cost,0);
   const budget=G.money;
@@ -1073,8 +1075,8 @@ function renderCalendar(){
       ${G.selectedRaces.length===0?'Sin carreras — puedes continuar igualmente.':G.selectedRaces.length+' carrera'+(G.selectedRaces.length>1?'s':'')+' seleccionada'+(G.selectedRaces.length>1?'s':'')+'.'}
     </div>
     <div class="grid-2">
-      <button class="main" onclick="G.screen='seasonStart';render()">← Volver</button>
-      <button class="main" onclick="G.screen='sponsors';render()">Patrocinios →</button>
+      <button class="main" onclick="G.screen='seasonStart';autoSave();render()">← Volver</button>
+      <button class="main" onclick="G.screen='sponsors';autoSave();render()">Patrocinios →</button>
     </div>`;
 }
 
@@ -1197,7 +1199,7 @@ function renderSponsors(){
       <strong>Tienes selecciones sin confirmar.</strong> Haz clic en un sponsor seleccionado para quitarlo, o confirma para firmar los contratos.
     </div>
     <button class="main" onclick="confirmSponsors()" style="background:#2d7a2d;border-color:#2d7a2d;color:#fff;margin-bottom:8px">✓ Confirmar patrocinios seleccionados</button>`:''}
-    <button class="main" onclick="G._pendingSponsors={};G.screen='training';render()">Bloque de entrenamiento →</button>`;
+    <button class="main" onclick="G._pendingSponsors={};G.screen='training';autoSave();render()">Bloque de entrenamiento →</button>`;
 }
 
 window.payPenalty=id=>{
@@ -1259,7 +1261,7 @@ function renderTraining(){
   el.innerHTML=`
     <h2>Bloque de entrenamiento</h2>
     <p class="sub">Efectividad: <strong>${seEffPct}%</strong> · ${wo?.trainingH||5}h/sem · ${se.label}</p>
-    ${G.zeroedOutThisRace&&G.postRaceConsequence?`<div class="danger">⚠ Secuelas de la última carrera — <strong>${G.postRaceConsequence.label}</strong>. ${G.postRaceConsequence.id==='descanso_forzado'?'Esta semana no puedes entrenar.':G.postRaceConsequence.id==='sobrecarga'?'Entrenamiento de piernas al 80% este año.':'Recuperación en curso.'}</div>`:''}
+    ${G.zeroedOutThisRace&&G.postRaceConsequence?`<div class="danger">⚠ Secuelas de la última carrera — <strong>${G.postRaceConsequence.label}</strong>. ${G.postRaceConsequence.id==='descanso_forzado'?`El bloque de esta temporada rinde un ${Math.round((1-restWeeksEffMult())*100)} % menos.`:G.postRaceConsequence.id==='sobrecarga'?'Subida, bajada y velocidad entrenan al 80 % esta temporada.':'Recuperación en curso.'}</div>`:''}
     ${hint?`<div class="${hint.type}">${hint.msg}</div>`:''}
     ${se.trainingMod!==0?`<div class="hint">${se.note}</div>`:''}
     <div style="margin-bottom:12px">
@@ -1295,7 +1297,7 @@ function renderTraining(){
         const effs=b.taperBlock?
           `<span style="font-size:12px;color:#4a8a2a">+2 Mental · Carga −18%</span>`:
           Object.entries(b.effects).filter(([,v])=>v!==0).map(([k,v])=>{
-            const r=Math.round(v*eff);const col=r>0?'#4a8a2a':'#c0392b';
+            const r=Math.round(v*eff*legsTrainingMult(k));const col=r>0?'#4a8a2a':'#c0392b';
             return `<span style="font-size:12px;color:${col}">${k.charAt(0).toUpperCase()+k.slice(1)} ${r>0?'+':''}${r}</span>`;
           }).join(' <span style="color:#ddd">·</span> ');
         const bkH=b.hours||8;const bkRepH=Math.max(0,(wo?.trainingH||5)+vacTrainingHBonus(G.currentQuarter||1)-bkH);
@@ -1359,10 +1361,14 @@ window.setAthleteHours=h=>{
   const first=G.lifeAthlete?esc(G.lifeAthlete.name.split(' ')[0]):'el atleta';
   if(h>0)showToast(`–${h}h para ti · +${h}h para ${first}`,'#c07a10');
   else showToast('Entrenas al 100% — sin horas para el atleta','#4a90d9');
-  // Re-render solo el bloque de horas para no perder scroll
-  const block=document.querySelector('[data-athlete-hours]');
-  if(block)block.outerHTML=renderAthleteHoursBlock();
-  else render();
+  // DS06 (v95): buscaba [data-athlete-hours] para repintar solo este bloque, pero
+  // el bloque nunca llevó ese atributo y siempre caía en render(). Y menos mal: la
+  // «Efectividad» de la cabecera y lo que sube cada bloque dependen de estas
+  // horas, y un repintado parcial los habría dejado desfasados. Se repinta entero
+  // conservando el scroll, que era lo que se buscaba.
+  const y=window.scrollY||0;
+  render();
+  if(window.scrollTo)window.scrollTo(0,y);
 };
 // ── PRE-RACE PREP (Tanda 7) ────────────
 function renderPreRacePrep(){
@@ -1469,7 +1475,7 @@ function renderMidSeasonCalendar(){
   const doneNames=G.raceResults.map(r=>r.name);
   const selIds=G.selectedRaces.map(r=>r.id);
   const spent=G.selectedRaces.reduce((a,r)=>a+r.cost,0);
-  const canAccess=r=>r.zegamaSpecial?(G.ranking<=20||G.zegamaQual):(r.reqRanking>=G.ranking||r.reqRanking===999);
+  const canAccess=canAccessRace;   // DS08 (v95)
   const tierColor=TIER_COLOR_RACE;
   const tierLabel=TIER_LABEL_RACE;
   const qLabel={1:'Primer trimestre',2:'Segundo trimestre',3:'Tercer trimestre',4:'Cuarto trimestre'};
@@ -1600,7 +1606,7 @@ function renderCircuits(){
           <div style="height:100%;width:${Math.min(100,Math.round(pts/c.pointsForPrize*100))}%;background:#c07a10;border-radius:2px"></div>
         </div>`:''}
       </div>`;}).join('')}
-    <button class="main" style="margin-top:8px" onclick="G.screen='seasonStart';render()">← Volver</button>`;
+    <button class="main" style="margin-top:8px" onclick="G.screen='seasonStart';autoSave();render()">← Volver</button>`;
 }
 window.toggleCircuit=id=>{
   const idx=G.joinedCircuits.indexOf(id);
@@ -1836,6 +1842,10 @@ window.doStart=()=>{
   } else {
     G.screen='workSetup';
   }
+  // H1 (v95): la partida no se guardaba hasta terminar la primera carrera. Recargar
+  // durante la preparación (jornada, calendario, patrocinios, entrenamiento) la
+  // devolvía al principio. Ahora cada paso adelante autoguarda.
+  autoSave();
   render();
 };
 window.toggleRace=id=>{
@@ -1979,6 +1989,7 @@ window.doStartRaces=()=>{
   } else {
     G.screen='preRacePrep';
   }
+  autoSave();   // H1 (v95)
   render();
 };
 
@@ -2028,14 +2039,14 @@ function applyTraining(force){
     const crossMult=G.injuryType?1.3:1.0;
     Object.entries(G.trainingBlock.effects).forEach(([k,v])=>{
       const capM=statCapMult(G.runner.stats[k]);
-      G.runner.stats[k]=Math.max(10,Math.min(100,Math.round(G.runner.stats[k]+v*eff*crossMult*capM)));
+      G.runner.stats[k]=Math.max(10,Math.min(100,Math.round(G.runner.stats[k]+v*eff*crossMult*capM*legsTrainingMult(k))));
     });
     G.bodyLoad=bodyLoadAfterTraining(G.trainingBlock.id);
     if(G.injuryType&&G.injuryRacesLeft>0){G.injuryRacesLeft=Math.max(0,G.injuryRacesLeft-1);}
   } else {
     Object.entries(G.trainingBlock.effects).forEach(([k,v])=>{
       const capM=statCapMult(G.runner.stats[k]);
-      G.runner.stats[k]=Math.max(10,Math.min(100,Math.round(G.runner.stats[k]+v*eff*capM)));
+      G.runner.stats[k]=Math.max(10,Math.min(100,Math.round(G.runner.stats[k]+v*eff*capM*legsTrainingMult(k))));
     });
     G.bodyLoad=bodyLoadAfterTraining(G.trainingBlock.id);
   }
@@ -2043,16 +2054,21 @@ function applyTraining(force){
   generateMonthlyEvents();
 }
 
-window.toggleSpend=(id,cost,yearNet)=>{
-  const projMoney=G.money+yearNet;
-  if(G.spending[id]){G.spending[id]=false;G.money+=cost;}
-  else{
-    const alreadySpent=Object.entries(G.spending).filter(([k,v])=>v&&k!==id).reduce((a,[k])=>a+({'fisio':200,'entrenador':250,'suplementos':100}[k]||0),0);
-    if(cost>projMoney-alreadySpent){alert('No tienes suficiente dinero para esto.');return;}
-    G.spending[id]=true;G.money-=cost;
-    if(id==='fisio')G._clubFisioUsed=true;
-    if(id==='entrenador')G._clubEntrenadorUsed=true;
-  }render();
+// H19 (v95): cobraba el coste en G.money al activarlo y el balance lo volvía a
+// restar en ese mismo cierre, así que el primer año se pagaba dos veces (y
+// desactivarlo devolvía dinero en cualquier momento). Ahora solo lo cobra
+// seasonYearNet(), por adelantado, y no deja contratar si eso te lleva a números
+// rojos: endeudarse comprando sigue sin estar permitido (T29). Con la jornada
+// forzosa tampoco: la crisis acaba de cancelar el staff.
+window.toggleSpend=id=>{
+  if(G.spending[id]){G.spending[id]=false;render();return;}
+  if(G.forcedFullTime){showToast('Con la jornada forzosa por deuda no puedes contratar staff','#c0392b');return;}
+  const cost=(STAFF_COSTS[id]||0)*12;
+  if(cost>(G.money||0)+seasonYearNet()){alert('No te llega: contratarlo te dejaría en números rojos al cerrar la temporada.');return;}
+  G.spending[id]=true;
+  if(id==='fisio')G._clubFisioUsed=true;
+  if(id==='entrenador')G._clubEntrenadorUsed=true;
+  render();
 };
 
 // T04 (v82): aquí había un G.currentRaceIdx++ propio ANTES de llamar a
@@ -2097,6 +2113,9 @@ window.handleEv=(evId,choiceIdx)=>{
         let i=G.currentRaceIdx+1;
         while(i<G.selectedRaces.length&&G.selectedRaces[i].month<=nueva.month)i++;
         G.selectedRaces.splice(i,0,nueva);
+      }else{
+        // DS11 (v95): sin carreras libres, aceptar no hacía nada y no lo decía.
+        showToast('No quedan carreras libres en el calendario — la invitación se queda en nada','#4a90d9');
       }
       break;
     }

@@ -280,6 +280,7 @@ function freshState(){
     _xpTimerVal:7,               // segundos que quedan en el temporizador
     _xpTimerDefault:null,        // opción que se elige sola si expira
     _debtCrisisPending:false,    // crisis de deuda pendiente de mostrar
+    _screenAfterCrisis:null,     // DS20 (v95): adónde lleva «Seguir adelante» desde la crisis
     // coach
     _pendingTrainerStyle:null,   // estilo elegido antes de confirmar
     _prevCoachRep:null,          // reputación previa, para animar el delta
@@ -470,6 +471,31 @@ function checkFollowerThresholds(){
   }
 }
 function monthlyClubCost(){return G.club?.cost||0;}
+// H15-bis (v95): la fase Entrenador existe por dos caminos. Entrenador suelto pone
+// G.gameMode='coach'; Carrera de Vida deja gameMode con la dificultad de Clásico y
+// marca lifecyclePhase='coach'. Las pestañas preguntaban solo por lo primero, así
+// que en Carrera de Vida enseñaban el calendario y el corredor de Clásico (CR-29).
+function isCoachPhase(){return G.gameMode==='coach'||(!!G.carreraVida&&G.lifecyclePhase==='coach');}
+// Secuelas de zona roja (v95, decisión de Bugs-Activos): escribían postRaceRestWeeks
+// y seasonLegsPenalty y nadie los leía. Clásico no tiene semanas —el bloque se aplica
+// una vez por temporada—, así que se traducen a eficacia y duran la temporada.
+// Descanso: −5 % por semana acumulada, con suelo en −30 %. Sobrecarga: ×0,8 en piernas.
+function restWeeksEffMult(){return Math.max(0.7,1-0.05*(G.postRaceRestWeeks||0));}
+function legsTrainingMult(k){
+  if(!(G.seasonLegsPenalty>0)||!['subida','bajada','velocidad'].includes(k))return 1;
+  return Math.max(0.5,1-G.seasonLegsPenalty);
+}
+// DS08 (v95): la regla de acceso a una carrera estaba escrita en cinco sitios y no
+// decía lo mismo: solo la pestaña Calendario contaba las invitaciones por
+// reputación y añadía «año 1: solo carreras abiertas». Esa regla sobraba —la
+// pantalla de selección ya dejaba apuntarse— y las invitaciones salían bloqueadas
+// en las demás vistas. addRepInvitation ya evita duplicados.
+function canAccessRace(r){
+  if(!r)return false;
+  if(r.zegamaSpecial)return G.ranking<=20||!!G.zegamaQual;
+  if((G.repInvitations||[]).some(i=>i.id===r.id))return true;
+  return r.reqRanking>=G.ranking||r.reqRanking===999;
+}
 function monthlyBrandIncome(){
   if(!G.ownBrand) return 0;
   return G.ownBrand.hasEmployee ? 600 : 300; // con empleado: 1300 bruto - 700 coste = 600 neto
@@ -501,9 +527,25 @@ function clubRepLabel(){
   return {text:'Recién llegado',color:'#aaa'};
 }
 
+function monthlyStaffCost(){
+  const sp=G.spending||{};
+  return Object.keys(STAFF_COSTS).reduce((a,k)=>a+(sp[k]?STAFF_COSTS[k]:0),0);
+}
 function monthlyNet(){
   if(G.gameMode==='expres')return monthlySponsorIncome();
-  return monthlyWorkIncome()+monthlySponsorIncome()+monthlyBrandIncome()-FIXED_COSTS.total-monthlyClubCost();
+  return monthlyWorkIncome()+monthlySponsorIncome()+monthlyBrandIncome()-FIXED_COSTS.total-monthlyClubCost()-monthlyStaffCost();
+}
+// H19 (v95): el resultado del año que doNextYear() liquida. Vivía escrito dentro
+// de renderSeasonBalance(), así que los atajos del modo dev no podían calcularlo
+// y cerraban temporada con doNextYear(0): la economía no se movía nunca y la
+// sesión 3 del playtest no podía llegar a la deuda. Y le faltaba la marca propia,
+// que Finanzas pintaba como ingreso y el cierre no cobraba.
+function seasonYearNet(){
+  const raceIncome=(G.raceResults||[]).reduce((a,r)=>a+(r.prize||0),0);
+  if(G.gameMode==='expres')return sponsorAnnual()+raceIncome;
+  const raceCosts=(G.selectedRaces||[]).reduce((a,r)=>a+(r.cost||0),0);
+  return monthlyWorkIncome()*12+sponsorAnnual()+monthlyBrandIncome()*12+raceIncome
+    -FIXED_COSTS.total*12-monthlyClubCost()*12-monthlyStaffCost()*12-raceCosts;
 }
 // T27 (v88): el anual ignoraba followersSponsorMult(), que el mensual sí aplica.
 // Con 100.000 seguidores el desfase era del 65 % a favor del mensual.
@@ -885,8 +927,11 @@ function bodyLoadAfterTraining(blockId){
   return Math.max(0,Math.min(100,(G.bodyLoad||0)+aged-(hasFisio()?5:0)));
 }
 
+// DS01 (v95): lo que suma una carrera a la carga corporal, sin mirar de quién es.
+// Entrenador lo usa sobre la carga del atleta; bodyLoadAfterRace, sobre la del corredor.
+function raceLoadGain(raceKm){return raceKm>=50?22:raceKm>=35?16:raceKm>=28?12:8;}
 function bodyLoadAfterRace(raceKm){
-  const add=raceKm>=50?22:raceKm>=35?16:raceKm>=28?12:8;
+  const add=raceLoadGain(raceKm);
   const fisioRedux=hasFisio()?6:0;
   const agingExtra=Math.round(agingDeg()*10); // hasta +5 extra pts a los 54
   return Math.max(0,Math.min(100,(G.bodyLoad||0)+add+agingExtra-fisioRedux));

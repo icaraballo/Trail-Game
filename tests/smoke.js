@@ -14,7 +14,7 @@
 // El banco de pruebas (concatenar los 9 .js en un ámbito con stubs de DOM) vive
 // en _bundle.js, compartido con content.js.
 const {build,scorer,domStub}=require('./_bundle');
-const {T,ctx}=build(['freshState','modeCfg','currentWorkPct','setWorkPct','getEffStat',
+const {T,ctx,src}=build(['freshState','modeCfg','currentWorkPct','setWorkPct','getEffStat',
   'applyTraining','checkSponsorObjective','isDNF','finishedResults','dnfLabel','migrateState',
   'TRAINING_BLOCKS','monthlyWorkIncome','curWorkOpt','endRaceCleanup',
   'resetRaceFlags','resetRaceDayState','drain','bumpStat','raceHistoryFor',
@@ -22,7 +22,9 @@ const {T,ctx}=build(['freshState','modeCfg','currentWorkPct','setWorkPct','getEf
   'deleteSlot','loadFromSlot','saveToSlot','SAVE_VERSION','SAVE_KEY','LS',
   'cnGetCategory','cnCurrentMonth','CN_CATEGORIES','shuffle','CIRCUITS_DB',
   'raceGainTotal','raceDesnivel','fmtGain','clubRaceKm','RACES_DB','CLUB_RACES','SPEC_RACES',
-  'screenRoutes','CLUB_STAFF_TYPES','renderExpresCalendar','renderCoachIntro','TRAINING_BLOCKS']);
+  'screenRoutes','CLUB_STAFF_TYPES','renderExpresCalendar','renderCoachIntro','TRAINING_BLOCKS',
+  'seasonYearNet','STAFF_COSTS','generateCoachSeasonObjective','coachObjectiveMet','raceLoadGain','canAccessRace',
+  'seasonMonthLabel','isCoachPhase','injuryThisRace','restWeeksEffMult','legsTrainingMult','raceMental','fairPlayMental']);
 const t=scorer();
 const setG=o=>{const g=T.freshState();Object.assign(g,o);T.setG(g);return g;};
 
@@ -147,8 +149,10 @@ t('runnerCritState cuenta los stats bajo 10', T.runnerCritState().critCount===2)
 t('y devuelve el mínimo', T.runnerCritState().minStat===5);
 
 console.log('\n── T68 · por qué NO se cambió a structuredClone ──');
-// G.coachSeasonObjective guarda un checkAll (coach.js). JSON.stringify lo tira
-// en silencio; structuredClone lanza y dejaría el modo Entrenador sin guardar.
+// Hasta v94 G.coachSeasonObjective guardaba un checkAll (coach.js): JSON.stringify
+// lo tiraba en silencio y structuredClone habría lanzado. Desde DS05 (v95) el
+// objetivo es solo datos, pero la guarda sigue: cualquier función que vuelva a
+// colarse en G rompería el guardado con structuredClone.
 setG({coachSeasonObjective:{id:'win_elite',met:false,checkAll:()=>true}});
 t('serializableState sigue tragando una función dentro de G',
   !('checkAll' in T.serializableState().coachSeasonObjective));
@@ -266,5 +270,112 @@ t('y sigue mostrando victorias, temporadas y premios',
 t('el porcentaje de crecimiento del entrenador sale de CLUB_STAFF_TYPES, no a mano',
   Math.round((T.CLUB_STAFF_TYPES.entrenador.growthBonus-1)*100)===30,
   'growthBonus='+T.CLUB_STAFF_TYPES.entrenador.growthBonus);
+
+console.log('\n── H19 (v95) · staff mensual y una sola cuenta del año ──');
+{
+  const _render=ctx.render,_toast=ctx.showToast;
+  ctx.render=()=>{};ctx.showToast=()=>{};
+  setG({gameMode:'medio',money:5000,currentQuarter:1,workByQuarter:{1:100,2:100,3:100,4:100},workPct:100});
+  const base=T.seasonYearNet();
+  ctx.toggleSpend('fisio');
+  t('contratar fisio no toca el dinero en el acto', T.getG().money===5000, T.getG().money);
+  t('el balance lo cobra una vez, 12 meses', T.seasonYearNet()===base-T.STAFF_COSTS.fisio*12);
+  T.getG().ownBrand={launched:1,hasEmployee:false};
+  t('la marca propia entra en el balance del año', T.seasonYearNet()===base-T.STAFF_COSTS.fisio*12+300*12);
+  setG({gameMode:'dificil',money:0,currentQuarter:1,workByQuarter:{1:40,2:40,3:40,4:40},workPct:40});
+  ctx.toggleSpend('fisio');
+  t('sin saldo no deja contratar staff', T.getG().spending.fisio===false);
+  setG({gameMode:'medio',money:99999,forcedFullTime:true});
+  ctx.toggleSpend('entrenador');
+  t('con la jornada forzosa por deuda tampoco', T.getG().spending.entrenador===false);
+  ctx.render=_render;ctx.showToast=_toast;
+}
+
+console.log('\n── DS05 (v95) · el objetivo de Entrenador sobrevive al guardado ──');
+setG({coachAthlete:{name:'Ane Uriarte',personality:'obediente'},coachSeason:1,coachAthleteHistory:[],coachSelectedRaces:[{},{}]});
+T.generateCoachSeasonObjective();
+const objG=T.getG().coachSeasonObjective;
+t('el objetivo es solo datos: no lleva funciones', !!objG&&Object.values(objG).every(v=>typeof v!=='function'));
+const objJ=JSON.parse(JSON.stringify(T.serializableState().coachSeasonObjective));
+t('tras guardar conserva el id y se puede evaluar', objJ.id===objG.id&&typeof T.coachObjectiveMet(objJ,[])==='boolean');
+t('«primer podio» se cumple con un 3.º', T.coachObjectiveMet({id:'first_podio'},[{pos:3,dnf:false}])===true);
+t('«superar tu mejor puesto» usa el prevBest guardado',
+  T.coachObjectiveMet({id:'beat_pb',prevBest:8},[{pos:6,dnf:false}])===true&&T.coachObjectiveMet({id:'beat_pb',prevBest:8},[{pos:9,dnf:false}])===false);
+
+console.log('\n── DS01 (v95) · la carga del atleta no sale del corredor ──');
+t('coach.js ya no calcula la carga del atleta con bodyLoadAfterRace', !/G\.coachBodyLoad=bodyLoadAfterRace\(/.test(src['coach.js']));
+t('una carrera suma lo mismo que antes', T.raceLoadGain(20)===8&&T.raceLoadGain(30)===12&&T.raceLoadGain(40)===16&&T.raceLoadGain(60)===22);
+
+console.log('\n── DS08 (v95) · una sola regla de acceso a carreras ──');
+setG({ranking:999,year:1,zegamaQual:false,repInvitations:[{id:'inv'}]});
+t('una invitación da acceso aunque el ranking no llegue', T.canAccessRace({id:'inv',reqRanking:10})===true);
+t('las carreras abiertas siguen abiertas', T.canAccessRace({id:'a',reqRanking:999})===true);
+t('sin ranking ni invitación, bloqueada', T.canAccessRace({id:'b',reqRanking:50})===false);
+t('ningún calendario reescribe la regla a mano',
+  !['render-clasico.js','devmode.js'].some(f=>/const canAccess=r=>/.test(src[f])));
+
+console.log('\n── T74 (v95) · la carrera siguiente no hereda el día de la anterior ──');
+{
+  const _r=ctx.render,_M=ctx.Math;
+  const M=Object.create(Math);M.random=()=>0.99;   // sin evento entre carreras
+  ctx.render=()=>{};ctx.Math=M;
+  setG({gameMode:'medio',selectedRaces:[{id:'a',name:'A',month:3},{id:'b',name:'B',month:5}],currentRaceIdx:0,
+    dayConditionGenerated:true,dayCondition:{id:'calor'},gelsCarried:3,gelsUsed:2,warmedUp:true,startStrategy:'agresivo'});
+  ctx.afterRace();
+  const g=T.getG();
+  t('sin evento entre carreras va directo a la preparación', g.screen==='preRacePrep', g.screen);
+  t('y llega sin la condición del día, los geles, el calentamiento ni la estrategia de la anterior',
+    !g.dayConditionGenerated&&g.dayCondition===null&&g.gelsCarried===0&&g.gelsUsed===0&&!g.warmedUp&&g.startStrategy===null);
+  ctx.render=_r;ctx.Math=_M;
+}
+
+console.log('\n── H15-bis (v95) · el contador de la barra avanza en cada modo ──');
+setG({gameMode:'coach',year:1,coachSeason:4,coachSelectedRaces:[{month:6}],coachRaceIdx:0});
+t('Entrenador suelto: su temporada y el mes de su carrera', T.seasonMonthLabel()==='A4 · Jun', T.seasonMonthLabel());
+setG({gameMode:'medio',carreraVida:true,lifecyclePhase:'coach',year:9,coachSeason:2,coachSelectedRaces:[],coachRaceIdx:0});
+t('Carrera de Vida en fase Entrenador: también', T.seasonMonthLabel()==='A2 · —', T.seasonMonthLabel());
+t('y enruta las pestañas como Entrenador', T.isCoachPhase()===true);
+setG({gameMode:'medio',year:3,selectedRaces:[{month:4}],currentRaceIdx:0});
+t('Clásico sigue igual', T.seasonMonthLabel()==='A3 · Abr'&&T.isCoachPhase()===false, T.seasonMonthLabel());
+setG({gameMode:'canicross',canicrossMode:true,cnSeason:5,cnWeek:0});
+t('Canicross: su temporada y su mes', T.seasonMonthLabel()==='A5 · Oct', T.seasonMonthLabel());
+
+console.log('\n── H10 (v95) · abandonar no esconde una lesión ya sufrida ──');
+setG({selectedRaces:[{id:'z',name:'Zegama',km:42}],currentRaceIdx:0,year:2,injuryType:'tendinitis',
+  injuryHistory:[{type:'tendinitis',label:'Tendinitis',race:'Zegama',year:2,km:20}]});
+t('detecta la lesión sufrida en esta carrera', T.injuryThisRace()?.label==='Tendinitis');
+T.getG().injuryHistory[0].year=1;
+t('y no la confunde con una de otra temporada', T.injuryThisRace()===null);
+
+console.log('\n── Secuelas de zona roja (v95) · lo que se anuncia se aplica ──');
+setG({postRaceRestWeeks:1});
+t('una semana de descanso resta un 5 % de eficacia', Math.abs(T.restWeeksEffMult()-0.95)<1e-9);
+T.getG().postRaceRestWeeks=3;
+t('la hospitalización, un 15 %', Math.abs(T.restWeeksEffMult()-0.85)<1e-9);
+T.getG().postRaceRestWeeks=20;
+t('con suelo en −30 %', T.restWeeksEffMult()===0.7);
+setG({seasonLegsPenalty:0.2});
+t('la sobrecarga deja subida, bajada y velocidad al 80 %', ['subida','bajada','velocidad'].every(k=>Math.abs(T.legsTrainingMult(k)-0.8)<1e-9));
+t('y no toca resistencia, nutrición ni mental', ['resistencia','nutricion','mental'].every(k=>T.legsTrainingMult(k)===1));
+t('las dos se limpian al cerrar la temporada', /G\.postRaceRestWeeks=0;G\.seasonLegsPenalty=0;/.test(src['render-temporada.js']));
+t('H17: el aviso «Modo Club disponible» ya no se pinta', !/<strong>Modo Club disponible<\/strong>/.test(src['coach.js']));
+
+console.log('\n── H14 (v95) · el mental de los eventos solo cuenta esa carrera ──');
+{
+  const f=T.freshState();
+  setG({runner:{...f.runner,stats:{...f.runner.stats,mental:60}},raceModifiers:{mental:0,velocidad:0,subida:0}});
+  T.raceMental(10);
+  t('un evento sube el mental efectivo de la carrera', T.getEffStat('mental')===70, T.getEffStat('mental'));
+  t('pero no el mental del corredor', T.getG().runner.stats.mental===60);
+  T.fairPlayMental(4);
+  t('ayudar a otro deja +1 permanente y el resto es de la carrera',
+    T.getG().runner.stats.mental===61&&T.getEffStat('mental')===74, T.getG().runner.stats.mental+' / '+T.getEffStat('mental'));
+  T.endRaceCleanup();
+  t('al terminar solo queda el +1 de deportividad', T.getEffStat('mental')===61, T.getEffStat('mental'));
+  // El único bumpStat de mental que queda en race.js es el +1 de fairPlayMental.
+  t('ningún evento sube ya el mental con bumpStat, salvo el +1 de deportividad',
+    (src['race.js'].match(/bumpStat\((r|G\.runner),'mental'/g)||[]).length===1
+    &&/function fairPlayMental\(n\)\{bumpStat\(G\.runner,'mental',1\)/.test(src['race.js']));
+}
 
 t.done('TODO OK');

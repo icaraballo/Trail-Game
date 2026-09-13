@@ -201,7 +201,7 @@ window.devSimulateClasicoSeasons=()=>{
   try{
     for(let i=0;i<n;i++){
       if(!G.selectedRaces||!G.selectedRaces.length){
-        const canAccess=r=>r.zegamaSpecial?(G.ranking<=20||G.zegamaQual):(r.reqRanking>=G.ranking||r.reqRanking===999);
+        const canAccess=canAccessRace;   // DS08 (v95)
         let spent=0;const picks=[];
         for(const r of RACES_DB){
           if(picks.length>=5)break;
@@ -223,7 +223,8 @@ window.devSimulateClasicoSeasons=()=>{
         G.currentRaceIdx++;
       }
       applyTraining(true); // T25 (v89): el simulador de temporadas sí quiere reaplicar
-      doNextYear(0);
+      doNextYear(seasonYearNet());   // H19 (v95): con 0 la economía no se movía nunca
+      if(G.careerEnded)break;
     }
     showToast('DEV: '+n+' temporada(s) de Clásico simuladas','#1a1a1a');
   }catch(e){
@@ -391,7 +392,7 @@ window.devForceSeasonEnd=(mode)=>{
   if(mode==='coach'){doCoachNextSeason();return;}
   if(mode==='club'){doClubNextSeason(0,0,0);return;}
   if(mode==='canicross'){cnDoSeasonTransition();return;}
-  doNextYear(0);
+  doNextYear(seasonYearNet());   // H19 (v95)
 };
 
 // ── Lesión rápida ──

@@ -1257,7 +1257,12 @@ window.doCoachRaceFinish=()=>{
     G.coachTrust=Math.max(0,Math.min(100,G.coachTrust+(st.trustMod||0)));
   }
   G.coachReputation=Math.min(100,(G.coachReputation||0)+repG);
-  G.coachBodyLoad=bodyLoadAfterRace(race.km);
+  // DS01 (v95): esto era bodyLoadAfterRace(), que parte de G.bodyLoad —la carga
+  // del CORREDOR de Clásico— y descuenta su fisio y su edad. Cada carrera
+  // sobrescribía la carga del atleta con la del corredor (casi siempre 0) más la
+  // de la carrera, y borraba lo acumulado entrenando. Ahora se acumula. Cambia el
+  // balance de Entrenador: más carga alta y más riesgo por sobrecarga.
+  G.coachBodyLoad=Math.max(0,Math.min(100,(G.coachBodyLoad||0)+raceLoadGain(race.km)));
   // Aplicar bodyLoadMod del estilo
   if(G.coachTrainerStyle){
     const st=TRAINER_STYLES[G.coachTrainerStyle];
@@ -1414,7 +1419,7 @@ function renderCoachSeasonEnd(){
   const obj=G.coachSeasonObjective;
   let objMet=false,objTrustDelta=0;
   if(obj){
-    try{objMet=obj.checkAll?obj.checkAll(results):results.some(r=>obj.check(r,results));}catch(e){objMet=false;}
+    try{objMet=coachObjectiveMet(obj,results);}catch(e){objMet=false;}   // DS05 (v95)
     G.coachSeasonObjective={...obj,met:objMet};
     objTrustDelta=objMet?(obj.reward||8):(obj.penalty||-5);
     G.coachTrust=Math.max(0,Math.min(100,G.coachTrust+objTrustDelta));
@@ -1431,8 +1436,10 @@ function renderCoachSeasonEnd(){
     return{...sp,met};
   });
 
-  const completedSeasons=((G.coachAthleteHistory||[]).filter(h=>h.completed).length)+(G.coachSeason-1);
-  const clubUnlock=completedSeasons>=2;
+  // H17 (v95): aquí se calculaba el aviso «🏕️ Modo Club disponible — N temporadas
+  // completadas» del cierre de temporada. Solo informaba: en Entrenador suelto no hay
+  // salto a Club (decidido el 2026-09-04 y confirmado el 2026-09-13) y el menú no lo
+  // desbloquea. Se quitó.
   const trust=G.coachTrust||0;
   const log=G.coachDecisionLog||[];
   const posDecisions=log.filter(d=>d.positive).length;
@@ -1604,7 +1611,6 @@ function renderCoachSeasonEnd(){
         <button class="main" style="margin-top:6px;opacity:0.5" onclick="doCoachNewAthlete()">Buscar nuevo atleta en su lugar</button>`}
     </div>
 
-    ${clubUnlock?`<div class="note" style="margin-bottom:12px">🏕️ <strong>Modo Club disponible</strong> — ${completedSeasons} temporadas completadas como entrenador.</div>`:''}
     <button class="main" style="margin-top:6px;opacity:0.5" onclick="saveCoachSlot();G.screen='coachHub';render()">← Volver al hub</button>
     <button class="main" style="margin-top:6px;opacity:0.4" onclick="backToMainMenu()">← Menú principal</button>`;
 }
@@ -1694,8 +1700,7 @@ window.doCoachNewAthlete=()=>{
 function renderCoachHub(){
   const el=$main();
   hideChrome();
-  saveCoachSlot();
-  saveCoachSlot(); // T111/T112 (v92): una vez antes de pintar, no una por slot
+  saveCoachSlot(); // T111/T112 (v92): una vez antes de pintar, no una por slot (DS12, v95: estaba dos veces)
   const roster=G.coachRoster||[];
   const rep=G.coachReputation||0;
   // E2: detectar desbloqueo de slot y celebrar
@@ -2213,6 +2218,38 @@ window.doCoachEventChoice=choiceIdx=>{
   G.screen='coachHome';render();
 };
 
+// DS05 (v95): el objetivo guardaba su comprobación como función (checkAll).
+// JSON.stringify la tira al guardar y cloneSlotValue cae a JSON al cambiar de
+// slot, así que tras recargar o cambiar de atleta el objetivo salía SIEMPRE
+// fallido: el jugador perdía confianza aunque lo hubiera cumplido. Ahora el
+// objetivo es solo datos (id + prevBest) y se evalúa aquí por id. Cada rama
+// reproduce el checkAll que se ejecutaba de verdad en partida —no los `check` de
+// COACH_SEASON_OBJECTIVES, que no coinciden—, comparado contra v94.
+function coachObjectiveMet(obj,all){
+  const res=all||[];
+  const fin=res.filter(x=>!x.dnf);
+  const lastBest=()=>(G.coachAthleteHistory||[]).slice(-1)[0]?.bestPos||999;
+  switch(obj&&obj.id){
+    case 'win_elite':     return res.some(r=>r.pos===1&&['elite','nacional'].includes(r.tier||''));
+    case 'no_abandon':
+    case 'no_dnf_season':
+    case 'perf_no_dnf':   return res.every(r=>!r.dnf);
+    case 'podio_x2':      return fin.filter(x=>x.pos<=3).length>=2;
+    case 'top10_all':     return res.every(x=>x.dnf||x.pos<=10);
+    case 'finish_all':    return fin.length>=(G.coachSelectedRaces||[]).length;
+    case 'improve_pb':
+    case 'perf_time':     {const prev=lastBest();return fin.some(x=>x.pos<prev);}
+    case 'no_injury':     return !G.coachInjury||(G.coachInjury?.severity||0)<2;
+    case 'two_races':     return fin.length>=2;
+    case 'first_podio':   return res.some(r=>r.pos<=3&&!r.dnf);
+    case 'beat_pb':       return Math.min(...fin.map(x=>x.pos))<(obj.prevBest??999);
+    case 'rebuild_trust': return G.coachTrust>=60;
+    case 'zegama_time':   return res.some(r=>['nacional','elite'].includes(r.tier||'')&&!r.dnf&&r.pos<=15);
+    case 'perf_top5':     return fin.some(x=>x.pos<=5&&['regional','nacional','elite'].includes(x.tier||''));
+  }
+  return false;
+}
+
 // ── Generate season objective ──
 function generateCoachSeasonObjective(){
   const a=G.coachAthlete;if(!a)return;
@@ -2229,32 +2266,27 @@ function generateCoachSeasonObjective(){
   if(season>=2){
     if(lastSeason&&lastSeason.wins===0&&lastSeason.podiums===0){
       historyPool.push({id:'first_podio',label:'Consigue tu primer podio con este atleta',
-        desc:`"El año pasado sin podios. Este año cambiamos eso."`,reward:+15,penalty:-8,
-        checkAll:(all)=>(all||[]).some(r=>r.pos<=3&&!r.dnf)});
+        desc:`"El año pasado sin podios. Este año cambiamos eso."`,reward:+15,penalty:-8});
     }
     if(lastSeason&&(lastSeason.dnfs||0)>=2){
       historyPool.push({id:'no_dnf_season',label:'Temporada completa sin abandonos',
         desc:`"${a.name.split(' ')[0]} abandonó demasiado el año pasado. Esta vez llegamos al final."`,
-        reward:+10,penalty:-6,
-        checkAll:(all)=>(all||[]).every(r=>!r.dnf)});
+        reward:+10,penalty:-6});
     }
     if(prevBest<999&&prevBest>5){
       historyPool.push({id:'beat_pb',label:`Superar la mejor posición del año pasado (#${prevBest})`,
         desc:`"El año pasado, el mejor fue #${prevBest}. Este año hay que hacerlo mejor."`,
-        reward:+12,penalty:-5,
-        checkAll:(all)=>{const b=Math.min(...(all||[]).filter(x=>!x.dnf).map(x=>x.pos)||[999]);return b<prevBest;}});
+        reward:+12,penalty:-5});
     }
     if(lastSeason&&lastSeason.trust<50){
       historyPool.push({id:'rebuild_trust',label:'Reconstruir la relación — terminar con confianza ≥60',
         desc:`"La temporada pasada acabó tensa. Hay que reconstruir desde dentro."`,
-        reward:+14,penalty:-4,
-        checkAll:()=>G.coachTrust>=60});
+        reward:+14,penalty:-4});
     }
     if(season>=3&&a.personality==='perfeccionista'){
       historyPool.push({id:'zegama_time',label:`Clasificar para Zegama o carrera nacional`,
         desc:`"${a.name.split(' ')[0]} ya está listo para dar el salto. Es el momento."`,
-        reward:+18,penalty:-10,
-        checkAll:(all)=>(all||[]).some(r=>['nacional','elite'].includes(r.tier||'')&&!r.dnf&&r.pos<=15)});
+        reward:+18,penalty:-10});
     }
   }
 
@@ -2267,20 +2299,7 @@ function generateCoachSeasonObjective(){
     id:chosen.id,label:chosen.label,desc:chosen.desc,
     reward:chosen.reward,penalty:chosen.penalty,met:false,
     fromHistory:useHistory,
-    checkAll:(all)=>{
-      if(chosen.checkAll)return chosen.checkAll(all);
-      // fallback para objetivos base sin checkAll propio
-      const id=chosen.id;
-      if(id==='win_elite')   return(all||[]).some(r=>r.pos===1&&['elite','nacional'].includes(r.tier||''));
-      if(id==='no_abandon')  return(all||[]).every(r=>!r.dnf);
-      if(id==='podio_x2')    return(all||[]).filter(x=>x.pos<=3&&!x.dnf).length>=2;
-      if(id==='top10_all')   return(all||[]).every(x=>x.dnf||x.pos<=10);
-      if(id==='finish_all')  return(all||[]).filter(x=>!x.dnf).length>=(G.coachSelectedRaces||[]).length;
-      if(id==='improve_pb')  {const prev=(G.coachAthleteHistory||[]).slice(-1)[0]?.bestPos||999;return(all||[]).some(x=>!x.dnf&&x.pos<prev);}
-      if(id==='no_injury')   return!G.coachInjury||(G.coachInjury?.severity||0)<2;
-      if(id==='two_races')   return(all||[]).filter(x=>!x.dnf).length>=2;
-      return false;
-    }
+    prevBest,   // DS05 (v95): beat_pb compara con el mejor puesto del año pasado tal como era al generarse
   };
 }
 

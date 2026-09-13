@@ -46,6 +46,10 @@ module.exports=[
     },
     rules:{
       'no-undef':'error',
+      // DS25 (v95): una cadena con comillas normales que contiene ${…} se pinta
+      // literal ante el jugador (DS04, la renegociación salarial de club.js).
+      // Ningún test de contenido la ve si no vive en una tabla de eventos.
+      'no-template-curly-in-string':'error',
       // `vars:'local'`: las declaraciones de nivel raíz son de facto las
       // exportaciones de cada fichero — el resto del juego las usa a través del
       // ámbito global compartido, así que marcarlas como no usadas es ruido.

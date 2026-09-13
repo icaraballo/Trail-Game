@@ -21,8 +21,8 @@ function renderSeasonBalance(){
   const annualClub=(G.club?.cost||0)*12;
   const raceIncome=G.raceResults.reduce((a,r)=>a+r.prize,0);
   const raceCosts=G.selectedRaces.reduce((a,r)=>a+r.cost,0);
-  const yearNet=annualWork+annualSponsor+raceIncome-annualFixed-annualClub-raceCosts-
-    (G.spending.fisio?200:0)-(G.spending.entrenador?250:0)-(G.spending.suplementos?100:0);
+  const annualBrand=monthlyBrandIncome()*12;
+  const yearNet=seasonYearNet();   // H19 (v95): la misma cuenta que usa el modo dev
   el.innerHTML=`
     <h2>Balance Temporada ${G.year}</h2>
     <p class="sub">${esc(G.runner.name)} · Año ${G.year} completado</p>
@@ -83,12 +83,13 @@ function renderSeasonBalance(){
         ${annualWork>0?`<tr><td>Trabajo (${currentWorkPct()}%)</td><td class="right plus">+€${annualWork}</td></tr>`:''}
         ${annualSponsor>0?`<tr><td>Patrocinios</td><td class="right plus">+€${annualSponsor}</td></tr>`:''}
         ${raceIncome>0?`<tr><td>Premios de carrera</td><td class="right plus">+€${raceIncome}</td></tr>`:''}
+        ${annualBrand>0?`<tr><td>Tu marca 👟</td><td class="right plus">+€${annualBrand}</td></tr>`:''}
         <tr><td>Gastos fijos de vida</td><td class="right minus">-€${annualFixed}</td></tr>
         ${annualClub>0?`<tr><td>Club (${G.club?.name})</td><td class="right minus">-€${annualClub}</td></tr>`:''}
         ${raceCosts>0?`<tr><td>Inscripciones y viajes</td><td class="right minus">-€${raceCosts}</td></tr>`:''}
-        ${G.spending.fisio?`<tr><td>Fisioterapeuta</td><td class="right minus">-€200</td></tr>`:''}
-        ${G.spending.entrenador?`<tr><td>Entrenador</td><td class="right minus">-€250</td></tr>`:''}
-        ${G.spending.suplementos?`<tr><td>Suplementos</td><td class="right minus">-€100</td></tr>`:''}
+        ${G.spending.fisio?`<tr><td>Fisioterapeuta (12 meses)</td><td class="right minus">-€${STAFF_COSTS.fisio*12}</td></tr>`:''}
+        ${G.spending.entrenador?`<tr><td>Entrenador (12 meses)</td><td class="right minus">-€${STAFF_COSTS.entrenador*12}</td></tr>`:''}
+        ${G.spending.suplementos?`<tr><td>Suplementos (12 meses)</td><td class="right minus">-€${STAFF_COSTS.suplementos*12}</td></tr>`:''}
         ${Object.values(G.workChangePenalties||{}).reduce((a,v)=>a+(v?.amount||v||0),0)>0?`<tr><td>Penalización cambios jornada</td><td class="right minus">-€${Object.values(G.workChangePenalties||{}).reduce((a,v)=>a+(v?.amount||v||0),0)}</td></tr>`:''}        <tr><td class="total">Resultado del año</td><td class="right total ${yearNet>=0?'plus':'minus'}">${yearNet>=0?'+':''}€${yearNet}</td></tr>
       </table>
     </div>
@@ -99,11 +100,11 @@ function renderSeasonBalance(){
     </div>
 
     <div class="section-label">¿En qué inviertes para la próxima temporada?</div>
-    <p style="font-size:13px;color:#aaa;margin-bottom:10px">Ahorros actuales: €${Math.max(0,G.money+yearNet)}</p>
-    ${[['fisio','Fisioterapeuta','Reduce riesgo de lesión. Recuperación más rápida.',200],['entrenador','Entrenador personal','Bloques de entrenamiento +20% efectivos.',250],['suplementos','Suplementos y nutrición','Avituallamientos más eficaces. +3 Nutrición.',100]].map(([id,l,d,cost])=>`
-      <div class="aid-row ${G.spending[id]?'sel-aid':''}" onclick="toggleSpend('${id}',${cost},${yearNet})">
+    <p style="font-size:13px;color:#aaa;margin-bottom:10px">Ahorros tras el cierre: €${Math.max(0,G.money+yearNet)} · el staff se paga ahora, por la temporada que empieza</p>
+    ${[['fisio','Fisioterapeuta','Reduce riesgo de lesión. Recuperación más rápida.'],['entrenador','Entrenador personal','Bloques de entrenamiento +20% efectivos.'],['suplementos','Suplementos y nutrición','Avituallamientos más eficaces. +3 Nutrición.']].map(([id,l,d])=>`
+      <div class="aid-row ${G.spending[id]?'sel-aid':''}" onclick="toggleSpend('${id}')">
         <div><div class="aid-name">${l}${G.spending[id]?` <span style="font-size:12px;color:#4a90d9;font-weight:400">· contratado</span>`:''}</div><div class="aid-effect">${d}</div></div>
-        <span class="aid-time" style="font-size:13px;font-weight:600">€${cost}</span>
+        <span class="aid-time" style="font-size:13px;font-weight:600">€${STAFF_COSTS[id]}/mes</span>
       </div>`).join('')}
 
     <button class="main" style="margin-top:14px" onclick="doNextYear(${yearNet})">${G.gameMode==='expres'&&G.year>=modeCfg().maxYears?'Ver resumen final →':`Temporada ${G.year+1} →`}</button>
@@ -356,6 +357,7 @@ window.doNextYear=yearNet=>{
   calcRepInvitations();
   G.circuitPoints={};G.circuitCompleted=[];G.vacByQuarter={1:0,2:0,3:0,4:0};
   G.seasonKm=0;
+  G.postRaceRestWeeks=0;G.seasonLegsPenalty=0;   // secuelas de zona roja: duran la temporada (v95)
   G.fatBurning=false;
   G.trainingMomentum=null;G.taperBonus=false;
   G.dayConditionGenerated=false;G.dayCondition=null;
@@ -399,10 +401,13 @@ window.doNextYear=yearNet=>{
     // Oferta del club (solo si no se ha cambiado ya la pantalla)
     if(G.screen!=='lifeAthleteOffer')checkClubOffer();
   }
+  // DS20 (v95): la crisis pisaba la pantalla que tocaba (workSetup o una oferta de
+  // Carrera de Vida) y su botón mandaba al calendario vacío del año nuevo.
+  const _nextScreen=G.screen;
   settleDebtSeason();   // T29b: pago mínimo + intereses, una sola vez por temporada
   // T29 (v86): la quiebra manda sobre cualquier pantalla de cierre de temporada.
   if(G.careerEnded)G.screen='careerEnd';
-  else if(G._debtCrisisPending){G._debtCrisisPending=false;G.screen='debtCrisis';}
+  else if(G._debtCrisisPending){G._debtCrisisPending=false;G._screenAfterCrisis=_nextScreen;G.screen='debtCrisis';}
   autoSave();render();
 };
 
@@ -1134,7 +1139,7 @@ function renderDebtCrisis(){
       bolsillo. Cuando esté saldada, volverás a elegir tu jornada.
     </p>
     ${cfg.hard!=null?`<div class="note" style="margin-bottom:14px">Si la deuda llega a <strong>€${cfg.hard}</strong> estando ya a jornada completa, la carrera deportiva se acaba.</div>`:''}
-    <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="G.screen='calendar';render()">Seguir adelante →</button>`;
+    <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="G.screen=G._screenAfterCrisis||'workSetup';G._screenAfterCrisis=null;render()">Seguir adelante →</button>`;
 }
 
 // T29 (v86) — escalón 3: la partida queda visitable pero no jugable.
@@ -1277,7 +1282,12 @@ window.afterRace=()=>{
   } else if(G.injuryType&&INJURY_TYPES[G.injuryType]?.canRace===true){
     applyInjuryToRaceStart();
   }
-  resetRaceFlags();
+  // T74 (v95): aquí solo se llamaba a resetRaceFlags(). Con evento entre carreras
+  // da igual, porque handleEv acaba en goNextRace(), que limpia las dos cosas; pero
+  // sin evento (35 % de las veces) se iba directo a la preparación y la carrera
+  // siguiente heredaba la condición del día —no se volvía a generar—, los geles,
+  // el calentamiento y la estrategia de salida de la anterior.
+  resetRaceFlags();resetRaceDayState();
   if(isExpres){G.pendingEvent=null;G.screen='expresPrep';render();return;}
   const hasFisioVal=G.spending.fisio||G.club?.hasFisio;
   if(Math.random()<0.65){

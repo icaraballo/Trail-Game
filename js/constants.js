@@ -14,6 +14,11 @@ const WORK_OPTIONS=[
 // que tocar cualquiera de los cuatro dejaba el total mintiendo. Ahora se suma.
 const FIXED_COSTS=(()=>{const c={rent:60,food:20,transport:8,gear:7};// por mes (escala juego)
   return {...c, total:Object.values(c).reduce((a,b)=>a+b,0)};})();
+// H19 (v95): coste MENSUAL del staff de Clásico. Hasta v94 eran €200/€250/€100
+// por temporada —el fisio salía a unos €17 al mes—, así que contratarlo no era
+// ninguna decisión. CR-57 diseñó la quiebra dando por hecho que eran mensuales.
+// Se cobra al cerrar temporada, por adelantado para la que empieza.
+const STAFF_COSTS={fisio:60,entrenador:75,suplementos:30};
 
 const SEASON_OBJECTIVES=[
   {
@@ -1168,6 +1173,8 @@ const COACH_POST_RACE_DIALOGUES={
 };
 
 // ── Objetivos de temporada del atleta (por personalidad) ──
+// DS05 (v95): los `check`/`checkAll` de esta tabla NO se leen. La evaluación vive
+// en coachObjectiveMet() (coach.js), que va por id y reproduce lo que se jugaba.
 const COACH_SEASON_OBJECTIVES={
   rebelde:[
     {id:'win_elite',  label:'Ganar una carrera élite o nacional',    reward:+12, penalty:-10,

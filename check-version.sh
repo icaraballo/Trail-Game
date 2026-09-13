@@ -36,7 +36,13 @@ else
   echo "OK     <title> coincide (v$BUILD)"
 fi
 
-SCRIPTS=(constants state save race coach club canicross render-core render-clasico render-temporada devmode)
+# DS10 (v95): la lista estaba escrita a mano mientras bump-version.sh usa una
+# regex, así que un .js nuevo se actualizaba pero no se comprobaba. Sale de index.html.
+SCRIPTS=($(grep -oE 'js/[a-zA-Z-]+\.js\?v=' "$INDEX_HTML" | sed -E 's#^js/##; s#\.js\?v=$##'))
+if [ "${#SCRIPTS[@]}" -eq 0 ]; then
+  echo "FALLO: no se encontró ningún <script src=\"js/*.js?v=...\"> en index.html"
+  exit 1
+fi
 for name in "${SCRIPTS[@]}"; do
   V="$(grep -oE "js/${name}\.js\?v=[0-9]+" "$INDEX_HTML" | grep -oE '[0-9]+' || true)"
   if [ -z "$V" ]; then

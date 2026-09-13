@@ -194,8 +194,10 @@ function effForWork(){
   const promotionPenalty=G.trainingHPenalty||0; // 2h/sem por ascenso laboral aceptado
   const h=Math.max(0,(wo?.trainingH||5)+vacBonus-brandH-promotionPenalty);
   const overlapMult=(G.carreraVida&&G.lifecyclePhase==='overlap')?lifeAthleteEffMult(G.lifeAthleteHours||0):1.0;
-  return trainingEffFromH(h)*(G.spending.entrenador?1.2:1.0)*G.trainingEff*overlapMult;
+  return trainingEffFromH(h)*(G.spending.entrenador?1.2:1.0)*G.trainingEff*overlapMult*restWeeksEffMult();   // secuelas de zona roja (v95)
 }
+// DS09 (v95): solo devuelve nieve, barro, seco o bueno. Tres eventos preguntaban
+// además por 'tecnico', que no existe: esas ramas nunca se cumplían y se quitaron.
 function getTerrainCondition(race){
   // Based on season and recent weather_risk
   const s=getSeason(race.month);
@@ -242,6 +244,17 @@ function getSpecificInjury(paceLog,load){
 // ══════════════════════════════════════
 //  TANDA 7: REPUTACIÓN POR HISTORIAL
 // ══════════════════════════════════════
+// H14 (v95): el mental de los eventos de carrera era permanente (bumpStat sobre
+// runner.stats): 21 opciones de +1 a +10, y con dos o tres eventos por carrera subía
+// más que entrenando una temporada. Decisión del usuario: que cuente solo esa carrera.
+// Va a G.raceModifiers —como el calentamiento y el momentum desde T15—, getEffStat()
+// lo suma y endRaceCleanup() lo vacía. Los gestos de deportividad (ayudar a otro
+// corredor, no devolver un sabotaje, arreglar una señal) dejan además +1 permanente.
+function raceMental(n){
+  if(!G.raceModifiers)G.raceModifiers={mental:0,velocidad:0,subida:0};
+  G.raceModifiers.mental=(G.raceModifiers.mental||0)+n;
+}
+function fairPlayMental(n){bumpStat(G.runner,'mental',1);if(n>1)raceMental(n-1);}
 function getRaceReputation(raceId){
   const hist=G.careerRaceHistory[raceId]||{finished:0,abandoned:0};
   return hist;
@@ -380,10 +393,16 @@ function initRace(){
   // 100 se comía el premio y el cleanup lo restaba igual — el jugador perdía
   // mental por ganar un evento. Ahora el premio va al stat base y el momentum
   // vive aparte, así que no pueden interferir.
+  // H14 (v95): desde entonces el mental de los eventos tampoco toca el stat base:
+  // también vive aquí, solo para esa carrera (raceMental).
   G.raceModifiers={mental:0,velocidad:0,subida:0};
   if(!injStart&&G.mentalMomentum!==0){
     G.raceModifiers.mental=G.mentalMomentum;
   }
+  // H14 (v95): «Finisher veterano/repetido» anunciaba «+N Mental esta carrera» en la
+  // preparación y no se sumaba en ningún sitio.
+  const repB=getReputationBonus(race.id);
+  if(repB?.statBonus?.mental)G.raceModifiers.mental+=repB.statBonus.mental;
   // Warmup bonus (p9) — temporal para esta carrera
   if(G.warmedUp&&!injStart){
     G.runner.energy=Math.max(10,G.runner.energy-5);
@@ -1168,7 +1187,7 @@ function checkInjuryAndFallEvents(ctx){
   }
 
   // 😬 RESBALÓN SIN CAÍDA — terreno técnico o húmedo, tramo 20%-75%, 1 vez
-  if(!G.midRaceEventTriggered.slip_nf&&(G.terrainCondition.id==='barro'||G.terrainCondition.id==='tecnico'||G.terrainCondition.id==='nieve')&&pct>=0.2&&pct<0.75){
+  if(!G.midRaceEventTriggered.slip_nf&&(G.terrainCondition.id==='barro'||G.terrainCondition.id==='nieve')&&pct>=0.2&&pct<0.75){
     if(Math.random()<0.18){
       G.midRaceEventTriggered.slip_nf=true;
       return{id:'slip_nf',
@@ -1183,7 +1202,7 @@ function checkInjuryAndFallEvents(ctx){
   }
 
   // 💥 CAÍDA GRAVE — barro/nieve/técnico, tramo 30%-70%, 1 vez
-  if(!G.midRaceEventTriggered.bad_fall&&(G.terrainCondition.id==='barro'||G.terrainCondition.id==='nieve'||G.terrainCondition.id==='tecnico')&&pct>=0.3&&pct<0.7){
+  if(!G.midRaceEventTriggered.bad_fall&&(G.terrainCondition.id==='barro'||G.terrainCondition.id==='nieve')&&pct>=0.3&&pct<0.7){
     if(Math.random()<0.08){
       G.midRaceEventTriggered.bad_fall=true;
       return{id:'bad_fall',
@@ -1488,7 +1507,7 @@ function checkExpressTimedEvents(ctx){
         }
       }
       // Bajada técnica: terreno técnico o piernas bajas
-      if(!G.midRaceEventTriggered.xp_descent&&pct>=0.2&&pct<0.75&&(r.legs<45||G.terrainCondition.id==='tecnico')){
+      if(!G.midRaceEventTriggered.xp_descent&&pct>=0.2&&pct<0.75&&r.legs<45){
         if(Math.random()<0.55){
           G.midRaceEventTriggered.xp_descent=true;
           G.midRaceEventTriggered._xpTimedCount=(xpTimed+1);
@@ -1697,7 +1716,7 @@ const MID_RACE_RESOLVERS={
   injured_runner:(r,mental,choiceId)=>{
     if(choiceId==='help'){
       G.time+=120; // +2 min
-      bumpStat(G.runner,'mental',2);
+      fairPlayMental(2);
       addFollowers(200);
       G.raceEvent='Ayudas al corredor hasta que llega un voluntario. Pierdes 2 minutos pero el gesto te da alas. +2 Mental.';
     } else if(choiceId==='warn'){
@@ -1711,10 +1730,10 @@ const MID_RACE_RESOLVERS={
     if(choiceId==='sprint'){
       G.time+=180; // se van 3 min extra de "pérdida" por acelerar demasiado
       drain(G.runner,'energy',3);
-      bumpStat(G.runner,'mental',4);
+      raceMental(4);
       G.raceEvent='¡Tus amigos te dan alas! Aceleras a tope durante 200m. +4 Mental, pero el cuerpo lo nota. 🔥';
     } else {
-      bumpStat(G.runner,'mental',4);
+      raceMental(4);
       addFollowers(120);
       G.raceEvent='Saludas con la mano y sigues. La energía del grupo te lleva hasta el siguiente avituallamiento. +4 Mental 🙌';
     }
@@ -1752,7 +1771,7 @@ const MID_RACE_RESOLVERS={
   },
   sabotage:(r,mental,choiceId)=>{
     if(choiceId==='honest'){
-      bumpStat(G.runner,'mental',2);
+      fairPlayMental(2);
       addFollowers(80);
       G.fairPlayCount=(G.fairPlayCount||0)+1;
       G.raceEvent='Haces lo correcto. El fair play define quién eres en el monte, no solo el tiempo. +2 Mental.';
@@ -1789,7 +1808,7 @@ const MID_RACE_RESOLVERS={
   },
   xp_rival:(r,mental,choiceId)=>{
     if(choiceId==='follow_rival'){const ok=r.legs>50&&r.energy>40;if(ok){G.time=Math.max(0,G.time-25);G.raceEvent='Le sigues y aguantas. Ganas 25 seg al pelotón.';}else{drain(r,'energy',10);drain(r,'legs',8);G.raceEvent='Le sigues pero el cuerpo no responde. -10 energía, -8 piernas.';}}
-    else{bumpStat(r,'mental',2);G.raceEvent='Mantienes tu plan. +2 Mental — la cabeza manda.';}
+    else{raceMental(2);G.raceEvent='Mantienes tu plan. +2 Mental — la cabeza manda.';}
   },
   xp_cramp:(r,mental,choiceId)=>{
     if(choiceId==='ease_cramp'){r.legs=Math.min(100,r.legs+4);G.time+=60;G.raceEvent='Bajas el ritmo. El calambre se va. +1 min pero llegas bien.';}
@@ -1811,7 +1830,7 @@ const MID_RACE_RESOLVERS={
   // ── EXPRESS · 6 nuevos con temporizador ───────────────────────────
   xp_rival_wheel:(r,mental,choiceId)=>{
     if(choiceId==='shake_rival'){drain(r,'energy',10);G.time=Math.max(0,G.time-20);G.raceEvent='Le sacudes de tu rueda. Ganas 20s pero pagas 10 de energía.';}
-    else{bumpStat(r,'mental',2);G.raceEvent='Mantienes el ritmo. Él viene fresquito, tú también. +2 Mental.';}
+    else{raceMental(2);G.raceEvent='Mantienes el ritmo. Él viene fresquito, tú también. +2 Mental.';}
   },
   xp_climb_attack:(r,mental,choiceId)=>{
     if(choiceId==='respond_climb'){drain(r,'energy',8);G.time=Math.max(0,G.time-15);G.raceEvent='Respondes al ataque. -8 energía pero mantienes la posición.';}
@@ -1833,7 +1852,7 @@ const MID_RACE_RESOLVERS={
     else{const risk=(G.bodyLoad||0)>70;if(risk){drain(r,'legs',20);if(Math.random()<Math.min(0.95,0.3*modeCfg().injuryRiskMult))G.injuryType='tendinitis';G.raceEvent='Los dos cuádriceps explotan. -20 piernas'+(!G.injuryType?'':' y tendinitis')+'.';}else{G.raceEvent='Aguantas. Llegas al límite pero de pie.';}}},
   // ── EXPRESS · 12 narrativos ───────────────────────────────────────
   xn_public_final:(r,mental,choiceId)=>{
-    if(choiceId==='show_public'){bumpStat(r,'mental',10);drain(r,'energy',5);G.raceEvent='¡La gente te enloquece! +10 Mental, -5 energía. Llegas con el puño en alto.';}
+    if(choiceId==='show_public'){raceMental(10);drain(r,'energy',5);G.raceEvent='¡La gente te enloquece! +10 Mental, -5 energía. Llegas con el puño en alto.';}
     else{G.raceEvent='Llegas sereno. Sin explosiones, sin regalar energía.';}
   },
   xn_rival_position:(r,mental,choiceId)=>{
@@ -1857,16 +1876,16 @@ const MID_RACE_RESOLVERS={
     else{const ok=Math.random()<0.55;if(ok){G.raceEvent='El instinto no falla. Sendero correcto.';}else{G.time+=40;drain(r,'energy',5);G.raceEvent='Te desvías en la niebla. +40s, -5 energía.';}}},
   xn_goat:(r,mental,choiceId)=>{
     if(choiceId==='go_around'){G.time+=10;G.raceEvent='Rodeo por la ladera. +10s. La cabra ni se inmuta.';}
-    else{const ok=Math.random()<0.6;if(ok){G.time+=5;G.raceEvent='La cabra se aparta. Solo +5s.'}else{r.stats.mental=Math.max(10,(r.stats.mental||50)-3);G.time+=15;G.raceEvent='El susto te descoloca. +15s, -3 Mental.';}}},
+    else{const ok=Math.random()<0.6;if(ok){G.time+=5;G.raceEvent='La cabra se aparta. Solo +5s.'}else{raceMental(-3);G.time+=15;G.raceEvent='El susto te descoloca. +15s, -3 Mental.';}}},
   xn_dog:(r,mental,choiceId)=>{
-    if(choiceId==='enjoy_dog'){bumpStat(r,'mental',8);G.time+=5;addFollowers(150);G.raceEvent='El perro se hace viral en redes. +8 Mental, +150 seguidores 🐕';}
+    if(choiceId==='enjoy_dog'){raceMental(8);G.time+=5;addFollowers(150);G.raceEvent='El perro se hace viral en redes. +8 Mental, +150 seguidores 🐕';}
     else{G.raceEvent='El perro desiste. Sigues al ritmo.';}
   },
   xn_sign_down:(r,mental,choiceId)=>{
-    if(choiceId==='fix_sign'){G.time+=10;bumpStat(r,'mental',3);G.raceEvent='Corriges la señal. +10s, +3 Mental. Los de atrás te lo agradecerán.';}
+    if(choiceId==='fix_sign'){G.time+=10;fairPlayMental(3);G.raceEvent='Corriges la señal. +10s, +3 Mental. Los de atrás te lo agradecerán.';}
     else{const ok=Math.random()<0.65;if(ok){G.raceEvent='Tu instinto es correcto. Sin pérdida de tiempo.'}else{G.time+=30;G.raceEvent='Te equivocas. +30s para retomar el camino.';}}},
   xn_retired_rival:(r,mental,choiceId)=>{
-    if(choiceId==='help_retired'){G.time+=20;bumpStat(r,'mental',4);addFollowers(200);G.raceEvent='Te paras a ayudar. +20s pero +4 Mental y +200 seguidores.';}
+    if(choiceId==='help_retired'){G.time+=20;fairPlayMental(4);addFollowers(200);G.raceEvent='Te paras a ayudar. +20s pero +4 Mental y +200 seguidores.';}
     else{G.time=Math.max(0,G.time-10);G.raceEvent='Aprovechas el hueco. Ganas 10s y subes posiciones.';}
   },
   xn_endless_climb:(r,mental,choiceId)=>{
@@ -1874,7 +1893,7 @@ const MID_RACE_RESOLVERS={
     else{drain(r,'energy',18);G.time=Math.max(0,G.time-30);G.raceEvent='Empujas la subida. -18 energía pero llegas 30s antes.';}
   },
   xn_runner_fallen:(r,mental,choiceId)=>{
-    if(choiceId==='help_fallen'){G.time+=20;bumpStat(r,'mental',4);G.raceEvent='Le ayudas a levantarse. +20s, +4 Mental.';}
+    if(choiceId==='help_fallen'){G.time+=20;fairPlayMental(4);G.raceEvent='Le ayudas a levantarse. +20s, +4 Mental.';}
     else{G.time+=5;G.raceEvent='Compruebas que puede seguir y continúas. +5s.';}
   },
   // ── 12 eventos de modo normal ─────────────────────────────────────
@@ -1905,27 +1924,27 @@ const MID_RACE_RESOLVERS={
   },
   nickname_shout:(r,mental,choiceId)=>{
     if(choiceId==='fist_pump'){
-      bumpStat(r,'mental',6);drain(r,'energy',5);
+      raceMental(6);drain(r,'energy',5);
       G.raceEvent='¡El puño en alto y a volar! +6 Mental. Las piernas no saben que están cansadas. −5 energía.';
     } else {
-      bumpStat(r,'mental',4);addFollowers(150);
+      raceMental(4);addFollowers(150);
       G.raceEvent='Sonríes y sigues. Ese +4 Mental te lleva al siguiente avituallamiento casi gratis. +150 seguidores.';
     }
   },
   lent_pole:(r,mental,choiceId)=>{
     if(choiceId==='give_pole'){
-      G.time+=120;bumpStat(r,'mental',3);addFollowers(200);G.fairPlayCount=(G.fairPlayCount||0)+1;G._helpingCount=(G._helpingCount||0)+1;
+      G.time+=120;fairPlayMental(3);addFollowers(200);G.fairPlayCount=(G.fairPlayCount||0)+1;G._helpingCount=(G._helpingCount||0)+1;
       G.raceEvent='Le llevas el bastón. Dos minutos perdidos, pero el corredor sigue. +3 Mental, +200 seguidores, y fair play anotado.';
     } else if(choiceId==='point_pole'){
       G.raceEvent='Le señalas el bastón y sigues. Él puede volver. Hiciste lo mínimo sin perder el ritmo.';
     } else {
-      G.time+=60;bumpStat(r,'mental',1);
+      G.time+=60;raceMental(1);
       G.raceEvent='Llevas el bastón hasta el avituallamiento. +1 min. Queda allí para cuando él llegue.';
     }
   },
   dog_fan:(r,mental,choiceId)=>{
     if(choiceId==='enjoy_dog'){
-      bumpStat(r,'mental',5);G.time+=5;addFollowers(180);
+      raceMental(5);G.time+=5;addFollowers(180);
       G.raceEvent='¡El perro se hace viral! Corréis juntos 400m más. +5 Mental, +180 seguidores 🐕';
     } else {
       G.time+=10;G.raceEvent='El perro entiende el mensaje y da media vuelta. +10 seg. Ya puedes concentrarte.';
@@ -1986,7 +2005,7 @@ const MID_RACE_RESOLVERS={
     } else if(choiceId==='detour_herd'){
       G.time+=120;drain(r,'legs',4);G.raceEvent='Rodeas por la ladera. +2 min y −4 piernas por el desnivel extra, pero sin perder ritmo mental.';
     } else {
-      G.time+=40;bumpStat(r,'mental',1);addFollowers(80);
+      G.time+=40;raceMental(1);addFollowers(80);
       G.raceEvent='Las cabras se apartan curiosas. Imagen para el recuerdo. +40 seg, +1 Mental, +seguidores 🐐';
     }
   },
@@ -2003,7 +2022,7 @@ const MID_RACE_RESOLVERS={
   },
   rival_pass:(r,mental,choiceId)=>{
     if(choiceId==='give_way'){
-      G.time+=20;bumpStat(r,'mental',2);G.fairPlayCount=(G.fairPlayCount||0)+1;G._helpingCount=(G._helpingCount||0)+1;
+      G.time+=20;fairPlayMental(2);G.fairPlayCount=(G.fairPlayCount||0)+1;G._helpingCount=(G._helpingCount||0)+1;
       G.raceEvent='Le cedes el paso. El gesto te da la razón y +2 Mental. Recuperarás esa posición más adelante. +20 seg.';
     } else if(choiceId==='hold_pace'){
       if(Math.random()<0.55){G.raceEvent='Aguantas el ritmo y él no puede pasar. Llegas a un tramo ancho y se separa. Sin coste.'}
@@ -2025,13 +2044,13 @@ const MID_RACE_RESOLVERS={
   },
   crowd_cameras:(r,mental,choiceId)=>{
     if(choiceId==='wave_crowd'){
-      bumpStat(r,'mental',3);addFollowers(100);
+      raceMental(3);addFollowers(100);
       G.raceEvent='¡La gente te anima! Saludas y sigues fuerte. +3 Mental, +100 seguidores 📸';
     } else if(choiceId==='show_off'){
       G.time=Math.max(0,G.time-50);drain(r,'energy',6);addFollowers(250);
       G.raceEvent='Aceleras para la cámara. −50 seg y +250 seguidores, pero −6 energía. Las redes lo adorarán.';
     } else {
-      bumpStat(r,'mental',1);
+      raceMental(1);
       G.raceEvent='Foco total. El ruido de fondo desaparece. +1 Mental por la concentración.';
     }
   },
@@ -2062,7 +2081,7 @@ const MID_RACE_RESOLVERS={
       G.time+=120;r.legs=Math.min(100,r.legs+2);
       G.raceEvent='Dos minutos frotándote las manos contra el pecho. Recuperas el agarre y el bastón vuelve a ser un aliado.';
     } else if(choiceId==='no_poles'){
-      bumpStat(r,'mental',2);
+      raceMental(2);
       G.raceEvent='Guardas los bastones. Sin ellos vas más libre pero las subidas cuestan el doble. +2 Mental por la adaptación.';
     } else {
       drain(r,'legs',8);G.raceEvent='Aguantas el frío. Los bastones resbalan en los apoyos y −8 piernas compensando el mal agarre.';
@@ -2116,17 +2135,30 @@ window.toggleNutTooltip=()=>{
   if(t)t.style.display=t.style.display==='none'?'block':'none';
 };
 
+// H10 (v95): una lesión que deja seguir corriendo se aplica en el tramo en que
+// ocurre, así que abandonar después ya no la evita. Las dos pantallas de abandono
+// prometían «llegas mejor a la siguiente» y la carrera siguiente salía como baja
+// por lesión, sin que nada lo explicase.
+function injuryThisRace(){
+  const race=G.selectedRaces[G.currentRaceIdx];
+  const last=(G.injuryHistory||[]).slice(-1)[0];
+  if(!race||!last||!G.injuryType||last.year!==G.year||last.race!==race.name)return null;
+  return last;
+}
 window.doAbandon=()=>{
   const race=G.selectedRaces[G.currentRaceIdx];
   if(!race){G.screen='seasonBalance';render();return;}
   const kmDone=Math.round(race.km*(G.seg/curSegs().length));
   const sponsorPenalty=Object.values(G.sponsors).filter(Boolean).some(sp=>sp.objKey==='finish2'||sp.objKey==='finish3'||sp.objKey==='finish4');
+  const inj=injuryThisRace();   // H10 (v95)
+  const baja=G.injuryRacesLeft||0;
   const el=$main();
   // Show confirm screen
   el.innerHTML=`
     ${topBar()}${progBar()}
     <h2 style="margin-top:12px">¿Abandonar la carrera?</h2>
     <p class="sub">${race.name} · km ${kmDone} de ${race.km}</p>
+    ${inj?`<div class="warn">🩹 Ya te has lesionado en esta carrera (${esc(inj.label)}${inj.km?`, km ${inj.km}`:''}). Abandonar no la evita${baja>0?`: te perderás ${baja} carrera${baja!==1?'s':''} igualmente`:''}.</div>`:''}
     <div class="note">
       <div style="font-weight:600;margin-bottom:6px">✅ Si abandonas ahora</div>
       <div style="font-size:13px;line-height:1.8">
@@ -2154,6 +2186,7 @@ window.doAbandon=()=>{
 window.doAbandonConfirmed=()=>{
   const race=G.selectedRaces[G.currentRaceIdx];
   if(!race){G.screen='seasonBalance';render();return;}
+  const inj=injuryThisRace();   // H10 (v95)
   // Revertir modificaciones temporales de carrera (warmup + mental momentum)
   endRaceCleanup();
   // Recover some energy from not finishing
@@ -2177,6 +2210,7 @@ window.doAbandonConfirmed=()=>{
       <div style="font-size:13px">· Sin puntos de ranking en esta carrera</div>
       <div style="font-size:13px">· Sin premio</div>
       <div style="font-size:13px">· Carga corporal reducida — llegas mejor a la siguiente</div>
+      ${inj?`<div style="font-size:13px;color:#c0392b">· Te retiras con ${esc(inj.label)}: la baja${(G.injuryRacesLeft||0)>0?` de ${G.injuryRacesLeft} carrera${G.injuryRacesLeft!==1?'s':''}`:''} sigue en pie</div>`:''}
       ${G.raceAbandonedCount>=2?`<div style="font-size:13px;color:#c07a10">· Historial de abandonos — puede afectar negociaciones con sponsors</div>`:''}
     </div>
     <button class="main" style="margin-top:8px" onclick="afterRace()">Continuar →</button>`;
@@ -2474,6 +2508,10 @@ function finishRace(){
   G.screen='raceResult';
   const race=G.selectedRaces[G.currentRaceIdx];
   const res=calcRaceResult(race);
+  // DS02 (v95): calcRaceResult devuelve null sin carrera (T40) pero aquí se leía
+  // res.rivalsAdjusted igual. Con el índice fuera de rango, se cierra la temporada
+  // como ya hace renderPreRace.
+  if(!res){endSeasonRaces();render();return;}
   // Aplicar mutaciones que antes hacía calcRaceResult (ahora pura)
   G.rivals=res.rivalsAdjusted;
   G.time=res.playerTime;

@@ -1158,7 +1158,8 @@ window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
         body:`Lleva ${chosen.seasonsInClub} temporada${chosen.seasonsInClub>1?'s':''} en el club y ha conseguido ${chosen.careerPodiums} podio${chosen.careerPodiums>1?'s':''}. Pide +€${increase}/mes. Riesgo de marcharse: ${risk}.`,
         options:[
           {text:`Aceptar (+€${increase}/mes para ${chosen.name.split(' ')[0]})`,repDelta:3,cohesionDelta:4,salarySpecificIncrease:true,targetId:chosen.id,increaseAmount:increase},
-          {text:'Negociar — solo la mitad (+€${Math.round(increase/2)}/mes)',repDelta:1,cohesionDelta:0,salarySpecificIncrease:true,targetId:chosen.id,increaseAmount:Math.round(increase/2)},
+          {text:`Negociar — solo la mitad (+€${Math.round(increase/2)}/mes)`,   // DS04 (v95): iba entre comillas simples y se pintaba el ${…} literal
+          repDelta:1,cohesionDelta:0,salarySpecificIncrease:true,targetId:chosen.id,increaseAmount:Math.round(increase/2)},
           {text:'Rechazar — el presupuesto no da para más',repDelta:-3,cohesionDelta:-6,loseRunnerById:chosen.id,loseChance:risk==='alto'?0.5:0.2},
         ]
       };

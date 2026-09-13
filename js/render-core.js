@@ -113,6 +113,19 @@ function renderAchievements(){
       }).join('')}
     </div>`;
 }
+// H15-bis (v95): la barra pintaba siempre G.year y el calendario de Clásico. En
+// Entrenador —suelto o en Carrera de Vida— y en Canicross ese año no avanza nunca,
+// así que el contador se quedaba congelado toda la partida.
+function seasonMonthLabel(){
+  const M=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  if(isCoachPhase()){
+    const cr=(G.coachSelectedRaces||[])[G.coachRaceIdx||0];
+    return 'A'+(G.coachSeason||1)+' · '+(cr?M[cr.month||1]:'—');
+  }
+  if(G.canicrossMode)return 'A'+(G.cnSeason||1)+' · '+M[cnCurrentMonth()];
+  const curRace=G.selectedRaces&&G.selectedRaces[G.currentRaceIdx||0];
+  return 'A'+G.year+' · '+(curRace?M[curRace.month||1]:(['','T1','T2','T3','T4'][G.currentQuarter||1]));
+}
 function updateFinBar(){
   const bar=document.getElementById('fin-bar');
   if(!bar)return;
@@ -145,12 +158,7 @@ function updateFinBar(){
         :`Números rojos: −3 mental por temporada. A partir de €${cfg.soft} vuelves a jornada completa y se cancela el staff.`;
     }
   }
-  // Año + mes derivado de carrera actual o trimestre
-  const curRace=G.selectedRaces&&G.selectedRaces[G.currentRaceIdx||0];
-  const MONTH_SHORT=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  const monthStr=curRace?MONTH_SHORT[curRace.month||1]:
-    (['','T1','T2','T3','T4'][G.currentQuarter||1]);
-  document.getElementById('fb-year').textContent='A'+G.year+' · '+monthStr;
+  document.getElementById('fb-year').textContent=seasonMonthLabel();   // H15-bis (v95)
   document.getElementById('fb-rank').textContent=G.ranking<900?'#'+G.ranking:'—';
   const sr=document.getElementById('fb-specrank');
   if(sr)sr.textContent=G.specRanking<900?'#'+G.specRanking:'—';
@@ -199,7 +207,7 @@ function updateTabNav(){
   const show=SCREENS_WITH_TABS.includes(G.screen);
   nav.style.display=show?'block':'none';
   const isExpres=G.gameMode==='expres';
-  const isCoach=G.gameMode==='coach';
+  const isCoach=isCoachPhase();   // H15-bis (v95)
   const isCanicross=G.gameMode==='canicross';
   if(isExpres&&G.activeTab==='fame')G.activeTab='game';
   ['game','calendar','finances','runner','fame'].forEach(t=>{
@@ -378,16 +386,16 @@ function render(){
   }
   // Si estamos en una pestaña auxiliar
   if(G.activeTab==='calendar'&&SCREENS_WITH_TABS.includes(G.screen)){
-    if(G.gameMode==='coach'){renderCoachCalendar();triggerFade(el);return;}
+    if(isCoachPhase()){renderCoachCalendar();triggerFade(el);return;}
     renderCalendarTab();triggerFade(el);return;
   }
   if(G.activeTab==='finances'&&SCREENS_WITH_TABS.includes(G.screen)){renderFinancesTab();triggerFade(el);return;}
   if(G.activeTab==='runner'&&SCREENS_WITH_TABS.includes(G.screen)){
-    if(G.gameMode==='coach'){renderCoachAthleteTab();triggerFade(el);return;}
+    if(isCoachPhase()){renderCoachAthleteTab();triggerFade(el);return;}
     renderRunnerTab();triggerFade(el);return;
   }
   if(G.activeTab==='fame'&&SCREENS_WITH_TABS.includes(G.screen)){
-    if(G.gameMode==='coach'){renderCoachRepTab();triggerFade(el);return;}
+    if(isCoachPhase()){renderCoachRepTab();triggerFade(el);return;}
     renderFameTab();triggerFade(el);return;
   }
   // Flujo normal del juego
@@ -410,6 +418,19 @@ function triggerFade(el){
 function renderSaveScreen(){
   const el=$main();
   const slots=getAllSlots();
+  // DS13 (v95): los logros globales son los mismos para las cinco ranuras y se
+  // leían y recorrían una vez por ranura.
+  let achNormal=0,achCn=0,achExpres=0;
+  try{
+    const ga=JSON.parse(LS.get('globalAchs')||'{}');
+    Object.keys(ga).forEach(id=>{
+      const a=ACHIEVEMENTS.find(x=>x.id===id);
+      if(!a)return;
+      if(a.mode==='cn')achCn++;
+      else if(a.mode==='expres')achExpres++;
+      else achNormal++;
+    });
+  }catch(e){}
   el.innerHTML=`
     <h1>Juego Trail</h1>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.5px">v${GAME_BUILD}</span></div>
@@ -429,17 +450,6 @@ function renderSaveScreen(){
           <button class="save-btn primary" onclick="startNewInSlot(${slot})">Nueva partida</button>
         </div>
       </div>`;
-      let achNormal=0,achCn=0,achExpres=0;
-      try{
-        const ga=JSON.parse(LS.get('globalAchs')||'{}');
-        Object.keys(ga).forEach(id=>{
-          const a=ACHIEVEMENTS.find(x=>x.id===id);
-          if(!a)return;
-          if(a.mode==='cn')achCn++;
-          else if(a.mode==='expres')achExpres++;
-          else achNormal++;
-        });
-      }catch(e){}
       return `<div class="save-slot">
         <div class="flex-between">
           <div class="save-slot-info">
