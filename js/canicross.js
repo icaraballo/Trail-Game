@@ -128,11 +128,13 @@ function cnCurrentMonth(){
   // T119 (v92): sin suelo, una semana negativa caía en el `return 3` final y
   // daba marzo antes de empezar la temporada.
   const w=Math.max(0,G.cnWeek||0);
-  if(w<5)return 10;
-  if(w<9)return 11;
-  if(w<13)return 12;
-  if(w<17)return 1;
-  if(w<21)return 2;
+  // BUG-17 (v96): octubre duraba cinco semanas (w<5) y «Avanzar» suma cuatro, así que el
+  // primer avance se quedaba en octubre. Cuatro semanas por mes; marzo termina en la 24.
+  if(w<4)return 10;
+  if(w<8)return 11;
+  if(w<12)return 12;
+  if(w<16)return 1;
+  if(w<20)return 2;
   return 3;
 }
 
@@ -323,7 +325,8 @@ window.doStartCanicross=()=>{
   G.runner.stats=applyAgeToStats({...SPEC_STATS[G.runner.specialty]},G.runner.age||25);
   G.canicrossMode=true;
   G.gameMode='canicross';
-  if(G._saveSlot==null)G._saveSlot=0;
+  // v96: aquí se ponía _saveSlot=0 si no había ranura, y el primer autoguardado pisaba la
+  // ranura 1 sin avisar. Sin ranura no se autoguarda, como en los demás modos.
   G.cnMoney=500;G.cnSeason=1;
   G.cnSelectedRaces=[];G.cnCurrentRaceIdx=0;G.cnRaceResults=[];
   G.cnTrainingBlock=null;G.cnWeek=0;
@@ -453,6 +456,7 @@ function cnApplyOneWeekTraining(){
 
 window.cnAdvanceWeek=()=>{
   if(!G.cnTrainingBlock){showToast('Elige un bloque de entrenamiento','#c0392b');return;}
+  const doneMonth=cnCurrentMonth();   // BUG-17 (v96): el aviso nombra el mes que termina, no el siguiente
   // Avanzar 4 semanas (1 mes) de una vez
   for(let i=0;i<4;i++){
     cnApplyOneWeekTraining();
@@ -462,10 +466,9 @@ window.cnAdvanceWeek=()=>{
       G.cnMoney=Math.max(0,(G.cnMoney||0)-cost);
     }
   }
-  const curMonth=cnCurrentMonth();
   const MONTH_NAMES={10:'Octubre',11:'Noviembre',12:'Diciembre',1:'Enero',2:'Febrero',3:'Marzo'};
   autoSave();render();
-  setTimeout(()=>showToast((MONTH_NAMES[curMonth]||'Mes')+' completado ✓','#4a8a2a'),150);
+  setTimeout(()=>showToast((MONTH_NAMES[doneMonth]||'Mes')+' completado ✓','#4a8a2a'),150);
 };
 
 window.cnStartRace=idx=>{
@@ -925,11 +928,11 @@ function renderCnCorredorTab(){
   const MONTH_NAMES={10:'Octubre',11:'Noviembre',12:'Diciembre',1:'Enero',2:'Febrero',3:'Marzo'};
   const mIdx=m=>MONTHS.indexOf(m);
   const isPastMonth=m=>mIdx(m)<mIdx(curMonth);
-  // v96: el reloj se para en marzo (cnCurrentMonth devuelve 3 desde la semana 21), así que
+  // v96: el reloj se para en marzo (cnCurrentMonth devuelve 3 desde la semana 20), así que
   // una carrera de marzo sin correr —por vínculo bajo, perro lesionado o «Saltar este
   // mes»— nunca pasaba a «pasada», y sin carreras apuntadas allRaceDone no se cumplía: la
-  // temporada no se podía cerrar. Avanzar desde marzo lleva la semana a 25+ y lo termina.
-  const marchDone=(G.cnWeek||0)>=25;
+  // temporada no se podía cerrar. Avanzar desde marzo lleva la semana a 24+ y lo termina.
+  const marchDone=(G.cnWeek||0)>=24;
   const pendingRaces=races.filter(r=>!doneIds.includes(r.id)&&!isPastMonth(r.month)&&!marchDone);
   const allRaceDone=marchDone||(races.length>0&&pendingRaces.length===0);
   cnCheckBirthday();

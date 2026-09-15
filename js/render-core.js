@@ -118,7 +118,7 @@ function renderAchievements(){
 // así que el contador se quedaba congelado toda la partida.
 function seasonMonthLabel(){
   const M=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  if(isCoachPhase()){
+  if(coachViewActive()){
     const cr=(G.coachSelectedRaces||[])[G.coachRaceIdx||0];
     return 'A'+(G.coachSeason||1)+' · '+(cr?M[cr.month||1]:'—');
   }
@@ -207,7 +207,7 @@ function updateTabNav(){
   const show=SCREENS_WITH_TABS.includes(G.screen);
   nav.style.display=show?'block':'none';
   const isExpres=G.gameMode==='expres';
-  const isCoach=isCoachPhase();   // H15-bis (v95)
+  const isCoach=coachViewActive();   // H15-bis (v95) · BUG-08: también el lado Entrenador del solapamiento
   const isCanicross=G.gameMode==='canicross';
   if(isExpres&&G.activeTab==='fame')G.activeTab='game';
   ['game','calendar','finances','runner','fame'].forEach(t=>{
@@ -248,16 +248,31 @@ window.switchTab=t=>{
 // ══════════════════════════════════════
 //  FEEDBACK VISUAL — TOAST
 // ══════════════════════════════════════
+// BUG-04 (v96): un solo aviso a la vez y cada uno pisaba al anterior. Varios logros
+// desbloqueados juntos dejaban ver solo el último, y un aviso emitido justo después
+// («✅ Decisiones aplicadas» tras «Sin fondos») escondía el que importaba. Ahora van en
+// cola, 1,8 s cada uno; un texto igual al que se ve o al último encolado no se repite, y
+// la cola no pasa de cuatro para no ir mostrando avisos de hace rato.
+const TOAST_QUEUE=[];
 function showToast(msg,color='#1a1a1a'){
   const t=document.getElementById('toast-notif');
   if(!t)return;
-  t.textContent=msg;
-  t.style.background=color;
+  const last=TOAST_QUEUE.length?TOAST_QUEUE[TOAST_QUEUE.length-1]:t._cur;
+  if(last&&last.msg===msg)return;
+  if(TOAST_QUEUE.length>=4)TOAST_QUEUE.shift();
+  TOAST_QUEUE.push({msg,color});
+  if(!t._tmr)nextToast(t);
+}
+function nextToast(t){
+  const it=TOAST_QUEUE.shift();
+  if(!it){t._tmr=null;t._cur=null;t.classList.remove('show');return;}
+  t._cur=it;
+  t.textContent=it.msg;
+  t.style.background=it.color;
   t.classList.remove('show');
   void t.offsetWidth; // reflow
   t.classList.add('show');
-  clearTimeout(t._tmr);
-  t._tmr=setTimeout(()=>t.classList.remove('show'),1800);
+  t._tmr=setTimeout(()=>nextToast(t),1800);
 }
 
 // T63 (v90): el despachador de 73 rutas se reconstruía entero en CADA render.
@@ -376,9 +391,10 @@ function render(){
   if(G.careerEnded&&G.screen!=='careerEnd'&&G.screen!=='saveScreen'&&G.screen!=='modeSelect'){
     G.screen='careerEnd';
   }
-  // Canicross — tab routing propio
+  // Canicross — tab routing propio. La pestaña «game» no se enruta aquí: el despachador
+  // ya lleva canicrossHub a renderCnCorredorTab, y enrutarla pintaba el hub también en
+  // canicrossSeasonBalance, así que «Cerrar temporada» no llegaba nunca al balance (BUG-05).
   if(G.gameMode==='canicross'&&SCREENS_WITH_TABS.includes(G.screen)){
-    if(G.activeTab==='game'){renderCnCorredorTab();triggerFade(el);return;}
     if(G.activeTab==='runner'){renderCnPerroTab();triggerFade(el);return;}
     if(G.activeTab==='fame'){renderCnEquipoTab();triggerFade(el);return;}
     if(G.activeTab==='calendar'){renderCnCalendarioTab();triggerFade(el);return;}
@@ -386,16 +402,16 @@ function render(){
   }
   // Si estamos en una pestaña auxiliar
   if(G.activeTab==='calendar'&&SCREENS_WITH_TABS.includes(G.screen)){
-    if(isCoachPhase()){renderCoachCalendar();triggerFade(el);return;}
+    if(coachViewActive()){renderCoachCalendar();triggerFade(el);return;}
     renderCalendarTab();triggerFade(el);return;
   }
   if(G.activeTab==='finances'&&SCREENS_WITH_TABS.includes(G.screen)){renderFinancesTab();triggerFade(el);return;}
   if(G.activeTab==='runner'&&SCREENS_WITH_TABS.includes(G.screen)){
-    if(isCoachPhase()){renderCoachAthleteTab();triggerFade(el);return;}
+    if(coachViewActive()){renderCoachAthleteTab();triggerFade(el);return;}
     renderRunnerTab();triggerFade(el);return;
   }
   if(G.activeTab==='fame'&&SCREENS_WITH_TABS.includes(G.screen)){
-    if(isCoachPhase()){renderCoachRepTab();triggerFade(el);return;}
+    if(coachViewActive()){renderCoachRepTab();triggerFade(el);return;}
     renderFameTab();triggerFade(el);return;
   }
   // Flujo normal del juego

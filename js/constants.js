@@ -1601,18 +1601,20 @@ const CLUB_RUNNER_POOL=[
 ];
 
 // ── Roles de plantilla (C8) ────────────────────────────────────────────────
+// BUG-16 (v96): los textos dicen lo que hace simClubRace(). crewBonus y dnfShield no los
+// lee nadie; el +6 del especialista cuenta cuando su especialidad es la del club.
 const CLUB_ROLES={
   capitan:    {label:'Capitán',    emoji:'⭐',color:'#c07a10',
-    desc:'Sube la cohesión del equipo en +5 por temporada. Bonus de rendimiento a corredores cercanos.',
+    desc:'Sube la cohesión del equipo en +5 por temporada y rinde +4 en carrera.',
     cohesionBonus:5, perfBonus:4, crewBonus:true},
   promesa:    {label:'Promesa',    emoji:'🌱',color:'#2d7a2d',
     desc:'Progresa un 50% más rápido que el resto. Solo menores de 26 años.',
     growthBonus:1.5, perfBonus:0},
   especialista:{label:'Especialista',emoji:'🎯',color:'#4a90d9',
-    desc:'Bonus +10 de rendimiento en carreras de su especialidad.',
+    desc:'+10 de rendimiento en carrera, y +6 más si su especialidad es la del club.',
     perfBonus:10, specBonus:true},
   gregario:   {label:'Gregario',  emoji:'🤝',color:'#888',
-    desc:'Reduce el riesgo de DNF del capitán o promesa cuando corren juntos.',
+    desc:'Corredor de apoyo: rinde −3 en carrera.',
     perfBonus:-3, dnfShield:true},
   normal:     {label:'Corredor',  emoji:'🏃',color:'#aaa',
     desc:'Sin bonus especial.',
@@ -1690,7 +1692,12 @@ const CLUB_SPONSORS_POOL=[
 // v96 · Economía del Club (decisión del 2026-09-15). Con la cuota a €25 un club recién
 // creado perdía ~€4.000 por temporada y el suelo en 0 del presupuesto lo escondía.
 // Cifras de partida: se miden jugando y se tocan aquí, nunca en la lógica.
-const CLUB_SOCIO_FEE=45;                          // €/socio/mes
+// v96 (tras el playtest): con €45 el club era rentable desde el primer año y el presupuesto
+// crecía sin techo (más de €200.000 en siete temporadas). Con €25 y el techo blando de
+// socios, un club pierde dinero de una a tres temporadas antes de despegar: «una empresa de
+// base pierde dinero hasta que es rentable». Se mide jugando.
+const CLUB_SOCIO_FEE=25;                          // €/socio/mes
+const CLUB_SOCIOS_SOFT_CAP=120;                   // los socios que dan los resultados se reducen al acercarse: a 60, la mitad
 const CLUB_SPONSOR_SPLIT={base:0.6,failRep:3};    // 60 % al simular; el 40 % restante solo si se cumple el objetivo
 const CLUB_RED_SEASONS_MAX=5;                     // temporadas seguidas cerrando en negativo hasta disolverse
 
@@ -2104,7 +2111,7 @@ const INJURY_TYPES={
     label:'Tendinitis',
     desc:'Inflamación en el tendón. Puedes correr pero con penalización seria.',
     statPenalty:{bajada:-5,velocidad:-2},
-    recoverySeasons:1,canRace:true,
+    canRace:true,
     racesBlocked:0,
     nextRaceStats:{energy:75,legs:65,hydration:80},
     fisioDiscount:0.5,
@@ -2113,7 +2120,7 @@ const INJURY_TYPES={
     label:'Rotura de fibras',
     desc:'Rotura muscular grave. No puedes correr las próximas 2 carreras.',
     statPenalty:{velocidad:-6,resistencia:-4,mental:-2},
-    recoverySeasons:1,canRace:false,
+    canRace:false,
     racesBlocked:2,
     nextRaceStats:{energy:55,legs:45,hydration:70},
     fisioDiscount:0.4,
@@ -2122,7 +2129,7 @@ const INJURY_TYPES={
     label:'Fractura de estrés',
     desc:'Lesión muy grave. La temporada puede estar comprometida.',
     statPenalty:{resistencia:-9,subida:-5,mental:-4,velocidad:-3},
-    recoverySeasons:2,canRace:false,
+    canRace:false,
     racesBlocked:INJURY_BLOCK_SEASON, // T46 (v88): centinela = resto de temporada, no 999 carreras
     nextRaceStats:{energy:40,legs:30,hydration:60},
     fisioDiscount:0.3,

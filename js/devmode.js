@@ -30,11 +30,15 @@ window.devJumpToCoach=()=>{
   confirmLifeCoachTransition();
 };
 window.devJumpToClub=()=>{
-  if(!G.clubModeData){
+  const nuevo=!G.clubModeData;
+  if(nuevo){
     G.clubModeData=initClubModeData('Club de Pruebas','mixto','montanero','equilibrado');
   }
   G.gameMode='club';
   G.carreraVida=true;G.lifecyclePhase='club';
+  // BUG-19 (v96): el club de pruebas arrancaba sin evento inicial ni objetivo de temporada,
+  // con otras cuentas que el creado desde el menú. Lo mismo que doClubCreate().
+  if(nuevo){generateClubEvent();generateClubObjective();}
   G.screen='clubHub';G.activeTab='game';
   showToast('DEV: saltado a Club','#1D9E75');
   render();
@@ -400,9 +404,29 @@ window.devSetInjury=(type)=>{
   if(!type){G.injuryStatus=null;G.injuryType=null;G.injuryRacesLeft=0;showToast('DEV: lesión retirada','#4a8a2a');render();return;}
   const injData=INJURY_TYPES[type];
   if(!injData){showToast('DEV: tipo de lesión desconocido','#c0392b');return;}
+  // BUG-18 (v96): hace lo mismo que una lesión de verdad —quita stats como secuela
+  // recuperable y la apunta en injuryHistory—. En carrera cuenta las carreras posteriores a la
+  // actual, como el juego. Entre carreras se trata como sufrida en la anterior: si impide
+  // correr, pasa ya por la pantalla de baja en vez de dejar preparar una carrera que no se va a
+  // correr (y que el motor cancelaba en el primer tramo).
+  const races=G.selectedRaces||[];const idx=G.currentRaceIdx||0;
+  const midRace=['segment','aid','midRaceEvent'].includes(G.screen);
+  const entreCarreras=!midRace&&idx<races.length&&['preRace','preRacePrep','betweenRace','betweenManage','expresPrep','expresPreRacePrep'].includes(G.screen);
   G.injuryStatus='moderada';G.injuryType=type;
-  G.injuryRecoverySeasons=injData.recoverySeasons||1;
-  G.injuryRacesLeft=injuryRacesBlocked(type,hasFisio(),(G.selectedRaces||[]).length-(G.currentRaceIdx||0));   // v96: con el mismo descuento de fisio que el juego
+  G.injuryRacesLeft=injuryRacesBlocked(type,hasFisio(),midRace?racesLeftAfterCurrent():Math.max(0,races.length-idx));
+  if(!G.injuryHistory)G.injuryHistory=[];
+  const race=(midRace?races[idx]:races[idx-1])||races[idx];
+  G.injuryHistory.push({type,label:injData.label,race:race?.name||'',year:G.year,km:race?.km||0});
+  if(entreCarreras&&!injData.canRace&&G.injuryRacesLeft>0){
+    G.pendingEvent=null;
+    G.currentRaceIdx=idx-1;
+    afterRace();                     // pinta la baja de la próxima carrera
+    applyInjuryStatPenalty(type);    // después: afterRace devuelve un 15 % de la secuela pendiente
+    autoSave();
+    showToast('DEV: lesión aplicada — '+(injData.label||type),'#c0392b');
+    return;
+  }
+  applyInjuryStatPenalty(type);
   showToast('DEV: lesión aplicada — '+(injData.label||type),'#c0392b');
   render();
 };

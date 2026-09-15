@@ -107,21 +107,22 @@ function renderSeasonBalance(){
         <span class="aid-time" style="font-size:13px;font-weight:600">€${STAFF_COSTS[id]}/mes</span>
       </div>`).join('')}
 
-    <button class="main" style="margin-top:14px" onclick="doNextYear(${yearNet})">${G.gameMode==='expres'&&G.year>=modeCfg().maxYears?'Ver resumen final →':`Temporada ${G.year+1} →`}</button>
-    ${(G.runner.age||25)>=42&&G.gameMode!=='expres'?`<button class="main" style="margin-top:6px;border-color:#c0392b;color:#c0392b" onclick="doRetire()">Retirarse — ver resumen de carrera</button>`:''}
-    ${G.carreraVida&&G.lifecyclePhase==='overlap'&&(G.runner.age||25)<42?`<button class="main" style="margin-top:6px;border-color:#534AB7;color:#3C3489" onclick="doRetire()">Dejar la competición — pasar a entrenador</button>`:''}
-    ${G.gameMode==='expres'&&G.year>=2?`<button class="main" style="margin-top:6px;border-color:#c0392b;color:#c0392b" onclick="doRetire()">Retiro anticipado — ver resumen</button>`:''}
     ${G.monthlyEvents&&G.monthlyEvents.length>0&&!G.monthlyEvents[0].resolved?`
     <div style="margin-top:18px;border-top:1px solid var(--color-border-tertiary);padding-top:16px">
       <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Evento del mes</div>
-      <p style="font-size:14px;font-weight:600;margin-bottom:14px">${G.monthlyEvents[0].title}</p>
+      <p style="font-size:14px;font-weight:600;margin-bottom:4px">${G.monthlyEvents[0].title}</p>
+      <p style="font-size:12px;color:#888;margin-bottom:14px">Puedes dejarlo para la temporada que viene.</p>
       <div style="display:grid;gap:8px">
         ${G.monthlyEvents[0].options.map((o,i)=>`<div class="pace" onclick="resolveMonthlyEvent(0,${i})">
           <div class="pace-label" style="font-size:13px;margin-bottom:2px">${o.text}</div>
           <div class="pace-desc">${o.value>0?`+€${o.value}`:o.value<0?`-€${Math.abs(o.value)}`:''} ${o.statBonus?'· '+Object.entries(o.statBonus).map(([k,v])=>'+'+v+' '+k).join(' '):''}${o.loadRedux?'· carga -'+o.loadRedux+'%':''}</div>
         </div>`).join('')}
       </div>
-    </div>`:''}`;
+    </div>`:''}
+    <button class="main" style="margin-top:14px" onclick="doNextYear(${yearNet})">${G.gameMode==='expres'&&G.year>=modeCfg().maxYears?'Ver resumen final →':`Temporada ${G.year+1} →`}</button>
+    ${(G.runner.age||25)>=42&&G.gameMode!=='expres'?`<button class="main" style="margin-top:6px;border-color:#c0392b;color:#c0392b" onclick="doRetire()">Retirarse — ver resumen de carrera</button>`:''}
+    ${G.carreraVida&&G.lifecyclePhase==='overlap'&&(G.runner.age||25)<42?`<button class="main" style="margin-top:6px;border-color:#534AB7;color:#3C3489" onclick="doRetire()">Dejar la competición — pasar a entrenador</button>`:''}
+    ${G.gameMode==='expres'&&G.year>=2?`<button class="main" style="margin-top:6px;border-color:#c0392b;color:#c0392b" onclick="doRetire()">Retiro anticipado — ver resumen</button>`:''}`;
 }
 
 function renderRankingChart(){
@@ -373,12 +374,19 @@ window.doNextYear=yearNet=>{
     const h=G.lifeAthleteHours||0;
     if(h>0){
       // Subir stats del atleta proporcional a horas
-      const gain=h>=10?3:h>=5?2:1;
+      const gain=lifeAthleteSeasonGain(h);
       const stats=G.lifeAthlete.currentStats||{...G.lifeAthlete.baseStats};
       const keys=Object.keys(stats);
       const picks=shuffle(keys).slice(0,gain);
       picks.forEach(k=>{stats[k]=Math.min(100,(stats[k]||50)+1);});
       G.lifeAthlete.currentStats=stats;
+      // v96: el atleta que entrenas en el lado Entrenador es G.coachAthlete, una copia que tras
+      // guardar y cargar ya no comparte objeto con G.lifeAthlete: las horas no le llegaban.
+      const ca=G.coachAthlete;
+      if(ca&&ca.id===G.lifeAthlete.id){
+        const cs=ca.currentStats||(ca.currentStats={...ca.baseStats});
+        if(cs!==stats)picks.forEach(k=>{cs[k]=Math.min(100,(cs[k]||50)+1);});
+      }
       // Línea en diario
       const first=G.lifeAthlete.name.split(' ')[0];
       G.seasonDiary=G.seasonDiary||[];
@@ -386,7 +394,7 @@ window.doNextYear=yearNet=>{
       // la pintaba como «Año undefined · undefined años».
       G.seasonDiary.push({
         year:G.year-1, age:(G.runner.age||25)-1,
-        text:`${first}: ${h}h dedicadas. ${gain===3?'Progresa bien.':gain===2?'Va mejorando.':'Poco tiempo, pero algo es algo.'}`,
+        text:`${first}: ${h}h a la semana dedicadas. ${gain===3?'Progresa bien.':gain===2?'Va mejorando.':'Poco tiempo, pero algo es algo.'}`,
         highlight:'Atleta a tu cargo',
       });
     }
@@ -399,14 +407,8 @@ window.doNextYear=yearNet=>{
     const offer=checkFirstAthleteOffer();
     if(offer){G.pendingLifeAthleteOffer=offer;G.screen='lifeAthleteOffer';}
   }
-  // Arco narrativo — fase entrenador: retiros de rivales y nuevos atletas
-  if(G.carreraVida&&G.lifecyclePhase==='coach'){
-    checkRivalRetirements();
-    checkLifeExtraAthlete();
-    if(G.screen==='lifeAthleteOffer'){}// checkLifeExtraAthlete puede haber cambiado screen
-    // Oferta del club (solo si no se ha cambiado ya la pantalla)
-    if(G.screen!=='lifeAthleteOffer')checkClubOffer();
-  }
+  // Carrera de Vida en fase Entrenador: retiros, atleta extra y oferta de club se comprueban al
+  // cerrar la temporada de Entrenador (doCoachNextSeason). Aquí estaban y no se llegaba nunca.
   // DS20 (v95): la crisis pisaba la pantalla que tocaba (workSetup o una oferta de
   // Carrera de Vida) y su botón mandaba al calendario vacío del año nuevo.
   const _nextScreen=G.screen;
@@ -447,9 +449,11 @@ function renderLifeAthleteOffer(){
   if(!el)return;
   hideChrome();
   const a=G.pendingLifeAthleteOffer;
-  if(!a){G.screen='workSetup';render();return;}
+  if(!a){G.screen=G.lifecyclePhase==='coach'?'coachHome':'workSetup';render();return;}
 
   const isUrgent=false; // filosofía: el juego informa, el jugador decide — sin presión
+  const enCoach=G.lifecyclePhase==='coach';   // v96: la oferta también llega siendo ya entrenador
+  const slotLibre=enCoach?coachFreeSlotIdx():-1;
   const potData=LIFE_POTENTIAL_LABEL[a.potential]||{label:a.potential,color:'#888',desc:''};
   const persData=PERSONALITY_LABEL[a.personality]||{label:a.personality,color:'#888',emoji:'⚫',desc:''};
   const specLabel={fondista:'Fondista',montanero:'Montañero',tecnico:'Técnico',todoterreno:'Todoterreno'}[a.spec]||a.spec;
@@ -497,13 +501,13 @@ function renderLifeAthleteOffer(){
     </div>
 
     <div style="font-size:13px;color:#888;margin-bottom:16px;line-height:1.6">
-      Aceptar implica dedicar horas a esta persona durante tus propias temporadas. No es gratis. Pero puede que merezca la pena.
+      ${enCoach?(slotLibre>=0?`Entraría en tu hueco ${slotLibre+1} de entrenamiento, junto a los atletas que ya llevas.`:'No tienes hueco libre: el 2.º se abre con reputación 40 y el 3.º con 70. Puedes decir que no; quizá vuelva a cruzarse contigo.'):'Aceptar implica dedicar horas a esta persona durante tus propias temporadas. No es gratis. Pero puede que merezca la pena.'}
     </div>
 
-    <button class="main" style="border-color:#4a8a2a;color:#2d5a1a" onclick="acceptLifeAthlete()">Acepto — quiero trabajar con ${esc(a.name.split(' ')[0])} →</button>
+    ${enCoach&&slotLibre<0?'':`<button class="main" style="border-color:#4a8a2a;color:#2d5a1a" onclick="acceptLifeAthlete()">Acepto — quiero trabajar con ${esc(a.name.split(' ')[0])} →</button>`}
     ${(()=>{
       const limitYear={facil:15,medio:13,dificil:10,hardcore:8}[G.gameMode||'medio']||13;
-      const forced=G.year>=limitYear;
+      const forced=!enCoach&&G.year>=limitYear;
       return forced
         ? `<div class="warn" style="margin-top:10px">El cuerpo te lo pide. Ha llegado el momento de pasar el testigo.</div>`
         : `<button class="main" style="margin-top:8px;opacity:0.65" onclick="rejectLifeAthlete()">Ahora no — puede que aparezca alguien más adelante</button>`;
@@ -513,6 +517,18 @@ function renderLifeAthleteOffer(){
 window.acceptLifeAthlete=()=>{
   const a=G.pendingLifeAthleteOffer;
   if(!a)return;
+  // v96 · Siendo ya entrenador, el atleta entra en un hueco libre con el fichaje de Entrenador.
+  // Antes esto ponía lifecyclePhase='overlap': devolvía la partida a la fase de solapamiento.
+  if(G.carreraVida&&G.lifecyclePhase==='coach'){
+    const idx=coachFreeSlotIdx();
+    if(idx<0){showToast('No tienes hueco libre para otro atleta','#c0392b');return;}
+    G.pendingLifeAthleteOffer=null;
+    addCoachSlot(idx);                   // guarda el slot actual y deja el nuevo vacío
+    G.coachPool=[{...a,currentStats:{...(a.currentStats||a.baseStats)}}];
+    showToast(`${a.name.split(' ')[0]} se une a tu equipo de entrenamiento.`,'#4a8a2a');
+    doCoachSelect(a.id);
+    return;
+  }
   G.lifeAthlete={...a};
   G.lifecyclePhase='overlap';
   G.pendingLifeAthleteOffer=null;
@@ -529,8 +545,9 @@ window.rejectLifeAthlete=()=>{
   G.lifePendingAthletes.push({...a});
   G.lifeAthleteOfferCount=(G.lifeAthleteOfferCount||0)+1;
   G.pendingLifeAthleteOffer=null;
-  showToast('Sigues con tus carreras. Quizás llegue alguien más adelante.','#888');
-  G.screen='workSetup';
+  const enCoach=G.lifecyclePhase==='coach';   // v96: siendo entrenador, de vuelta a tu hub
+  showToast(enCoach?'Sigues con tus atletas. Quizás vuelva a cruzarse contigo.':'Sigues con tus carreras. Quizás llegue alguien más adelante.','#888');
+  G.screen=enCoach?'coachHome':'workSetup';
   autoSave();render();
 };
 function renderOverlapHub(){
@@ -558,7 +575,8 @@ function renderOverlapHub(){
       </div>
     </div>
 
-    ${G.lifeAthleteHours>0?`<div class="note" style="font-size:13px">Esta temporada llevas <strong>${G.lifeAthleteHours}h</strong> dedicadas a ${athleteFirst}.</div>`:`<div class="hint" style="font-size:13px">Aún no has dedicado horas a ${athleteFirst} esta temporada. Puedes hacerlo desde el bloque de entrenamiento.</div>`}`;
+    ${G.lifeAthleteHours>0?`<div class="note" style="font-size:13px">Esta temporada dedicas <strong>${G.lifeAthleteHours}h a la semana</strong> a ${athleteFirst}: tu entrenamiento rinde al ${Math.round(lifeAthleteEffMult(G.lifeAthleteHours)*100)} % y, al cerrar la temporada, ${athleteFirst} ganará +1 en ${lifeAthleteSeasonGain(G.lifeAthleteHours)} stat${lifeAthleteSeasonGain(G.lifeAthleteHours)>1?'s':''}.</div>`:`<div class="hint" style="font-size:13px">Aún no has dedicado horas a ${athleteFirst} esta temporada. Puedes hacerlo desde el bloque de entrenamiento.</div>`}
+    <div class="hint" style="font-size:13px;margin-top:8px">🏁 Cuando cierres esta temporada, en el balance podrás <strong>dejar la competición</strong> y entrenar a ${athleteFirst} a tiempo completo.</div>`;
 }
 
 window.goToCoachFromOverlap=()=>{
@@ -772,24 +790,35 @@ function renderClubOffer(){
     <button class="main" style="margin-top:8px;opacity:0.65" onclick="rejectClubOffer()">Ahora no — sigo solo con mis atletas</button>`;
 }
 
+// v96 · Aceptar la oferta lleva a la fundación completa —nombre, especialidad, filosofía y
+// arquetipo—, precargada. Antes el club nacía con filosofía montañero y arquetipo equilibrado
+// fijos. La fundación la cierra doClubCreate(), que llama a applyLifeClubFounding().
 window.confirmClubOffer=()=>{
+  const athlete=G.coachAthlete;
+  G._clubFromLife=true;
+  G._clubNameDraft=`Club Trail ${G.runner?.name?.split(' ').slice(-1)[0]||'Monte Perdido'}`;
+  G._clubSpecDraft=['montanero','fondista','tecnico'].includes(athlete?.spec)?athlete.spec:'mixto';   // «todoterreno» no es especialidad de club
+  G._clubFilDraft='montanero';G._clubArqDraft='equilibrado';
+  G.screen='clubCreate';
+  autoSave();render();
+};
+
+// Lo propio de fundar el club desde Carrera de Vida, sobre el clubModeData recién creado.
+function applyLifeClubFounding(){
   const cost=Math.round((G.money||0)*0.6);
   G.money=Math.max(0,(G.money||0)-cost);
   G.lifecyclePhase='club';
   G._clubOfferSeen=true;
-  // Inicializar clubModeData con el atleta actual ya dentro
   const athlete=G.coachAthlete;
-  const spec=athlete?.spec||'mixto';
-  const clubName=`Club Trail ${G.runner?.name?.split(' ').slice(-1)[0]||'Monte Perdido'}`;
-  G.clubModeData=initClubModeData(clubName,spec,'montanero','equilibrado');
   // Heredar trayectoria como entrenador como bonus de reputación de club (70% de coachReputation)
   const coachingYears=(G.coachSeason||1);
   const coachRep=(G.coachReputation||0);
   const repSeeding=Math.floor(coachRep*0.7);
   G.clubModeData.reputacion=Math.min(100,10+repSeeding);
   G.clubModeData._coachingHistory={years:coachingYears,coachReputation:coachRep};
-  // El atleta actual pasa a la plantilla del club
+  // El atleta actual pasa a la plantilla del club, como capitán (y único: el arquetipo ya traía uno)
   if(athlete){
+    G.clubModeData.plantilla.forEach(r=>{if(r.role==='capitan')r.role='normal';});
     const clubRunner={
       id:athlete.id||'life_athlete',
       name:athlete.name, flag:athlete.flag||'🇪🇸', spec:athlete.spec||'fondista',
@@ -798,8 +827,6 @@ window.confirmClubOffer=()=>{
     };
     G.clubModeData.plantilla.unshift(clubRunner);
   }
-  generateClubEvent();
-  generateClubObjective();
   // Desbloquear modo club en localStorage
   try{
     let ul={};try{ul=JSON.parse(LS.get('unlocked')||'{}');}catch(_e){}
@@ -807,10 +834,7 @@ window.confirmClubOffer=()=>{
     LS.set('unlocked',JSON.stringify(ul));
   }catch(e){}
   showToast('El club nace. Una nueva etapa empieza.','#1D9E75');
-  checkAndUnlockAchievements(); // CR-38 (v76): logro cm_found
-  G.screen='clubIntro';
-  autoSave();render();
-};
+}
 
 function renderClubIntro(){
   const el=$main();
@@ -926,8 +950,10 @@ function checkLifeExtraAthlete(){
   const usedIds=[
     ...(G.coachAthleteHistory||[]).map(a=>a.id),
     G.coachAthlete?.id,
+    ...(G.coachRoster||[]).map(s=>s&&s.coachAthlete&&s.coachAthlete.id),   // v96: tampoco los de otros huecos
   ].filter(Boolean);
-  const available=LIFE_EXTRA_ATHLETES.filter(a=>!usedIds.includes(a.id));
+  const usedNames=(G.coachAthleteHistory||[]).map(a=>a.name);   // el historial guarda el nombre, no el id
+  const available=LIFE_EXTRA_ATHLETES.filter(a=>!usedIds.includes(a.id)&&!usedNames.includes(a.name));
   if(!available.length)return;
   const pick=available[Math.floor(Math.random()*available.length)];
   G.pendingLifeAthleteOffer={...pick,currentStats:{...pick.baseStats}};
@@ -1021,7 +1047,9 @@ window.confirmLifeCoachTransition=()=>{
   }
   // Tiene atleta — transición directa a entrenador
   G.lifecyclePhase='coach';
-  G.coachAthlete={...G.lifeAthlete};
+  // v96: en el solapamiento ya lo entrenabas como G.coachAthlete; copiar G.lifeAthlete encima
+  // borraba todo lo trabajado en el lado Entrenador.
+  if(!G.coachAthlete||G.coachAthlete.id!==G.lifeAthlete.id)G.coachAthlete={...G.lifeAthlete};
 
   // Heredar logros de fame de Clásico como bonus de reputación inicial
   let repBonus=0;

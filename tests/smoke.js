@@ -27,7 +27,9 @@ const {T,ctx,src}=build(['freshState','modeCfg','currentWorkPct','setWorkPct','g
   'seasonMonthLabel','isCoachPhase','injuryThisRace','restWeeksEffMult','legsTrainingMult','raceMental','fairPlayMental',
   'injuryRacesBlocked','injuryBlockText','INJURY_BLOCK_SEASON','overlapRunnerScreen',
   'applyInjuryStatPenalty','recoverInjurySequel','INJURY_SEQUEL_RECOVERY','recordDNF','careerAgg','ACHIEVEMENTS',
-  'CLUB_SOCIO_FEE','CLUB_RED_SEASONS_MAX','clubSponsorObjectiveMet','clubObjectiveDeltas']);
+  'CLUB_SOCIO_FEE','CLUB_RED_SEASONS_MAX','clubSponsorObjectiveMet','clubObjectiveDeltas',
+  'coachViewActive','initClubModeData','simClubRace','CLUB_RACES','CLUB_ROLES','TOAST_QUEUE',
+  'LIFE_EXTRA_ATHLETES','CLUB_SOCIOS_SOFT_CAP']);
 const t=scorer();
 const setG=o=>{const g=T.freshState();Object.assign(g,o);T.setG(g);return g;};
 
@@ -475,7 +477,7 @@ console.log('\n── v96 · los DNF entran en el historial del corredor ──'
 }
 
 console.log('\n── v96 · economía del Club ──');
-t('la cuota de socio es €45', T.CLUB_SOCIO_FEE===45&&!/socios\*25\*12/.test(src['club.js']));
+t('la cuota de socio es €25 y sale de la constante', T.CLUB_SOCIO_FEE===25&&!/socios\*25\*12/.test(src['club.js']));
 {
   const R=[{pos:2,dnf:false,race:{tier:'local'}},{pos:8,dnf:false,race:{tier:'regional'}},{pos:9,dnf:false,race:{tier:'local'}},
     {pos:null,dnf:true,race:{tier:'local'}},{pos:4,dnf:false,race:{tier:'nacional'}}];
@@ -511,6 +513,195 @@ console.log('\n── v96 · el objetivo de temporada del Club se aplica una vez
 
 console.log('\n── v96 · Canicross se puede cerrar en marzo ──');
 t('avanzar desde marzo lo termina y abre el cierre',
-  /const marchDone=\(G\.cnWeek\|\|0\)>=25;/.test(src['canicross.js'])&&/const allRaceDone=marchDone\|\|\(races\.length>0&&pendingRaces\.length===0\);/.test(src['canicross.js']));
+  /const marchDone=\(G\.cnWeek\|\|0\)>=24;/.test(src['canicross.js'])&&/const allRaceDone=marchDone\|\|\(races\.length>0&&pendingRaces\.length===0\);/.test(src['canicross.js']));
+
+console.log('\n── Tanda del playtest v96 ──');
+{
+  const _render=ctx.render,_toast=ctx.showToast;
+  const pinta=domStub(ctx);
+
+  // BUG-05: la pantalla, no el texto del fuente
+  setG({gameMode:'canicross',canicrossMode:true,screen:'canicrossSeasonBalance',activeTab:'game',cnSeason:1,cnWeek:28,cnRaceResults:[],dog:null});
+  let html=pinta(()=>_render());
+  t('Canicross: «Cerrar temporada» llega al balance y se pinta', html.includes('cnEndSeason()'), html.slice(0,80));
+
+  // BUG-17
+  setG({cnWeek:4});  t('Canicross: el primer «Avanzar» (semana 4) ya es noviembre', T.cnCurrentMonth()===11, T.cnCurrentMonth());
+  setG({cnWeek:19}); t('semana 19 → febrero', T.cnCurrentMonth()===2, T.cnCurrentMonth());
+  setG({cnWeek:20}); t('semana 20 → marzo', T.cnCurrentMonth()===3, T.cnCurrentMonth());
+  t('el aviso de «Avanzar» nombra el mes que termina', /const doneMonth=cnCurrentMonth\(\);[\s\S]*for\(let i=0;i<4;i\+\+\)[\s\S]*MONTH_NAMES\[doneMonth\]/.test(src['canicross.js']));
+
+  // BUG-08
+  setG({carreraVida:true,lifecyclePhase:'overlap',screen:'coachHome'});
+  t('solapamiento, lado Entrenador: se pinta como Entrenador', T.coachViewActive()===true&&T.isCoachPhase()===false);
+  setG({carreraVida:true,lifecyclePhase:'overlap',screen:'preRacePrep'});
+  t('solapamiento, lado Corredor: se pinta como Corredor', T.coachViewActive()===false);
+
+  // BUG-04
+  {
+    const nodo={textContent:'',style:{},classList:{add(){},remove(){}},offsetWidth:1};
+    const _gid=ctx.document.getElementById,_st=ctx.setTimeout;const timers=[];
+    ctx.document.getElementById=id=>id==='toast-notif'?nodo:_gid(id);
+    ctx.setTimeout=f=>{timers.push(f);return timers.length;};
+    _toast('🏆 Logro: A');_toast('🏆 Logro: B');_toast('🏆 Logro: B');
+    t('dos avisos seguidos: se ve el primero', nodo.textContent==='🏆 Logro: A');
+    t('el repetido no se encola', T.TOAST_QUEUE.length===1, T.TOAST_QUEUE.length);
+    timers.shift()();
+    t('y al acabar sale el segundo, no se pierde', nodo.textContent==='🏆 Logro: B');
+    timers.shift()();
+    t('la cola se vacía', T.TOAST_QUEUE.length===0&&timers.length===0);
+    ctx.document.getElementById=_gid;ctx.setTimeout=_st;
+  }
+
+  ctx.render=()=>{};ctx.showToast=()=>{};
+
+  // BUG-15
+  setG({gameMode:'club'});
+  let d=T.initClubModeData('Test','mixto','montanero','equilibrado');
+  T.getG().clubModeData=d;d.presupuesto=50;
+  const coh=d.cohesion,soc=d.socios;
+  T.getG()._monthlySelections={training:'conservador',focus:'marketing',budget:'invertir'};
+  ctx.doClubApplyMonthlyFull();
+  t('Club: «Invertir» sin fondos no aplica nada ni gasta la decisión', d.monthlyDecisionDone===false&&d.cohesion===coh&&d.socios===soc);
+
+  // BUG-14
+  {
+    const _M=ctx.Math;ctx.Math=Object.assign(Object.create(Math),{random:()=>0.5});
+    const runner={id:'r1',stats:{resistencia:60,velocidad:60,subida:60,bajada:60},spec:'fondista',role:'normal',age:28};
+    const race=T.CLUB_RACES[0];
+    d=T.initClubModeData('Test','mixto','montanero','equilibrado');
+    const sin=T.simClubRace(runner,race,d).perf;
+    d._monthlyFocusBonus=4;
+    const con=T.simClubRace(runner,race,d).perf;
+    ctx.Math=_M;
+    t('Club: «Resultados» de la decisión mensual sube el rendimiento', con>sin, sin+' → '+con);
+  }
+  t('Club: el foco «Formación» del hub acelera la cantera', /const focusCoef=d\.monthlyFocus==='formacion'/.test(src['club.js'])&&/\*coef\*staffCoef\*focusCoef;/.test(src['club.js']));
+
+  // BUG-16
+  t('Club: el Capitán ya no promete bonus a los compañeros', !/corredores cercanos/.test(T.CLUB_ROLES.capitan.desc));
+
+  // BUG-19
+  setG({clubModeData:null});
+  ctx.devJumpToClub();
+  t('dev: el salto a Club crea el club con objetivo de temporada', !!T.getG().clubModeData&&!!T.getG().clubModeData.seasonObjective);
+
+  // BUG-18
+  const rs=[{id:'a',name:'A',km:20,month:3,cost:10,prize:50},{id:'b',name:'B',km:20,month:5,cost:10,prize:50},{id:'c',name:'C',km:20,month:7,cost:10,prize:50}];
+  setG({gameMode:'medio',screen:'preRacePrep',selectedRaces:rs,currentRaceIdx:1,raceResults:[{}]});
+  const antes=Object.values(T.getG().runner.stats).reduce((a,b)=>a+b,0);
+  pinta(()=>ctx.devSetInjury('fractura'));
+  let g=T.getG();
+  t('dev: fractura en la preparación → pantalla de baja, sin preparar la carrera', g.screen==='raceResult'&&g.currentRaceIdx===1, g.screen+' idx '+g.currentRaceIdx);
+  t('y quita stats y la apunta en el historial', Object.values(g.runner.stats).reduce((a,b)=>a+b,0)<antes&&g.injuryHistory.length===1);
+
+  // Canicross sin ranura
+  t('Canicross ya no se inventa la ranura 1', !/if\(G\._saveSlot==null\)G\._saveSlot=0;/.test(src['canicross.js']));
+
+  ctx.render=_render;ctx.showToast=_toast;
+}
+
+console.log('\n── Activos del playtest v96, segunda tanda ──');
+{
+  const _render=ctx.render,_toast=ctx.showToast;
+  const pinta=domStub(ctx);
+  ctx.render=()=>{};ctx.showToast=()=>{};
+
+  // Ficha 3
+  t('injuryRecoverySeasons ya no existe', !Object.values(src).some(s=>/injuryRecoverySeasons|recoverySeasons:/.test(s)));
+
+  // Ficha 6 · horas del pupilo
+  t('mejora por horas: 0h nada, 2h → 1, 5h → 2, 10h → 3',
+    ctx.lifeAthleteSeasonGain(0)===0&&ctx.lifeAthleteSeasonGain(2)===1&&ctx.lifeAthleteSeasonGain(5)===2&&ctx.lifeAthleteSeasonGain(10)===3);
+  {
+    const base={resistencia:50,velocidad:50,subida:50,bajada:50,nutricion:50,mental:50};
+    const life={id:'noa',name:'Noa Prueba',age:20,spec:'fondista',baseStats:{...base},currentStats:{...base}};
+    const coachA={...life,currentStats:{...base,resistencia:70}};   // otro objeto, como tras guardar y cargar
+    setG({gameMode:'medio',carreraVida:true,lifecyclePhase:'overlap',lifeAthlete:life,coachAthlete:coachA,lifeAthleteHours:10,year:3,selectedRaces:[],raceResults:[]});
+    let err='';
+    try{ctx.doNextYear(0);}catch(e){err=e.message;}
+    const g=T.getG();
+    const suma=o=>Object.values(o).reduce((a,b)=>a+b,0);
+    t('las horas llegan también al atleta que entrenas en el lado Entrenador',
+      !err&&suma(g.coachAthlete.currentStats)===suma(base)+20+3&&suma(g.lifeAthlete.currentStats)===suma(base)+3, err||suma(g.coachAthlete.currentStats));
+    setG({gameMode:'medio',carreraVida:true,lifecyclePhase:'overlap',lifeAthlete:{...life},coachAthlete:{...coachA,currentStats:{...base,resistencia:70}},year:12,unlockedAchievements:[]});
+    try{ctx.confirmLifeCoachTransition();}catch(e){err=e.message;}
+    t('al retirarte no se pisa lo entrenado en el lado Entrenador', !err&&T.getG().coachAthlete.currentStats.resistencia===70, err||T.getG().coachAthlete.currentStats.resistencia);
+    setG({carreraVida:true,lifecyclePhase:'overlap',lifeAthlete:{...life},lifeAthleteHours:5,year:3});
+    const html=pinta(()=>ctx.renderOverlapHub());
+    t('el hub del solapamiento habla de horas a la semana y de la retirada', html.includes('a la semana')&&html.includes('dejar la competición')&&!html.includes('llevas'));
+  }
+
+  // Ficha 7 · cohesión
+  setG({clubModeData:{filosofia:'montanero'}});
+  const tip=ctx.clubCohesionTipHtml();
+  t('el ⓘ de la cohesión dice lo que hace la simulación',
+    tip.includes('+4 por cada victoria')&&tip.includes('−6 por cada abandono')&&tip.includes('+8 con psicólogo')&&tip.includes('+2 por tu filosofía')
+    &&/wins\*4-dnfs\*6/.test(src['club.js']));
+
+  // Ficha 8 · números rojos
+  t('el aviso de números rojos sale en todas las temporadas', !/if\(d\.redSeasons<3\)showToast/.test(src['club.js']));
+
+  // Ficha 11a · invitaciones
+  setG({selectedRaces:[{id:'x',_invite:true}],repInvitations:[{id:'y'}]});
+  t('invitación del organizador y por reputación se distinguen',
+    ctx.inviteBadge({id:'x'}).includes('organizador')&&ctx.inviteBadge({id:'y'}).includes('reputación')&&ctx.inviteBadge({id:'z'})==='');
+  t('el distintivo sale en las tres listas', (src['render-clasico.js'].match(/\$\{inviteBadge\(r\)\}/g)||[]).length===3);
+
+  ctx.render=_render;ctx.showToast=_toast;
+}
+
+console.log('\n── Carrera de Vida: de Entrenador a Club · economía del Club ──');
+{
+  const _render=ctx.render,_toast=ctx.showToast,_M=ctx.Math;
+  const pinta=domStub(ctx);
+  ctx.render=()=>{};ctx.showToast=()=>{};
+  ctx.Math=Object.assign(Object.create(Math),{random:()=>0.99});   // sin retiros ni atleta extra por azar
+  const base={resistencia:55,velocidad:55,subida:55,bajada:55,nutricion:50,mental:50};
+  const ane={id:'ane',name:'Ane Prueba',flag:'🇪🇸',spec:'todoterreno',personality:'obediente',age:24,baseStats:{...base},currentStats:{...base}};
+  let err='',g;
+
+  setG({gameMode:'medio',carreraVida:true,lifecyclePhase:'coach',coachAthlete:{...ane},coachSeason:2,coachReputation:70,coachRaceResults:[],coachTrainerStyle:'x',money:10000});
+  try{ctx.doCoachNextSeason();}catch(e){err=e.message;}
+  t('Entrenador en Carrera de Vida: al cerrar la 3.ª temporada llega la oferta de club', !err&&T.getG().screen==='clubOffer', err||T.getG().screen);
+
+  ctx.confirmClubOffer();
+  g=T.getG();
+  t('aceptar lleva a la fundación completa, precargada', g.screen==='clubCreate'&&g._clubFromLife===true&&g._clubSpecDraft==='mixto'&&g.lifecyclePhase==='coach');
+  g._clubArqDraft='cantera';g._clubFilDraft='estrategico';
+  try{ctx.doClubCreate();}catch(e){err=e.message;}
+  g=T.getG();const dc=g.clubModeData;
+  t('fundar: arquetipo y filosofía elegidos, tu atleta de capitán (único) y fase Club',
+    !err&&dc&&dc.archetype==='cantera'&&dc.filosofia==='estrategico'&&dc.plantilla[0].name==='Ane Prueba'
+    &&dc.plantilla.filter(r=>r.role==='capitan').length===1&&g.lifecyclePhase==='club'&&g.screen==='clubIntro'&&g.money===4000&&!g._clubFromLife,
+    err||JSON.stringify({arq:dc&&dc.archetype,screen:g.screen,money:g.money}));
+
+  const extra={...T.LIFE_EXTRA_ATHLETES[0],currentStats:{...T.LIFE_EXTRA_ATHLETES[0].baseStats}};
+  setG({gameMode:'medio',carreraVida:true,lifecyclePhase:'coach',coachAthlete:{...ane},coachActiveIdx:0,coachRoster:[],coachReputation:45,coachTrainerStyle:'x',pendingLifeAthleteOffer:{...extra}});
+  try{ctx.acceptLifeAthlete();}catch(e){err=e.message;}
+  g=T.getG();
+  t('siendo entrenador, aceptar un atleta lo mete en el hueco libre, sin volver al solapamiento',
+    !err&&g.lifecyclePhase==='coach'&&g.coachActiveIdx===1&&g.coachAthlete.id===extra.id&&g.coachRoster[0]&&g.coachRoster[0].coachAthlete.id==='ane',
+    err||JSON.stringify({fase:g.lifecyclePhase,idx:g.coachActiveIdx}));
+  setG({gameMode:'medio',carreraVida:true,lifecyclePhase:'coach',coachAthlete:{...ane},coachActiveIdx:0,coachRoster:[],coachReputation:10,pendingLifeAthleteOffer:{...extra}});
+  ctx.acceptLifeAthlete();
+  t('sin hueco libre no se ficha', !!T.getG().pendingLifeAthleteOffer&&T.getG().coachAthlete.id==='ane');
+  ctx.rejectLifeAthlete();
+  t('y rechazar devuelve al hub de Entrenador, no a la jornada laboral', T.getG().screen==='coachHome');
+
+  // Economía: techo blando de socios
+  const res=[{race:{name:'R',tier:'local',cost:0},runner:{id:'a',name:'A'},pos:2,dnf:false,prize:0},{race:{name:'R2',tier:'local',cost:0},runner:{id:'a',name:'A'},pos:3,dnf:false,prize:0}];
+  const ganancia=socios=>{
+    setG({gameMode:'club'});
+    const dd=T.initClubModeData('Eco','mixto','montanero','equilibrado');
+    dd.socios=socios;dd.reputacion=10;dd.seasonResults=res;T.getG().clubModeData=dd;
+    const h=pinta(()=>ctx.renderClubSeasonEnd());
+    return +((h.match(/doClubNextSeason\((-?[\d.]+),/)||[])[1]);
+  };
+  const g0=ganancia(0),g60=ganancia(60),g120=ganancia(120);
+  t('socios por resultados: a 60 la mitad, a 120 ninguno', T.CLUB_SOCIOS_SOFT_CAP===120&&g0>0&&g60===Math.round(g0/2)&&g120===0, g0+' · '+g60+' · '+g120);
+
+  ctx.render=_render;ctx.showToast=_toast;ctx.Math=_M;
+}
 
 t.done('TODO OK');

@@ -1679,7 +1679,15 @@ window.doCoachNextSeason=()=>{
   if(!G._skipMaturityThisSeason)applyAthleteMaturity(a);
   G._skipMaturityThisSeason=false;
   checkAndUnlockAchievements(); // CR-38 (v76)
-  G.screen='coachHome';G.activeTab='game';saveCoachSlot();autoSave();render();
+  G.screen='coachHome';G.activeTab='game';
+  // v96 · Carrera de Vida: retiros de rivales, atleta extra y oferta de club se comprobaban solo
+  // en doNextYear(), el cierre de Clásico, al que en fase Entrenador no se llega nunca.
+  if(G.carreraVida&&G.lifecyclePhase==='coach'){
+    checkRivalRetirements();
+    checkLifeExtraAthlete();
+    if(G.screen!=='lifeAthleteOffer')checkClubOffer();
+  }
+  saveCoachSlot();autoSave();render();
 };
 
 window.doCoachNewAthlete=()=>{
@@ -1840,6 +1848,15 @@ function renderCoachHub(){
     <button class="main" style="margin-top:12px;opacity:0.5" onclick="backToMainMenu()">← Menú principal</button>`;
 }
 
+// v96 · Primer hueco desbloqueado y vacío del roster, o -1. Guarda antes el slot activo: si
+// no, el atleta que estás viendo podría no constar todavía en G.coachRoster.
+function coachFreeSlotIdx(){
+  saveCoachSlot();
+  for(let i=0;i<3;i++){
+    if(coachSlotUnlocked(i)&&!(G.coachRoster&&G.coachRoster[i]&&G.coachRoster[i].coachAthlete))return i;
+  }
+  return -1;
+}
 window.addCoachSlot=idx=>{
   // Determine which slot to fill: if idx given, use it; else find first empty unlocked slot
   let targetIdx=idx!==undefined?idx:-1;
@@ -1952,6 +1969,7 @@ function renderCoachAthleteTab(){
         <div style="font-size:11px;color:#aaa;margin-top:4px;font-style:italic">${es.desc}</div>
       </div>
     </div>
+    ${G.carreraVida&&G.lifecyclePhase==='overlap'&&G.lifeAthlete&&G.lifeAthlete.id===a.id?`<div class="note" style="margin-bottom:12px;font-size:13px">🕒 Como corredor le dedicas <strong>${G.lifeAthleteHours||0}h a la semana</strong>${(G.lifeAthleteHours||0)>0?`: al cerrar tu temporada ganará +1 en ${lifeAthleteSeasonGain(G.lifeAthleteHours)} stat${lifeAthleteSeasonGain(G.lifeAthleteHours)>1?'s':''}`:'. Se asignan en tu bloque de entrenamiento'}.</div>`:''}
     <div class="card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <div class="sec-title-sm" style="margin-bottom:0">Confianza</div>

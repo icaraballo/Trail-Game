@@ -884,7 +884,6 @@ window.doPace=p=>{
     const injData=INJURY_TYPES[midRaceInjury];
     G.injuryType=midRaceInjury;
     G.injuryStatus='moderada';
-    G.injuryRecoverySeasons=injData.recoverySeasons||1;
     // v96: la misma cuenta que la lesión post-carrera (fisio y fractura por carreras
     // restantes) y lo perdido queda como secuela recuperable
     G.injuryRacesLeft=injuryRacesBlocked(midRaceInjury,hasFisio(),racesLeftAfterCurrent());
@@ -2461,7 +2460,6 @@ function applyPostRaceTracking(race,res){
   if(specificInjury){
     const injData=INJURY_TYPES[specificInjury];
     G.injuryStatus='moderada';G.injuryType=specificInjury;
-    G.injuryRecoverySeasons=injData.recoverySeasons||1;
     // T46 (v88): con el centinela de "resto de temporada" el descuento de fisio
     // lo convertía en 500 carreras — mismo efecto práctico, número sin sentido.
     // La cuenta vive en injuryRacesBlocked() desde v96, compartida con la ayuda.

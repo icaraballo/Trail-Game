@@ -92,6 +92,15 @@ window.selectClub=id=>{
   render();
 };
 // ── CALENDAR TAB ───────────────────────
+// NOTA-04 (v96): «📩 Invitación» solo salía en la pestaña del calendario, y no distinguía
+// la del organizador (evento entre carreras) de la que abre la reputación (umbral de
+// seguidores). Mismo distintivo en la pestaña, la selección de inicio y la de mitad de temporada.
+function inviteBadge(r){
+  const ev=(G.selectedRaces||[]).some(s=>s.id===r.id&&s._invite);
+  const rep=(G.repInvitations||[]).some(i=>i.id===r.id);
+  if(!ev&&!rep)return '';
+  return `<span style="font-size:12px;font-weight:600;padding:1px 5px;border-radius:3px;background:#2d7a2a22;color:#2d7a2a">📩 ${ev?'Invitación del organizador':'Invitación por reputación'}</span>`;
+}
 function renderCalendarTab(){
   const el=$main();
   const selIds=G.selectedRaces.map(r=>r.id);
@@ -127,7 +136,7 @@ function renderCalendarTab(){
           <span style="font-size:12px;font-weight:600;padding:1px 5px;border-radius:3px;background:${tierColor[r.tier]||'#888'}22;color:${tierColor[r.tier]||'#888'}">${tierLabel[r.tier]||''}</span>
           ${badge}
           ${r.spec?`<span style="font-size:12px;font-weight:600;padding:1px 5px;border-radius:3px;background:#4a8a2a22;color:#4a8a2a">★ ${r.spec}</span>`:''}
-          ${isInvited?`<span style="font-size:12px;font-weight:600;padding:1px 5px;border-radius:3px;background:#2d7a2a22;color:#2d7a2a">📩 Invitación</span>`:''}
+          ${inviteBadge(r)}
         </div>
         <div class="cal-race-meta">${r.monthName} · ${r.type} · ${raceDesnivel(r)}${isInvited?' · <span style="color:#2d7a2a">ranking no requerido</span>':''}</div>
       </div>
@@ -1006,6 +1015,7 @@ function renderCalendar(){
           <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:2px">
             <span class="card-title">${esc(r.name)}</span>
             <span style="font-size:12px;font-weight:600;padding:1px 6px;border-radius:4px;background:${tierColor[r.tier]||'#888'}22;color:${tierColor[r.tier]||'#888'}">${tierLabel[r.tier]||''}</span>
+            ${inviteBadge(r)}
             ${isSpec?`<span style="font-size:12px;font-weight:600;padding:1px 6px;border-radius:4px;background:${myColor}22;color:${myColor}">${myLabel}</span>`:''}
             ${inCirc?`<span style="font-size:12px;font-weight:600;padding:1px 5px;border-radius:4px;background:#c07a1022;color:#c07a10">Liga · ~${circPts}pts</span>`:''}
           </div>
@@ -1263,6 +1273,7 @@ function renderTraining(){
   el.innerHTML=`
     <h2>Bloque de entrenamiento</h2>
     <p class="sub">Efectividad: <strong>${seEffPct}%</strong> · ${wo?.trainingH||5}h/sem · ${se.label}</p>
+    <div class="hint">📅 El bloque se aplica <strong>al cerrar la temporada</strong>, una sola vez: las cifras de cada tarjeta son lo que sumará entonces.</div>
     ${G.zeroedOutThisRace&&G.postRaceConsequence?`<div class="danger">⚠ Secuelas de la última carrera — <strong>${G.postRaceConsequence.label}</strong>. ${G.postRaceConsequence.id==='descanso_forzado'?`El bloque de esta temporada rinde un ${Math.round((1-restWeeksEffMult())*100)} % menos.`:G.postRaceConsequence.id==='sobrecarga'?'Subida, bajada y velocidad entrenan al 80 % esta temporada.':'Recuperación en curso.'}</div>`:''}
     ${hint?`<div class="${hint.type}">${hint.msg}</div>`:''}
     ${se.trainingMod!==0?`<div class="hint">${se.note}</div>`:''}
@@ -1347,10 +1358,12 @@ function renderAthleteHoursBlock(){
           return `<div onclick="setAthleteHours(${v})" style="flex:1;text-align:center;padding:8px 4px;border-radius:8px;border:1.5px solid ${sel?'#534AB7':'#e0dfd8'};background:${sel?'#EEEDFE':'#fff'};cursor:pointer;font-size:13px;font-weight:${sel?'600':'400'};color:${sel?'#534AB7':'#555'};transition:all .15s">${v}h</div>`;
         }).join('')}
       </div>
-      ${h>0?`<div style="font-size:12px;color:#c07a10">–${h}h para ti · +${h}h para ${first} · tu entrenamiento al <strong>${effPct}%</strong></div>`
+      ${h>0?`<div style="font-size:12px;color:#c07a10">–${h}h para ti · +${h}h para ${first} · tu entrenamiento al <strong>${effPct}%</strong> · al cerrar la temporada, ${first} +1 en ${lifeAthleteSeasonGain(h)} stat${lifeAthleteSeasonGain(h)>1?'s':''}</div>`
            :`<div style="font-size:12px;color:#aaa">Sin horas asignadas — entrenas al 100%</div>`}
     </div>`;
 }
+// Mejora del atleta al cerrar la temporada según las horas semanales: +1 en 1, 2 o 3 stats.
+function lifeAthleteSeasonGain(h){return h<=0?0:h>=10?3:h>=5?2:1;}
 function lifeAthleteEffMult(h){
   // 0h=100%, 2h=90%, 5h=75%, 10h=60%
   if(h<=0)return 1.0;
@@ -1503,6 +1516,7 @@ function renderMidSeasonCalendar(){
           <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:2px">
             <span class="card-title">${esc(r.name)}</span>
             <span style="font-size:12px;font-weight:600;padding:1px 5px;border-radius:3px;background:${tierColor[r.tier]||'#888'}22;color:${tierColor[r.tier]||'#888'}">${tierLabel[r.tier]||''}</span>
+            ${inviteBadge(r)}
           </div>
           <div style="font-size:12px;color:#888">${r.monthName} · ${r.type} · ${raceDesnivel(r)}</div>
           ${locked?(r.zegamaSpecial?`<div style="font-size:12px;color:#c07a10;margin-top:2px">🏔️ Invitación Top 20 o clasificación por tiempo (corte 4h20)</div>`:`<div style="font-size:12px;color:#ccc;margin-top:2px">🔒 Ranking #${r.reqRanking} requerido</div>`):''}
@@ -1977,7 +1991,8 @@ window.selectTraining=id=>{
       const parts=Object.entries(b.effects)
         .filter(([,v])=>v!==0)
         .map(([k,v])=>{const r=Math.round(v*eff);const label=k.charAt(0).toUpperCase()+k.slice(1);return r>0?`+${r} ${label}`:(r<0?`${r} ${label}`:'');}).filter(Boolean);
-      if(parts.length) showToast('✓ '+parts.join(' · '),parts.some(p=>p.startsWith('+'))?'#2d7a2d':'#c07a10');
+      if(parts.length) showToast('Al cerrar la temporada: '+parts.join(' · '),   // BUG-02 (v96): parecía inmediato
+        parts.some(p=>p.startsWith('+'))?'#2d7a2d':'#c07a10');
     }
   }
   autoSave();render();
@@ -2117,7 +2132,7 @@ window.handleEv=(evId,choiceIdx)=>{
       const extras=RACES_DB.filter(r=>!r.zegamaSpecial&&r.month>mesActual
         &&!G.selectedRaces.find(s=>s.id===r.id));
       if(extras.length>0){
-        const nueva={...shuffle(extras)[0]};
+        const nueva={...shuffle(extras)[0],_invite:true};   // NOTA-04 (v96): para distinguirla en los calendarios
         let i=G.currentRaceIdx+1;
         while(i<G.selectedRaces.length&&G.selectedRaces[i].month<=nueva.month)i++;
         G.selectedRaces.splice(i,0,nueva);

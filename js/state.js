@@ -35,7 +35,7 @@ function freshState(){
     activeTab:'game',
     lastRaceGains:[],
     bodyLoad:0,
-    injuryStatus:null,injuryType:null,injuryRecoverySeasons:0,
+    injuryStatus:null,injuryType:null,
     injuryRacesLeft:0,injuryHistory:[],
     injurySequel:{},             // v96: {stat: puntos pendientes de recuperar} tras una lesión
     raceFinishedCount:0,raceAbandonedCount:0,
@@ -295,7 +295,7 @@ function freshState(){
     _clubNameDraft:null,
     _clubSpecDraft:null,
     _clubFilDraft:null,
-    _clubArqDraft:null,
+    _clubArqDraft:null,_clubFromLife:false,
     _clubSimIdx:0,               // índice de la simulación de jornada
     _monthlySelections:null,     // {decisionId:opcionId} del consejo mensual
     _clubFromBetween:false,      // se entró al club desde la pantalla de gestión
@@ -478,6 +478,11 @@ function monthlyClubCost(){return G.club?.cost||0;}
 // marca lifecyclePhase='coach'. Las pestañas preguntaban solo por lo primero, así
 // que en Carrera de Vida enseñaban el calendario y el corredor de Clásico (CR-29).
 function isCoachPhase(){return G.gameMode==='coach'||(!!G.carreraVida&&G.lifecyclePhase==='coach');}
+// BUG-08 (v96): lo que se pinta. En el solapamiento isCoachPhase() es falso aunque estés en el
+// lado Entrenador, y las pestañas Calendario, Atleta y Reputación pintaban al corredor.
+function coachViewActive(){
+  return isCoachPhase()||(!!G.carreraVida&&G.lifecyclePhase==='overlap'&&typeof G.screen==='string'&&G.screen.startsWith('coach'));
+}
 // Secuelas de zona roja (v95, decisión de Bugs-Activos): escribían postRaceRestWeeks
 // y seasonLegsPenalty y nadie los leía. Clásico no tiene semanas —el bloque se aplica
 // una vez por temporada—, así que se traducen a eficacia y duran la temporada.

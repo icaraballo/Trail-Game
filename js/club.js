@@ -31,13 +31,15 @@ function simClubRace(runner,race,clubData){
   const role=CLUB_ROLES[runner.role||'normal']||CLUB_ROLES.normal;
   base+=role.perfBonus||0;
   if(role.specBonus&&runner.spec===d.specialty)base+=6;
+  // Decisión mensual «Resultados»: +4 en la próxima simulación. Se escribía y nadie lo leía (BUG-14).
+  base+=d._monthlyFocusBonus||0;
 
   // C9 Filosofía: bonus si especialidad coincide
   const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;
   if(fil&&fil.specBonus&&runner.spec===fil.specBonus)base+=5;
   if(fil&&fil.raceBonus&&fil.raceBonus.includes(race.tier))base+=3;
 
-  // C6 Cohesión: ±5% rendimiento
+  // C6 Cohesión: ±10 % rendimiento
   const cohMod=((d.cohesion||50)-50)/500; // -0.1 a +0.1
   base*=(1+cohMod);
 
@@ -114,6 +116,7 @@ function initClubModeData(name,specialty,filosofia,archetype){
       {name:'Euskadi Trail Elite',  rep:75,socios:120,level:'nacional'},
     ],
     monthlyFocus:null,              // C16 decisión mensual activa
+    _monthlyFocusBonus:0,           // C16 «Resultados» de la decisión mensual: +4 en la próxima simulación
     seasonSimulated:false,
     redSeasons:0,                   // v96: temporadas seguidas cerrando con presupuesto negativo
     dissolved:false,                // v96: el club se disolvió tras CLUB_RED_SEASONS_MAX en rojo
@@ -203,9 +206,10 @@ function renderClubCreate(){
     <div style="text-align:center;padding:14px 0 16px">
       <div style="font-size:32px;margin-bottom:6px">🏕️</div>
       <h2>Crear tu club</h2>
-      <p class="sub">${G._clubUnlockedHint?'Con tu experiencia como corredor y entrenador, el club ya nace con algo de credibilidad.':'Define el nombre, especialidad y filosofía del club.'}</p>
+      <p class="sub">${G._clubFromLife?'Tu atleta entra como capitán y tu reputación de entrenador te acompaña. Elige cómo quieres que sea el club.':G._clubUnlockedHint?'Con tu experiencia como corredor y entrenador, el club ya nace con algo de credibilidad.':'Define el nombre, especialidad y filosofía del club.'}</p>
     </div>
-    ${G._clubUnlockedHint?`<div class="note" style="margin-bottom:14px;background:#E1F5EE;border-color:#9FE1CB;color:#085041">Tu historial habla por ti. Empiezas con presupuesto un 15% mayor y reputación inicial de 13 en lugar de 10.</div>`:''}
+    ${G._clubFromLife?`<div class="note" style="margin-bottom:14px">Inversión inicial: <strong>€${Math.round((G.money||0)*0.6)}</strong> (60 % de tus ahorros).${G.coachAthlete?` ${esc(G.coachAthlete.name)} entra como capitán.`:''}</div>`:''}
+    ${G._clubUnlockedHint&&!G._clubFromLife?`<div class="note" style="margin-bottom:14px;background:#E1F5EE;border-color:#9FE1CB;color:#085041">Tu historial habla por ti. Empiezas con presupuesto un 15% mayor y reputación inicial de 13 en lugar de 10.</div>`:''}
     <label class="field-label">Nombre del club</label>
     <input id="club-name-inp" type="text" placeholder="Ej: Gorbea Trail Club, Txindoki Runners..." maxlength="32" value="${esc(name)}" oninput="G._clubNameDraft=this.value;"/>
     <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Especialidad de la plantilla</div>
@@ -238,7 +242,7 @@ function renderClubCreate(){
       </div>`).join('')}
     <div class="hint" style="margin-top:10px;margin-bottom:14px">Empiezas con 3 corredores, ${CLUB_ARCHETYPES[arq].socios} socios, €${CLUB_ARCHETYPES[arq].presupuesto} de presupuesto y cohesión ${CLUB_ARCHETYPES[arq].cohesion}/100.</div>
     <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doClubCreate()">Fundar el club →</button>
-    <button class="main" style="margin-top:6px;opacity:0.5" onclick="G.screen='modeSelect';render()">← Volver</button>`;
+    <button class="main" style="margin-top:6px;opacity:0.5" onclick="G.screen=G._clubFromLife?'clubOffer':'modeSelect';render()">← Volver</button>`;
 }
 
 window.doClubCreate=()=>{
@@ -248,8 +252,11 @@ window.doClubCreate=()=>{
   const fil=G._clubFilDraft||'montanero';
   const arqSel=G._clubArqDraft||'equilibrado';
   G.clubModeData=initClubModeData(name,spec,fil,arqSel);
+  const desdeVida=!!G._clubFromLife;   // v96: fundación desde la oferta de Carrera de Vida
+  G._clubFromLife=false;
+  if(desdeVida)applyLifeClubFounding();
   // Guiño narrativo si el modo está desbloqueado: presupuesto +15% y reputación inicial +3
-  if(G._clubUnlockedHint){
+  else if(G._clubUnlockedHint){
     G.clubModeData.presupuesto=Math.round(G.clubModeData.presupuesto*1.15);
     G.clubModeData.reputacion=Math.min(100,(G.clubModeData.reputacion||10)+3);
     G._clubUnlockedHint=false;
@@ -257,9 +264,28 @@ window.doClubCreate=()=>{
   G._clubNameDraft=null;G._clubSpecDraft=null;G._clubFilDraft=null;G._clubArqDraft=null;
   generateClubEvent();
   generateClubObjective();
-  G.screen='clubHub';autoSave();render();
+  if(desdeVida)checkAndUnlockAchievements();   // CR-38 (v76): logro cm_found
+  G.screen=desdeVida?'clubIntro':'clubHub';autoSave();render();
 };
 
+// BUG-13 (v96): la cohesión subía y bajaba sin que nada lo explicase. Las cifras de staff,
+// capitán y filosofía salen de las constantes; las de victorias y abandonos son las de
+// doClubSimulateSeason (wins*4-dnfs*6), que fija un test.
+function clubCohesionTipHtml(){
+  const d=G.clubModeData||{};
+  const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;
+  return [
+    '<strong>Al simular la temporada</strong>',
+    '+4 por cada victoria · −6 por cada abandono',
+    `+${CLUB_ROLES.capitan.cohesionBonus} si tienes capitán · +${CLUB_STAFF_TYPES.psicologo.cohesionBonus} con psicólogo`+(fil?` · ${fil.cohesionBonus>0?'+'+fil.cohesionBonus:'±0'} por tu filosofía (${fil.label})`:''),
+    '<strong>Decisión mensual</strong>',
+    'Conservador +4 · Técnico +2 · Invertir +2 · Evento social +6',
+    '<strong>Al cerrar la temporada</strong>',
+    '−10 por cada temporada que cierras en números rojos',
+    'y lo que marquen el objetivo de temporada, los eventos y las renegociaciones',
+    '<br>La cohesión mueve el rendimiento de todo el equipo: −10 % con 0 y +10 % con 100.',
+  ].join('<br>');
+}
 function renderClubHub(){
   const el=$main();
   hideChrome();
@@ -314,6 +340,9 @@ function renderClubHub(){
         </div>`).join('')}
     </div>
 
+    <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#888;margin-bottom:3px">
+      <span>🤝 Cohesión <button class="tip-btn" onclick="showTip('Qué mueve la cohesión',clubCohesionTipHtml())">ⓘ</button></span><span>${d.cohesion}/100</span>
+    </div>
     <div style="height:6px;background:#e5e4de;border-radius:3px;margin-bottom:12px;overflow:hidden">
       <div style="width:${d.cohesion}%;height:100%;background:${cohColor};border-radius:3px;transition:width .4s"></div>
     </div>
@@ -349,7 +378,7 @@ function renderClubHub(){
       <div class="fin-row"><span>Salarios plantilla</span><span class="minus">−€${annualWages}</span></div>
       ${staffCost>0?`<div class="fin-row"><span>Staff técnico</span><span class="minus">−€${staffCost}</span></div>`:''}
       <div class="fin-row tot"><span>Balance neto</span><span class="${annualNet>=0?'plus':'minus'}">${annualNet>=0?'+':''}€${annualNet}</span></div>
-      ${(d.redSeasons||0)>0?`<div class="danger" style="margin-top:8px;font-size:13px">Números rojos: ${d.redSeasons} de ${CLUB_RED_SEASONS_MAX} temporadas seguidas. ${d.redSeasons>=CLUB_RED_SEASONS_MAX-1?'Si cierras otra en negativo, el club se disuelve.':'A la 3.ª se despide el staff y a la 4.ª se va el corredor más caro.'}</div>`:''}
+      ${(d.redSeasons||0)>0?`<div class="danger" style="margin-top:8px;font-size:13px">Números rojos: ${d.redSeasons} de ${CLUB_RED_SEASONS_MAX} temporadas seguidas. ${d.redSeasons>=CLUB_RED_SEASONS_MAX-1?'Si cierras otra en negativo, el club se disuelve.':'Cada temporada en rojo resta 10 de cohesión; a la 3.ª se despide el staff y a la 4.ª se va el corredor más caro.'}</div>`:''}
     </div>
 
     <div class="card" style="margin-bottom:12px">
@@ -685,6 +714,7 @@ window.doClubSimulateSeason=()=>{
   if(d.monthlyFocus==='resultados')results.forEach(r=>{if(!r.dnf)r.pos=Math.max(1,r.pos-1);});
   if(d.monthlyFocus==='marketing')d.socios=Math.min(999,(d.socios||8)+4);
   if(d.monthlyFocus==='ahorro')d.presupuesto+=200;
+  d._monthlyFocusBonus=0;   // BUG-14 (v96): el bonus de «Resultados» se gasta en esta simulación
 
   d.seasonResults=results;
   d.seasonSimulated=true;
@@ -958,11 +988,12 @@ function renderClubMonthly(){
         <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">${dec.icon} ${dec.label}</div>
         ${dec.options.map(opt=>{
           const isSel=sel[dec.id]===opt.id;
-          return`<div onclick="clubToggleMonthlySel('${dec.id}','${opt.id}')" style="cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid ${isSel?'#4a90d9':'#e0dfd8'};background:${isSel?'#f0f6ff':'#fafaf8'};margin-bottom:6px;display:flex;align-items:center;gap:10px">
+          const sinFondos=!isSel&&(opt.cost||0)>(d.presupuesto||0);   // BUG-15 (v96)
+          return`<div ${sinFondos?'':`onclick="clubToggleMonthlySel('${dec.id}','${opt.id}')"`} style="cursor:${sinFondos?'default':'pointer'};${sinFondos?'opacity:0.45;':''}padding:10px 12px;border-radius:8px;border:1px solid ${isSel?'#4a90d9':'#e0dfd8'};background:${isSel?'#f0f6ff':'#fafaf8'};margin-bottom:6px;display:flex;align-items:center;gap:10px">
             <span style="font-size:18px">${opt.emoji}</span>
             <div style="flex:1">
               <div style="font-size:13px;font-weight:${isSel?'700':'500'};color:${isSel?'#4a90d9':'#1a1a1a'}">${opt.text}</div>
-              <div style="font-size:12px;color:#888">${opt.desc}${opt.cost?` · −€${opt.cost}`:''}</div>
+              <div style="font-size:12px;color:#888">${opt.desc}${opt.cost?` · −€${opt.cost}`:''}${sinFondos?' · <strong>Sin fondos</strong>':''}</div>
             </div>
             ${isSel?`<span style="font-size:16px;color:#4a90d9">✓</span>`:''}
           </div>`;
@@ -975,6 +1006,10 @@ window.doClubApplyMonthlyFull=()=>{
   const d=G.clubModeData;if(!d)return;
   if(d.monthlyDecisionDone){showToast('Ya has tomado la decisión de esta temporada','#c07a10');return;}   // v96: se confirmaba sin límite y cada vez volvía a sumar
   const sel=G._monthlySelections||{};
+  const costs={invertir:200,evento:100};
+  // BUG-15 (v96): sin presupuesto para la opción elegida se aplicaban igual las otras dos
+  // áreas y se gastaba la decisión de la temporada. Se comprueba antes de aplicar nada.
+  if((costs[sel.budget]||0)>(d.presupuesto||0)){showToast(`Sin fondos para esa opción (€${costs[sel.budget]}): elige otra`,'#c0392b');return;}
   const effects={
     training:{
       intensivo:  (d)=>d.plantilla.forEach(r=>Object.keys(r.stats).forEach(k=>r.stats[k]=Math.min(95,(r.stats[k]||40)+3))),
@@ -992,7 +1027,6 @@ window.doClubApplyMonthlyFull=()=>{
       evento:     (d,cost)=>{if(d.presupuesto<cost){showToast('Sin fondos','#c0392b');return false;}d.presupuesto-=cost;d.cohesion=Math.min(100,(d.cohesion||50)+6);d.socios=Math.min(999,(d.socios||8)+2);},
     },
   };
-  const costs={invertir:200,evento:100};
   let msgs=[];
   ['training','focus','budget'].forEach(area=>{
     const optId=sel[area];if(!optId)return;
@@ -1039,7 +1073,7 @@ function renderClubSeasonEnd(){
   // netBalance es el año entero, para enseñarlo; closing es lo que queda por aplicar.
   const netBalance=socioIncome+totalPrize+sponsorIncome-raceCosts-wages-staffCost;
   const closing=socioIncome-wages-staffCost;
-  const socioGain=Math.round(podiums*4+top10*1.5+(d.reputacion/20));
+  const socioGain=Math.round((podiums*4+top10*1.5+(d.reputacion/20))*Math.max(0,1-d.socios/CLUB_SOCIOS_SOFT_CAP));   // v96: techo blando
   const socioLoss=results.length===0?3:0;
 
   // C18 — Resultado del objetivo. v96: esta pantalla solo lo ENSEÑA; se aplica una vez en
@@ -1178,7 +1212,7 @@ window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
   d.sponsorOutcomes=[];d.monthlyDecisionDone=false;
   // v96 · Quiebra en cinco temporadas (decisión del 2026-09-15). Cuenta el presupuesto
   // FINAL negativo en temporadas seguidas, no el neto del año: un club que empieza con
-  // capital puede perder dinero sin estar en rojo. 1.ª-2.ª: −10 cohesión · 3.ª: fuera
+  // capital puede perder dinero sin estar en rojo. cada una: −10 cohesión · 3.ª: fuera
   // el staff · 4.ª: se va el corredor más caro · 5.ª: el club se disuelve. Una temporada
   // cerrada en positivo pone el contador a cero.
   if(d.presupuesto<0){
@@ -1191,7 +1225,8 @@ window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
       const gone=d.plantilla.splice(i,1)[0];
       showToast(`Números rojos: ${gone.name} se va del club`,'#c0392b');
     }
-    if(d.redSeasons<3)showToast(`Números rojos (${d.redSeasons}/${CLUB_RED_SEASONS_MAX}): los sueldos llegan tarde, −10 cohesión`,'#c07a10');
+    // BUG-12 (v96): el −10 se aplica en todas, pero el aviso solo salía en las dos primeras.
+    showToast(`Números rojos (${d.redSeasons}/${CLUB_RED_SEASONS_MAX}): ${d.redSeasons<3?'los sueldos llegan tarde':'el vestuario lo nota'}, −10 cohesión`,'#c07a10');
   } else d.redSeasons=0;
   d.temporada++;
   d.calAssignments={};d.seasonResults=[];d.seasonSimulated=false;
@@ -1215,10 +1250,12 @@ window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
     const base=r.potential==='alto'?(isYouth?4:3):r.potential==='medio'?2:0;
     const isCantera=r.role==='promesa';
     const coef=(isCantera||isYouth)?CLUB_ROLES.promesa.growthBonus:1;
+    // Foco «Formación» del hub: la cantera crece un 20 % más rápido. Lo prometía y nada lo leía.
+    const focusCoef=d.monthlyFocus==='formacion'&&(d.cantera||[]).includes(r)?1.2:1;
     const staffCoef=hasEntrenador?CLUB_STAFF_TYPES.entrenador.growthBonus:1;
     const cap=r.potential==='alto'?95:r.potential==='medio'?88:82;
     Object.keys(r.stats).forEach(k=>{
-      let delta=Math.floor(Math.random()*(base+1))*coef*staffCoef;
+      let delta=Math.floor(Math.random()*(base+1))*coef*staffCoef*focusCoef;
       // Filosofía: extra en el stat clave
       if(fil&&k===fil.statGrowthKey)delta+=1;
       // Declive para veteranos (+35 años)
