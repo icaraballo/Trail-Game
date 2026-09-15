@@ -358,6 +358,12 @@ window.doNextYear=yearNet=>{
   G.circuitPoints={};G.circuitCompleted=[];G.vacByQuarter={1:0,2:0,3:0,4:0};
   G.seasonKm=0;
   G.postRaceRestWeeks=0;G.seasonLegsPenalty=0;   // secuelas de zona roja: duran la temporada (v95)
+  // v96 · la pretemporada cura: la baja y el estado de lesión no pasan a la temporada
+  // siguiente (con el 999, una fractura bloqueaba también todas las posteriores, y la
+  // primera carrera del año no comprobaba la baja). Lo que queda es la secuela de stats,
+  // que en pretemporada recupera la mitad de lo pendiente.
+  G.injuryRacesLeft=0;G.injuryType=null;G.injuryStatus=null;
+  recoverInjurySequel(INJURY_SEQUEL_RECOVERY.preseason);
   G.fatBurning=false;
   G.trainingMomentum=null;G.taperBonus=false;
   G.dayConditionGenerated=false;G.dayCondition=null;
@@ -540,7 +546,7 @@ function renderOverlapHub(){
     <p class="sub" style="margin-bottom:24px">Puedes seguir con tu carrera o gestionar a ${athleteFirst}. Tú decides.</p>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
-      <div onclick="G.screen='workSetup';render()" style="background:#fff;border:1.5px solid #e0dfd8;border-radius:12px;padding:20px 16px;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f8f7f3'" onmouseleave="this.style.background='#fff'">
+      <div onclick="goToRunnerFromOverlap()" style="background:#fff;border:1.5px solid #e0dfd8;border-radius:12px;padding:20px 16px;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#f8f7f3'" onmouseleave="this.style.background='#fff'">
         <div style="font-size:28px;margin-bottom:10px">🏃</div>
         <div style="font-size:15px;font-weight:600;margin-bottom:4px">Seguir corriendo</div>
         <div style="font-size:12px;color:#888;line-height:1.5">Temporada ${G.year} · ${esc(G.runner?.specialty||'')}<br>${G.selectedRaces?.length?G.selectedRaces.length+' carrera'+(G.selectedRaces.length!==1?'s':'')+' en calendario':'Sin carreras aún'}</div>
@@ -589,9 +595,31 @@ window.switchOverlapMode=()=>{
     if(onCoachSide)forceAbandonCoachRace();
     else{doAbandonConfirmed();afterRace();}
   }
-  if(onCoachSide){G.screen='workSetup';autoSave();render();return;}
+  if(onCoachSide){goToRunnerFromOverlap();return;}
+  if(G.screen!=='overlapHub')G.overlapRunnerScreen=G.screen;
   goToCoachFromOverlap();
   autoSave();
+};
+
+// v96 · Solapamiento: la pantalla del corredor a la que se vuelve desde Entrenador.
+// Antes se volvía siempre a 'workSetup', el arranque de temporada, y desde ahí
+// «¡Empezar temporada!» vaciaba raceResults y ponía currentRaceIdx a 0: con la
+// temporada a medias, las carreras ya corridas se volvían a correr y careerHistory
+// las contaba dos veces. Se guarda la pantalla al salir (overlapRunnerScreen se
+// persiste, y loadSlot() la rellena al mandar al hub) y, si no hay ninguna válida,
+// se deduce del estado de la temporada.
+function overlapRunnerScreen(){
+  const s=G.overlapRunnerScreen;
+  if(s&&!s.startsWith('coach')&&!['segment','aid','midRaceEvent','overlapHub'].includes(s))return s;
+  const done=(G.raceResults||[]).length,idx=G.currentRaceIdx||0;
+  if(done>idx)return 'raceResult';   // la carrera en curso ya tiene resultado: falta afterRace()
+  if(done>0||idx>0)return G.pendingEvent?'betweenRace':'preRacePrep';
+  return 'workSetup';
+}
+window.goToRunnerFromOverlap=()=>{
+  G.screen=overlapRunnerScreen();
+  G.overlapRunnerScreen=null;
+  autoSave();render();
 };
 
 function generateDiaryEntry(yearNet){
@@ -913,9 +941,9 @@ function renderLifeRetirement(){
   hideChrome();
   const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
 
-  const totalRaces=G.careerHistory.length;
-  const totalWins=G.careerHistory.filter(r=>r.pos===1).length;
-  const totalPodiums=G.careerHistory.filter(r=>r.pos<=3).length;
+  const totalRaces=finishedResults(G.careerHistory).length;   // v96: sin los DNF
+  const totalWins=finishedResults(G.careerHistory).filter(r=>r.pos===1).length;
+  const totalPodiums=finishedResults(G.careerHistory).filter(r=>r.pos<=3).length;
   const totalPrize=G.careerHistory.reduce((a,r)=>a+(r.prize||0),0);
   const yearsActive=G.year-1;
   const age=G.runner.age||25;
@@ -1032,8 +1060,8 @@ function renderCoachIntro(){
   const athleteSpec=a?a.spec:'todoterreno';
 
   // Legado de Clásico
-  const totalRaces=(G.careerHistory||[]).length;
-  const totalWins=(G.careerHistory||[]).filter(r=>r.pos===1).length;
+  const totalRaces=finishedResults(G.careerHistory).length;   // v96: sin los DNF
+  const totalWins=finishedResults(G.careerHistory).filter(r=>r.pos===1).length;
   const topRanking=G.ranking||999;
   const totalPrize=(G.careerHistory||[]).reduce((a,r)=>a+(r.prize||0),0);
   const yearsActive=G.year-1;
@@ -1147,7 +1175,7 @@ function renderCareerEnd(){
   const el=$main();
   hideChrome();
   const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
-  const hist=G.careerHistory||[];
+  const hist=finishedResults(G.careerHistory);   // v96: sin los DNF
   const totalWins=hist.filter(r=>r.pos===1).length;
   const totalPodiums=hist.filter(r=>r.pos<=3).length;
   const modeLabel=modeLabelOf(G.gameMode);   // T54 (v93)
@@ -1185,9 +1213,9 @@ function renderRetirement(){
   hideChrome();
   const fb=document.getElementById('fin-bar');if(fb)fb.style.display='none';
 
-  const totalRaces=G.careerHistory.length;
-  const totalWins=G.careerHistory.filter(r=>r.pos===1).length;
-  const totalPodiums=G.careerHistory.filter(r=>r.pos<=3).length;
+  const totalRaces=finishedResults(G.careerHistory).length;   // v96: sin los DNF
+  const totalWins=finishedResults(G.careerHistory).filter(r=>r.pos===1).length;
+  const totalPodiums=finishedResults(G.careerHistory).filter(r=>r.pos<=3).length;
   const totalPrize=G.careerHistory.reduce((a,r)=>a+(r.prize||0),0);
   const yearsActive=G.year-1;
   const age=G.runner.age||25;
@@ -1247,6 +1275,9 @@ window.postRaceContinue=()=>{
 //  MODO ENTRENADOR — RENDER & LOGIC
 // ══════════════════════════════════════
 window.afterRace=()=>{
+  // v96 · secuela: cada carrera que pasa (corrida, abandonada o de baja) devuelve un 15 %
+  // de lo pendiente, salvo si llegas con la carga corporal en aviso 2.
+  if(getBodyLoad()<getLoadThresholdsByMode().warningLevel2)recoverInjurySequel(INJURY_SEQUEL_RECOVERY.perRace);
   G.currentRaceIdx++;
   const isExpres=G.gameMode==='expres';
   if(G.currentRaceIdx>=G.selectedRaces.length){endSeasonRaces(isExpres?'expresSeasonBalance':'seasonBalance');render();return;} // T25 (v89)
@@ -1258,7 +1289,7 @@ window.afterRace=()=>{
     const race=G.selectedRaces[G.currentRaceIdx];
     const injData=INJURY_TYPES[G.injuryType]||{};
     const remaining=G.injuryRacesLeft;
-    G.raceResults.push({id:race?.id,name:race?.name||'',time:0,pos:null,dnf:true,dnfReason:'lesion',prize:0,all:[],statGains:[],injured:true,injuryLabel:injData.label||'Lesión'}); // T104 (v88): id · T45 (v89): forma única de DNF
+    recordDNF(race,'lesion',{injured:true,injuryLabel:injData.label||'Lesión'}); // T104 (v88): id · T45 (v89): forma única de DNF · v96: también en careerHistory
     const el=$main();
     el.innerHTML=`
       <h2>Baja por lesión</h2>

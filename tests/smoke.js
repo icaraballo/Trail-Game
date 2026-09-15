@@ -24,7 +24,10 @@ const {T,ctx,src}=build(['freshState','modeCfg','currentWorkPct','setWorkPct','g
   'raceGainTotal','raceDesnivel','fmtGain','clubRaceKm','RACES_DB','CLUB_RACES','SPEC_RACES',
   'screenRoutes','CLUB_STAFF_TYPES','renderExpresCalendar','renderCoachIntro','TRAINING_BLOCKS',
   'seasonYearNet','STAFF_COSTS','generateCoachSeasonObjective','coachObjectiveMet','raceLoadGain','canAccessRace',
-  'seasonMonthLabel','isCoachPhase','injuryThisRace','restWeeksEffMult','legsTrainingMult','raceMental','fairPlayMental']);
+  'seasonMonthLabel','isCoachPhase','injuryThisRace','restWeeksEffMult','legsTrainingMult','raceMental','fairPlayMental',
+  'injuryRacesBlocked','injuryBlockText','INJURY_BLOCK_SEASON','overlapRunnerScreen',
+  'applyInjuryStatPenalty','recoverInjurySequel','INJURY_SEQUEL_RECOVERY','recordDNF','careerAgg','ACHIEVEMENTS',
+  'CLUB_SOCIO_FEE','CLUB_RED_SEASONS_MAX','clubSponsorObjectiveMet','clubObjectiveDeltas']);
 const t=scorer();
 const setG=o=>{const g=T.freshState();Object.assign(g,o);T.setG(g);return g;};
 
@@ -377,5 +380,137 @@ console.log('\n── H14 (v95) · el mental de los eventos solo cuenta esa carr
     (src['race.js'].match(/bumpStat\((r|G\.runner),'mental'/g)||[]).length===1
     &&/function fairPlayMental\(n\)\{bumpStat\(G\.runner,'mental',1\)/.test(src['race.js']));
 }
+
+console.log('\n── v96 · la ayuda de lesiones sale de los datos (T46) ──');
+t('la rotura: 2 carreras, 1 con fisio', T.injuryRacesBlocked('rotura',false)===2&&T.injuryRacesBlocked('rotura',true)===1);
+t('la fractura bloquea las carreras que quedan (v96: ya no el 999)', T.injuryRacesBlocked('fractura',false,6)===6);
+t('la tendinitis no bloquea', T.injuryRacesBlocked('tendinitis',true)===0);
+t('el texto de la rotura dice lo que aplica el juego', T.injuryBlockText('rotura')==='2 carreras de baja (1 carrera con fisio)', T.injuryBlockText('rotura'));
+t('el de la fractura ya no promete carreras', /resto de la temporada/.test(T.injuryBlockText('fractura')), T.injuryBlockText('fractura'));
+t('ninguna ayuda dice «4 carreras bloqueadas»', !['render-core.js','render-clasico.js'].some(f=>/4 carreras bloqueadas/.test(src[f])));
+t('race.js y devmode.js usan la misma cuenta',
+  /injuryRacesBlocked\(specificInjury,hasFisio\(\),racesLeftAfterCurrent\(\)\)/.test(src['race.js'])
+  &&/injuryRacesBlocked\(midRaceInjury,hasFisio\(\),racesLeftAfterCurrent\(\)\)/.test(src['race.js'])
+  &&/injuryRacesBlocked\(type,hasFisio\(\),/.test(src['devmode.js']));
+
+console.log('\n── v96 · el solapamiento no repite carreras ──');
+setG({raceResults:[],currentRaceIdx:0});
+t('sin temporada empezada, se vuelve a la jornada laboral', T.overlapRunnerScreen()==='workSetup');
+setG({raceResults:[{pos:3,dnf:false}],currentRaceIdx:1,pendingEvent:null});
+t('a mitad de temporada, a la preparación y no al arranque', T.overlapRunnerScreen()==='preRacePrep', T.overlapRunnerScreen());
+setG({raceResults:[{pos:3,dnf:false}],currentRaceIdx:1,pendingEvent:{id:'x',choices:[]}});
+t('con un evento entre carreras pendiente, al evento', T.overlapRunnerScreen()==='betweenRace');
+setG({raceResults:[{pos:3,dnf:false}],currentRaceIdx:0});
+t('con la carrera en curso ya terminada, a su resultado (falta afterRace)', T.overlapRunnerScreen()==='raceResult');
+setG({raceResults:[{pos:3,dnf:false}],currentRaceIdx:1,overlapRunnerScreen:'betweenManage'});
+t('si se guardó la pantalla del corredor, se vuelve a esa', T.overlapRunnerScreen()==='betweenManage');
+setG({raceResults:[{pos:3,dnf:false}],currentRaceIdx:1,overlapRunnerScreen:'segment'});
+t('una pantalla de carrera guardada no vale: se deduce', T.overlapRunnerScreen()==='preRacePrep');
+setG({raceResults:[],currentRaceIdx:0,overlapRunnerScreen:'coachHome'});
+t('una pantalla de Entrenador guardada tampoco', T.overlapRunnerScreen()==='workSetup');
+t('overlapRunnerScreen está declarado y se guarda', 'overlapRunnerScreen' in T.freshState()&&'overlapRunnerScreen' in T.serializableState());
+t('ni el botón de cambio ni el hub mandan a workSetup a pelo',
+  !/onCoachSide\)\{G\.screen='workSetup'/.test(src['render-temporada.js'])&&/onclick="goToRunnerFromOverlap\(\)"/.test(src['render-temporada.js']));
+t('cargar en el lado corredor recuerda la pantalla', /G\.overlapRunnerScreen=s;\s*G\.screen='overlapHub'/.test(src['render-core.js']));
+t('doStartRaces no vacía una temporada empezada',
+  /if\(G\.raceResults\.length>0\|\|G\.currentRaceIdx>0\)\{goNextRace\(\);autoSave\(\);return;\}\s*G\.raceResults=\[\];G\.currentRaceIdx=0;/.test(src['render-clasico.js']));
+
+console.log('\n── v96 · decisiones del Club con vuelta atrás ──');
+t('el foco mensual se puede quitar antes de simular', /window\.clearClubMonthlyFocus=/.test(src['club.js'])&&/onclick="clearClubMonthlyFocus\(\)"/.test(src['club.js']));
+t('la opción elegida se desmarca al tocarla', /if\(sel\[decId\]===optId\)delete sel\[decId\]/.test(src['club.js'])&&/onclick="clubToggleMonthlySel\(/.test(src['club.js']));
+
+console.log('\n── v96 · lesión: la baja acaba con la temporada, secuela recuperable y fisio ──');
+t('fractura con fisio: el 30 % de las que quedan, redondeando arriba', T.injuryRacesBlocked('fractura',true,6)===2);
+t('con fisio, al menos una si queda alguna', T.injuryRacesBlocked('fractura',true,1)===1);
+t('en la última carrera no bloquea nada', T.injuryRacesBlocked('fractura',true,0)===0&&T.injuryRacesBlocked('fractura',false,0)===0);
+{
+  const f=T.freshState();
+  setG({runner:{...f.runner,stats:{...f.runner.stats,resistencia:60,subida:60,mental:60,velocidad:60}},injurySequel:{},spending:{...f.spending,fisio:false}});
+  T.applyInjuryStatPenalty('fractura');
+  const g=T.getG();
+  t('la fractura quita sus stats y los apunta como secuela',
+    g.runner.stats.resistencia===51&&g.injurySequel.resistencia===9&&g.injurySequel.velocidad===3, JSON.stringify(g.injurySequel));
+  T.recoverInjurySequel(T.INJURY_SEQUEL_RECOVERY.perRace);
+  t('una carrera devuelve ~15 % de lo pendiente, mínimo 1 por stat',
+    g.runner.stats.resistencia===52&&g.injurySequel.resistencia===8&&g.injurySequel.velocidad===2, JSON.stringify(g.injurySequel));
+  T.recoverInjurySequel(1);
+  t('nunca devuelve más de lo perdido', g.runner.stats.resistencia===60&&g.runner.stats.velocidad===60&&Object.keys(g.injurySequel).length===0, JSON.stringify(g.runner.stats));
+  setG({runner:{...f.runner,stats:{...f.runner.stats,resistencia:50}},injurySequel:{resistencia:10},spending:{...f.spending,fisio:true}});
+  T.recoverInjurySequel(0.2);
+  t('con fisio recupera ×1,5', T.getG().injurySequel.resistencia===7, T.getG().injurySequel.resistencia);
+}
+t('la pretemporada cura la baja y recupera la mitad de la secuela',
+  /G\.injuryRacesLeft=0;G\.injuryType=null;G\.injuryStatus=null;\s*recoverInjurySequel\(INJURY_SEQUEL_RECOVERY\.preseason\)/.test(src['render-temporada.js']));
+t('cada carrera que pasa recupera, salvo con la carga en aviso 2',
+  /if\(getBodyLoad\(\)<getLoadThresholdsByMode\(\)\.warningLevel2\)recoverInjurySequel\(INJURY_SEQUEL_RECOVERY\.perRace\);\s*G\.currentRaceIdx\+\+;/.test(src['render-temporada.js']));
+t('las dos lesiones de carrera pasan por la secuela', (src['race.js'].match(/applyInjuryStatPenalty\(/g)||[]).length===2&&!/injData\.statPenalty\|\|\{\}\)\.forEach/.test(src['race.js']));
+
+console.log('\n── v96 · los DNF entran en el historial del corredor ──');
+{
+  const fin=(name,pos,year)=>({name,year,time:100,pos,dnf:false,prize:0});
+  const dnf=(name,year,reason)=>({name,year,time:0,pos:null,dnf:true,dnfReason:reason,prize:0});
+  setG({careerHistory:[fin('A',1,1),fin('B',1,1),fin('C',1,1)]});
+  const sinDnf=T.careerAgg();
+  t('sin DNF, los agregados de siempre', sinDnf.n===3&&sinDnf.wins===3&&sinDnf.maxWinStreak===3&&sinDnf.racesByYear[1]===3);
+  setG({careerHistory:[fin('A',1,1),dnf('X',1,'abandono'),fin('B',1,1),fin('C',1,1)]});
+  const a=T.careerAgg();
+  t('un DNF no es carrera, victoria ni podio', a.n===3&&a.wins===3&&a.podiums===3&&a.racesByYear[1]===3, JSON.stringify({n:a.n,w:a.wins,p:a.podiums}));
+  t('pero un abandono corta la racha', a.maxWinStreak===2, a.maxWinStreak);
+  setG({careerHistory:[fin('A',1,1),fin('B',1,1),dnf('X',1,'lesion'),fin('C',1,1)]});
+  t('y la baja por lesión también', T.careerAgg().maxWinStreak===2);
+  const pf=T.ACHIEVEMENTS.find(x=>x.id==='perfect_full');
+  setG({careerHistory:[1,2,3,4,5].map(i=>fin('R'+i,1,1))});
+  t('«Invicto total» con cinco de cinco', pf.check()===true);
+  setG({careerHistory:[...[1,2,3,4,5].map(i=>fin('R'+i,1,1)),dnf('X',1,'abandono')]});
+  t('y no con un DNF esa temporada', pf.check()===false);
+  setG({year:2,raceResults:[],careerHistory:[]});
+  T.recordDNF({id:'r1',name:'Carrera'},'abandono');
+  const g=T.getG();
+  t('recordDNF apunta en los dos historiales con la forma de T45',
+    g.raceResults.length===1&&g.careerHistory.length===1&&T.isDNF(g.raceResults[0])&&T.isDNF(g.careerHistory[0])&&g.careerHistory[0].year===2);
+  t('abandonar, el abandono forzado y la baja lo usan',
+    /recordDNF\(race,'abandono'\)/.test(src['race.js'])&&/recordDNF\(race2,'abandono'\)/.test(src['race.js'])&&/recordDNF\(race,'lesion'/.test(src['render-temporada.js']));
+  t('las pantallas cuentan carreras sin los DNF',
+    !/G\.careerHistory\.filter\(|\(G\.careerHistory\|\|\[\]\)\.(length|filter)|G\.careerHistory\.length;|const hist=G\.careerHistory/.test(src['render-temporada.js']+src['render-clasico.js']));
+}
+
+console.log('\n── v96 · economía del Club ──');
+t('la cuota de socio es €45', T.CLUB_SOCIO_FEE===45&&!/socios\*25\*12/.test(src['club.js']));
+{
+  const R=[{pos:2,dnf:false,race:{tier:'local'}},{pos:8,dnf:false,race:{tier:'regional'}},{pos:9,dnf:false,race:{tier:'local'}},
+    {pos:null,dnf:true,race:{tier:'local'}},{pos:4,dnf:false,race:{tier:'nacional'}}];
+  const ok=k=>T.clubSponsorObjectiveMet({objKey:k},R,{socios:40});
+  t('top10x3 y podio1 se cumplen con estos resultados', ok('top10x3')&&ok('podio1'));
+  t('part5 cuenta participaciones, también el DNF', ok('part5'));
+  t('no_dnf falla con un abandono', !ok('no_dnf'));
+  t('top5nat mira el tier nacional', ok('top5nat')&&!T.clubSponsorObjectiveMet({objKey:'top5nat'},R.slice(0,4),{socios:40}));
+  t('socios50 mira los socios', !ok('socios50')&&T.clubSponsorObjectiveMet({objKey:'socios50'},R,{socios:50}));
+}
+t('al simular se cobra el 60 % y el 40 % solo si se cumple',
+  /const base=Math\.round\(total\*CLUB_SPONSOR_SPLIT\.base\);\s*const bonus=met\?total-base:0;/.test(src['club.js']));
+t('el cierre ya no vuelve a sumar premios ni sponsors',
+  /onclick="doClubNextSeason\(\$\{socioGain\},\$\{socioLoss\},\$\{closing\}\)"/.test(src['club.js'])&&/const closing=socioIncome-wages-staffCost;/.test(src['club.js']));
+t('el presupuesto ya no tiene suelo en 0 al cerrar', !/d\.presupuesto=Math\.max\(0,d\.presupuesto\+netBalance\)/.test(src['club.js']));
+t('cinco temporadas seguidas en rojo disuelven el club', T.CLUB_RED_SEASONS_MAX===5
+  &&/if\(d\.redSeasons>=CLUB_RED_SEASONS_MAX\)\{d\.dissolved=true;G\.screen='clubDissolved'/.test(src['club.js'])
+  &&/clubDissolved:renderClubDissolved/.test(src['render-core.js']));
+t('una decisión mensual por temporada', /if\(d\.monthlyDecisionDone\)\{showToast/.test(src['club.js'])&&/d\.sponsorOutcomes=\[\];d\.monthlyDecisionDone=false;/.test(src['club.js']));
+
+console.log('\n── v96 · el objetivo de temporada del Club se aplica una vez ──');
+{
+  const obj={reward:{rep:15,socios:10},penalty:{rep:-5}};
+  const ok=T.clubObjectiveDeltas({seasonObjective:obj,seasonObjectiveMet:true});
+  const ko=T.clubObjectiveDeltas({seasonObjective:obj,seasonObjectiveMet:false});
+  t('cumplido: +15 rep y +10 socios; fallado: −5 rep', ok.rep===15&&ok.socios===10&&ko.rep===-5&&ko.socios===0);
+  t('sin objetivo, nada', JSON.stringify(T.clubObjectiveDeltas({seasonObjective:null}))==='{"rep":0,"socios":0,"cohesion":0}');
+  const pintar=src['club.js'].slice(src['club.js'].indexOf('function renderClubSeasonEnd'),src['club.js'].indexOf('window.doClubNextSeason'));
+  t('la pantalla de balance ya no toca reputación ni cohesión', !/d\.reputacion=|d\.cohesion=/.test(pintar));
+  t('doClubNextSeason aplica reputación y socios del objetivo',
+    /d\.reputacion=Math\.max\(0,Math\.min\(100,\(d\.reputacion\|\|0\)\+_obj\.rep\)\)/.test(src['club.js'])&&/socioLoss\+_obj\.socios\)/.test(src['club.js']));
+}
+
+console.log('\n── v96 · Canicross se puede cerrar en marzo ──');
+t('avanzar desde marzo lo termina y abre el cierre',
+  /const marchDone=\(G\.cnWeek\|\|0\)>=25;/.test(src['canicross.js'])&&/const allRaceDone=marchDone\|\|\(races\.length>0&&pendingRaces\.length===0\);/.test(src['canicross.js']));
 
 t.done('TODO OK');

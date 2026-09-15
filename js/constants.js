@@ -60,8 +60,12 @@ const SEASON_OBJECTIVES=[
 // Se calcula todo en UNA pasada y se memoiza. La caché se invalida cuando
 // cambia el array (referencia distinta: cargar partida, freshState) o su
 // longitud (una carrera nueva). Las entradas no se mutan en el sitio en ningún
-// punto del código —careerHistory solo recibe push en race.js:2319— así que no
-// hay tercer camino por el que quedarse obsoleta.
+// punto del código —careerHistory solo recibe push al terminar una carrera en race.js
+// y, desde v96, en recordDNF()— así que no hay tercer camino por el que quedarse obsoleta.
+//
+// v96: careerHistory trae también los DNF (abandono y baja por lesión). No cuentan como
+// carrera, victoria ni podio, pero cortan la racha y se apuntan por año en dnfByYear
+// (perfect_full exige cero). Sin DNF en el historial, los agregados son los de siempre.
 //
 // OJO con la fidelidad: se replica lo que hacía cada check, no lo que "debería".
 // En particular win_same_2 solo miraba nombres de RACES_DB (no los de
@@ -72,7 +76,8 @@ function careerAgg(){
   const h=G.careerHistory||[];
   if(_CAGG&&_CAGG_REF===h&&_CAGG_LEN===h.length)return _CAGG;
   const a={
-    n:h.length, wins:0, podiums:0, maxWinStreak:0, hasUltra:false,
+    n:0, wins:0, podiums:0, maxWinStreak:0, hasUltra:false,
+    dnfByYear:{},        // año → abandonos y bajas (v96)
     racesByYear:{},      // año → carreras terminadas
     winsByYear:{},       // año → victorias
     winNamesByYear:{},   // año → [nombres ganados]
@@ -83,6 +88,8 @@ function careerAgg(){
   const porNombre=allRacesByName();
   for(const r of h){
     const y=r.year;
+    if(isDNF(r)){racha=0;a.dnfByYear[y]=(a.dnfByYear[y]||0)+1;continue;}
+    a.n++;
     a.racesByYear[y]=(a.racesByYear[y]||0)+1;
     if(r.pos<=3)a.podiums++;
     if(!a.hasUltra&&porNombre.get(r.name)?.km>=40)a.hasUltra=true;
@@ -156,7 +163,7 @@ const ACHIEVEMENTS=[
   {id:'distance_10k',  rarity:'legendary',label:'Diez mil kilómetros', desc:'Acumular 10.000 km de carrera',                      check:()=>(G.totalCareerKm||0)>=10000},
   {id:'win_zegama_3',  rarity:'legendary',label:'Leyenda de Zegama',   desc:'Ganar la Zegama-Aizkorri en 3 temporadas distintas', check:()=>(careerAgg().winCountByName['Zegama-Aizkorri']||0)>=3},
   {id:'no_injury_5y',  rarity:'legendary',label:'Indestructible',      desc:'Completar 5 temporadas seguidas sin lesión',         check:()=>{if(G.year<5)return false;const ij=new Set((G.injuryHistory||[]).map(i=>i.year));for(let y=1;y<=G.year-4;y++){let ok=true;for(let i=0;i<5;i++)if(ij.has(y+i)){ok=false;break;}if(ok)return true;}return false;}},
-  {id:'perfect_full',  rarity:'legendary',label:'Invicto total',       desc:'Ganar todas las carreras de una temporada (mín 5)',  check:()=>{const a=careerAgg();return Object.keys(a.racesByYear).some(yr=>a.racesByYear[yr]>=5&&(a.winsByYear[yr]||0)===a.racesByYear[yr]);}},
+  {id:'perfect_full',  rarity:'legendary',label:'Invicto total',       desc:'Ganar todas las carreras de una temporada (mín 5)',  check:()=>{const a=careerAgg();return Object.keys(a.racesByYear).some(yr=>a.racesByYear[yr]>=5&&(a.winsByYear[yr]||0)===a.racesByYear[yr]&&!a.dnfByYear[yr]);}}, // v96: con un DNF esa temporada ya no es «invicto»
   // ══ CANICROSS — FÁCIL ════════════════════════════════
   {id:'cn_first_race', rarity:'easy',   mode:'cn',label:'Primera carrera juntos', desc:'Completar la primera carrera de canicross',          check:()=>(G.cnRaceResults||[]).filter(r=>!r.dnf).length>=1},
   {id:'cn_bond_50',    rarity:'easy',   mode:'cn',label:'Buen equipo',            desc:'Alcanzar vínculo 50 con tu perro',                   check:()=>(G.dog?.peakBond||0)>=50},
@@ -1679,6 +1686,13 @@ const CLUB_SPONSORS_POOL=[
   {id:'cs6',name:'Diputación Foral',   cat:'local',     tier:2, monthlyIncome:400,
    objective:'50+ socios activos',     objKey:'socios50',duration:2},
 ];
+
+// v96 · Economía del Club (decisión del 2026-09-15). Con la cuota a €25 un club recién
+// creado perdía ~€4.000 por temporada y el suelo en 0 del presupuesto lo escondía.
+// Cifras de partida: se miden jugando y se tocan aquí, nunca en la lógica.
+const CLUB_SOCIO_FEE=45;                          // €/socio/mes
+const CLUB_SPONSOR_SPLIT={base:0.6,failRep:3};    // 60 % al simular; el 40 % restante solo si se cumple el objetivo
+const CLUB_RED_SEASONS_MAX=5;                     // temporadas seguidas cerrando en negativo hasta disolverse
 
 // ── Cantera juvenil — pool de jóvenes fichables (C12) ────────────────────
 const CLUB_YOUTH_POOL=[

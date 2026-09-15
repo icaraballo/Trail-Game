@@ -304,9 +304,10 @@ function renderRunnerTab(){
   const r=G.runner;
   const specLabel=SPEC_LABEL;
   const activeSponsorList=Object.entries(G.sponsors).filter(([,v])=>v);
-  const totalRaces=G.careerHistory.length;
-  const wins=G.careerHistory.filter(h=>h.pos===1).length;
-  const podiums=G.careerHistory.filter(h=>h.pos<=3).length;
+  const _fin=finishedResults(G.careerHistory);   // v96: careerHistory trae también los DNF
+  const totalRaces=_fin.length;
+  const wins=_fin.filter(h=>h.pos===1).length;
+  const podiums=_fin.filter(h=>h.pos<=3).length;
   el.innerHTML=`
     <div class="runner-header">
       <div class="runner-avatar">🏃</div>
@@ -384,6 +385,7 @@ function renderRunnerTab(){
       })()}
     </div>`:''}
 
+    ${injurySequelText()?`<div class="note" style="margin-bottom:12px">🩹 <strong>Secuela de lesión</strong>: ${injurySequelText()}. Se recupera con cada carrera, en pretemporada y con las sesiones de recuperación; el fisio lo acelera.</div>`:''}
     ${G.careerHistory.length>0?`<div class="card">
       <div class="sec-title">Evolución ranking</div>
       ${renderRankingChart()}
@@ -503,11 +505,11 @@ function renderRunnerTab(){
       ${G.careerHistory.slice().reverse().slice(0,10).map(h=>`<div class="history-row">
         <div>
           <div style="font-weight:500">${h.name}</div>
-          <div style="font-size:12px;color:#aaa;margin-top:1px">Año ${h.year} · ${fmt(h.time)}</div>
+          <div style="font-size:12px;color:#aaa;margin-top:1px">Año ${h.year} · ${h.dnf?dnfLabel(h):fmt(h.time)}</div>
           ${h.catPos&&h.catTotal>1?`<div style="margin-top:3px"><span style="font-size:11px;background:#e8eef8;color:#2d4fa0;border-radius:4px;padding:1px 6px;font-weight:600">${h.catName} ${h.catPos}º</span></div>`:''}
         </div>
         <div style="text-align:right">
-          <div style="font-size:14px;font-weight:700;color:${h.pos===1?'#c07a10':h.pos<=3?'#4a8a2a':'#888'}">${h.pos}º</div>
+          ${h.dnf?`<div style="font-size:14px;font-weight:700;color:#c0392b">DNF</div>`:`<div style="font-size:14px;font-weight:700;color:${h.pos===1?'#c07a10':h.pos<=3?'#4a8a2a':'#888'}">${h.pos}º</div>`}
           ${h.prize>0?`<div style="font-size:12px;color:#2d7a2d">+€${h.prize}</div>`:''}
         </div>
       </div>`).join('')}
@@ -1318,7 +1320,7 @@ function renderTraining(){
     </div>
     ${G.trainingEvent?`<div class="hint" style="margin-bottom:12px">${G.trainingEvent.icon} <strong>Evento de entrenamiento:</strong> ${G.trainingEvent.title} — ${G.trainingEvent.desc}</div>`:''}
     ${G.carreraVida&&G.lifecyclePhase==='overlap'&&G.lifeAthlete?renderAthleteHoursBlock():''}
-    <button class="main" onclick="doStartRaces()" ${!G.trainingBlock?'disabled':''}>¡Empezar temporada! →</button>`;
+    <button class="main" onclick="doStartRaces()" ${!G.trainingBlock?'disabled':''}>${G.raceResults.length>0||G.currentRaceIdx>0?'Seguir con la temporada →':'¡Empezar temporada! →'}</button>`;
   // T106 (v93): esto era un `<script>` interpolado dentro del innerHTML. El
   // navegador NO ejecuta los <script> insertados por innerHTML, así que el
   // perfil de «Ver próxima carrera» nunca ha tenido manejadores: tocar un tramo
@@ -1390,7 +1392,7 @@ function renderPreRacePrep(){
     ${abandon?`<div class="warn">⚠ ${abandon.label} — los sponsors reducen sus ofertas (×${abandon.sponsorMult})</div>`:''}
     ${altPenalty>0?`<div class="warn">⚠ Carrera de alta altitud — sin entrenamiento específico irás un ${Math.round(altPenalty*100)}% más lento en subidas. Club de Alta Montaña o entrenador lo reducen.</div>`:''}
     ${G.injuryType?`<div class="injury-card">
-      <div class="injury-type" style="font-size:14px">${INJURY_TYPES[G.injuryType]?.label||'Lesión'} — llegas tocado <button class="tip-btn" onclick="showTip('Tipos de lesión','<strong>Tendinitis</strong> — corres pero con stats reducidos.<br><strong>Rotura muscular</strong> — 2 carreras bloqueadas (1 con fisio).<br><strong>Fractura de estrés</strong> — 4 carreras bloqueadas (2 con fisio).<br><br>El <strong>fisioterapeuta</strong> reduce el bloqueo a la mitad. Sin él, una fractura puede destrozarte media temporada. La carga corporal alta es la principal causa.')">ⓘ</button></div>
+      <div class="injury-type" style="font-size:14px">${INJURY_TYPES[G.injuryType]?.label||'Lesión'} — llegas tocado <button class="tip-btn" onclick="showTip('Tipos de lesión','${['tendinitis','rotura','fractura'].map(k=>`<strong>${INJURY_TYPES[k].label}</strong> — ${injuryBlockText(k)}.`).join('<br>')}<br><br>Los stats perdidos se recuperan poco a poco. El <strong>fisioterapeuta</strong> acorta las bajas y acelera esa recuperación. La carga corporal alta es la principal causa.')">ⓘ</button></div>
       <div style="font-size:12px;color:#555;margin-top:4px">
         Energía inicial: <strong>${INJURY_TYPES[G.injuryType]?.nextRaceStats?.energy||80}%</strong> ·
         Piernas: <strong>${INJURY_TYPES[G.injuryType]?.nextRaceStats?.legs||70}%</strong> ·
@@ -1786,7 +1788,8 @@ window.doRecovery=id=>{
   G.money-=o.cost;
   G.bodyLoad=Math.max(0,G.bodyLoad-o.loadRedux);
   G._recoveryUsed=true;
-  showToast(`Carga -${o.loadRedux}%${o.cost>0?' · -€'+o.cost:''}`,'#4a8a2a');
+  const _rec=recoverInjurySequel(INJURY_SEQUEL_RECOVERY[id]);   // v96: también recupera secuela de lesión
+  showToast(`Carga -${o.loadRedux}%${o.cost>0?' · -€'+o.cost:''}${_rec?' · stats +'+_rec:''}`,'#4a8a2a');
   render();
 };
 function renderBetweenRace(){
@@ -1982,6 +1985,11 @@ window.selectTraining=id=>{
 window.toggleNR=()=>{const p=document.getElementById('nr-panel'),b=document.getElementById('btn-nr');if(p){const v=p.style.display!=='none';p.style.display=v?'none':'block';if(b)b.textContent=v?'Ver próxima carrera ↓':'Ocultar ↑';}};
 window.doStartRaces=()=>{
   if(!G.trainingBlock)return;
+  // v96: con la temporada ya empezada esto no es empezar, es volver a la pantalla
+  // de entrenamiento a mitad de temporada —el evento «cambiar bloque» lleva ahí, y
+  // hasta v95 también el cambio de modo del solapamiento—. Vaciar raceResults y
+  // currentRaceIdx repetía las carreras ya corridas y las duplicaba en careerHistory.
+  if(G.raceResults.length>0||G.currentRaceIdx>0){goNextRace();autoSave();return;}
   G.raceResults=[];G.currentRaceIdx=0;
   resetRaceFlags();
   if(G.selectedRaces.length===0){

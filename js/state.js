@@ -37,6 +37,7 @@ function freshState(){
     bodyLoad:0,
     injuryStatus:null,injuryType:null,injuryRecoverySeasons:0,
     injuryRacesLeft:0,injuryHistory:[],
+    injurySequel:{},             // v96: {stat: puntos pendientes de recuperar} tras una lesión
     raceFinishedCount:0,raceAbandonedCount:0,
     preRaceNutrition:null,dropbagItems:[],dropbagShown:false,
     careerRaceHistory:{},
@@ -175,6 +176,7 @@ function freshState(){
     lifeAthlete:null,            // atleta del arco narrativo {id,name,age,specialty,personality,potential,bio,currentStats}
     lifePendingAthletes:[],      // pool de atletas rechazados (vuelven más adelante)
     lifeAthleteHours:0,          // horas semanales dedicadas al atleta en fase overlap
+    overlapRunnerScreen:null,    // v96: pantalla del corredor a la que se vuelve desde Entrenador
     rivalRetirements:{},         // {rivalId: {season, childName, childStats}} — rivales retirados
     pendingLifeAthleteOffer:null,// atleta pendiente de aceptar/rechazar en la pantalla de oferta
     lifeAthleteOfferCount:0,     // cuántas veces se ha ofrecido un atleta (para texto urgente año 7)
@@ -846,6 +848,80 @@ function clearExpressTimer(){
 }
 function getBodyLoad(){return Math.max(0,Math.min(100,Math.round(G.bodyLoad||0)));}
 function hasFisio(){return G.spending.fisio||G.club?.hasFisio;}
+// T46 · bajas por lesión: una sola cuenta para el juego, el modo dev y los textos de
+// ayuda (v96). La ayuda decía «Fractura: 4 carreras (2 con fisio)» escrito a mano.
+// La fractura (racesBlocked = INJURY_BLOCK_SEASON) bloquea las carreras que quedan en
+// la temporada; con fisio, su fisioDiscount de esas, redondeando arriba y mínimo una.
+// Ya no se guarda el 999 en injuryRacesLeft: se cuenta al lesionarse. racesLeft son las
+// carreras del calendario posteriores a la lesión.
+function injuryRacesBlocked(type,withFisio,racesLeft){
+  const inj=INJURY_TYPES[type];if(!inj)return 0;
+  const b=inj.racesBlocked||0;
+  const disc=inj.fisioDiscount||0.5;
+  if(b===INJURY_BLOCK_SEASON){
+    const left=Math.max(0,racesLeft||0);
+    return (withFisio&&left>0)?Math.max(1,Math.ceil(left*disc)):left;
+  }
+  return withFisio?Math.max(0,Math.round(b*disc)):b;
+}
+// Carreras del calendario que quedan después de la que se está corriendo.
+function racesLeftAfterCurrent(){return Math.max(0,(G.selectedRaces||[]).length-(G.currentRaceIdx||0)-1);}
+function injuryBlockText(type){
+  const inj=INJURY_TYPES[type];if(!inj)return '';
+  if(inj.racesBlocked===INJURY_BLOCK_SEASON)
+    return 'baja el resto de la temporada (con fisio, el '+Math.round((inj.fisioDiscount||0.5)*100)+' % de las carreras que queden)';
+  const sin=injuryRacesBlocked(type,false);
+  if(sin===0)return 'corres, pero con stats reducidos';
+  const con=injuryRacesBlocked(type,true);
+  const n=x=>x+' carrera'+(x!==1?'s':'');
+  return n(sin)+' de baja'+(con<sin?' ('+(con>0?n(con):'ninguna')+' con fisio)':'');
+}
+// v96 · Secuela recuperable (decisión del 2026-09-15). Los stats que quita una lesión
+// eran permanentes. Ahora lo perdido se apunta en G.injurySequel y vuelve poco a poco:
+// un 15 % de lo pendiente por cada carrera que pasa (salvo con la carga en aviso 2), la
+// mitad en pretemporada y un extra con cada acción de recuperación entre carreras; todo
+// ×1,5 con fisio. No pasa por statCapMult: es devolver lo que era tuyo, no entrenar.
+// Cifras de partida: se miden jugando y se tocan aquí, nunca en la lógica.
+const INJURY_SEQUEL_RECOVERY={perRace:0.15,preseason:0.5,fisioMult:1.5,session:0.10,massage:0.06,rest:0.04};
+function applyInjuryStatPenalty(type){
+  const inj=INJURY_TYPES[type];if(!inj)return;
+  if(!G.injurySequel||typeof G.injurySequel!=='object')G.injurySequel={};
+  Object.entries(inj.statPenalty||{}).forEach(([k,v])=>{
+    const before=G.runner.stats[k]||50;
+    const after=Math.max(10,before+v);
+    G.runner.stats[k]=after;
+    if(before>after)G.injurySequel[k]=(G.injurySequel[k]||0)+(before-after);
+  });
+}
+function recoverInjurySequel(frac){
+  const s=G.injurySequel;
+  if(!s||typeof s!=='object'||!(frac>0))return 0;
+  const f=Math.min(1,frac*(hasFisio()?INJURY_SEQUEL_RECOVERY.fisioMult:1));
+  let total=0;
+  Object.keys(s).forEach(k=>{
+    const pend=s[k]||0;
+    if(pend>0){
+      const give=Math.min(pend,Math.max(1,Math.round(pend*f)));
+      G.runner.stats[k]=Math.min(100,(G.runner.stats[k]||50)+give);
+      s[k]=pend-give;total+=give;
+    }
+    if(!(s[k]>0))delete s[k];
+  });
+  return total;
+}
+function injurySequelText(){
+  return Object.entries(G.injurySequel||{}).filter(([,v])=>v>0).map(([k,v])=>`${k} −${v}`).join(' · ');
+}
+// v96 · Un DNF de Clásico/Exprés se apunta en los dos historiales con la forma de T45.
+// Solo la baja por lesión dejaba fila: el abandono, voluntario o forzado, no aparecía ni
+// en el balance de temporada ni en la carrera deportiva. `extra` añade campos a la fila
+// de raceResults (la baja lleva injured e injuryLabel).
+function recordDNF(race,reason,extra){
+  if(!race)return;
+  G.raceResults.push({id:race.id,name:race.name||'',time:0,pos:null,dnf:true,dnfReason:reason,prize:0,all:[],statGains:[],...(extra||{})});
+  if(!Array.isArray(G.careerHistory))G.careerHistory=[];
+  G.careerHistory.push({name:race.name||'',year:G.year,time:0,pos:null,dnf:true,dnfReason:reason,prize:0});
+}
 // T18 (v83): el fisio ya no da inmunidad. Protege bien con el cuerpo fresco y
 // pierde efecto conforme sube la carga corporal, hasta dejar de cubrirte en los
 // modos duros. Los cuatro puntos de riesgo de lesión de race.js usan esta única

@@ -925,8 +925,13 @@ function renderCnCorredorTab(){
   const MONTH_NAMES={10:'Octubre',11:'Noviembre',12:'Diciembre',1:'Enero',2:'Febrero',3:'Marzo'};
   const mIdx=m=>MONTHS.indexOf(m);
   const isPastMonth=m=>mIdx(m)<mIdx(curMonth);
-  const pendingRaces=races.filter(r=>!doneIds.includes(r.id)&&!isPastMonth(r.month));
-  const allRaceDone=races.length>0&&pendingRaces.length===0;
+  // v96: el reloj se para en marzo (cnCurrentMonth devuelve 3 desde la semana 21), así que
+  // una carrera de marzo sin correr —por vínculo bajo, perro lesionado o «Saltar este
+  // mes»— nunca pasaba a «pasada», y sin carreras apuntadas allRaceDone no se cumplía: la
+  // temporada no se podía cerrar. Avanzar desde marzo lleva la semana a 25+ y lo termina.
+  const marchDone=(G.cnWeek||0)>=25;
+  const pendingRaces=races.filter(r=>!doneIds.includes(r.id)&&!isPastMonth(r.month)&&!marchDone);
+  const allRaceDone=marchDone||(races.length>0&&pendingRaces.length===0);
   cnCheckBirthday();
 
   el.innerHTML=`
@@ -988,7 +993,8 @@ function renderCnCorredorTab(){
       const nextMonthNames=[10,11,12,1,2,3];
       const curIdx=nextMonthNames.indexOf(curMonth);
       const nextM=nextMonthNames[curIdx+1];
-      return`<button class="main" style="margin-top:4px;margin-bottom:14px" onclick="cnAdvanceWeek()">Avanzar a ${nextM?MONTH_NAMES[nextM]:'siguiente mes'} →</button>`;
+      if(marchDone)return'';   // v96: marzo terminado, abajo sale «Cerrar temporada»
+      return`<button class="main" style="margin-top:4px;margin-bottom:14px" onclick="cnAdvanceWeek()">${nextM?'Avanzar a '+MONTH_NAMES[nextM]:'Terminar marzo'} →</button>`;
     })()}
 
     <div class="section-label" style="margin-top:18px">📅 Carreras de temporada</div>

@@ -115,6 +115,10 @@ function initClubModeData(name,specialty,filosofia,archetype){
     ],
     monthlyFocus:null,              // C16 decisión mensual activa
     seasonSimulated:false,
+    redSeasons:0,                   // v96: temporadas seguidas cerrando con presupuesto negativo
+    dissolved:false,                // v96: el club se disolvió tras CLUB_RED_SEASONS_MAX en rojo
+    monthlyDecisionDone:false,      // v96: una decisión mensual completa por temporada
+    sponsorOutcomes:[],             // v96: objetivo de cada sponsor, evaluado al simular
   };
 }
 
@@ -130,6 +134,20 @@ window.doClubMonthlyFocus=(focus)=>{
     ahorro:'💰 Control de costes activado'};
   showToast(msgs[focus]||'Foco mensual establecido','#8e44ad');
   autoSave();render();
+};
+// v96: el foco se aplica al simular la temporada (doClubSimulateSeason), no al
+// elegirlo, pero la elección no tenía vuelta atrás. Hasta simular, se puede cambiar.
+window.clearClubMonthlyFocus=()=>{
+  const d=G.clubModeData;if(!d||d.seasonSimulated)return;
+  d.monthlyFocus=null;
+  autoSave();render();
+};
+// v96: en la decisión mensual completa, tocar la opción ya elegida la desmarca.
+window.clubToggleMonthlySel=(decId,optId)=>{
+  const sel=G._monthlySelections||{};
+  if(sel[decId]===optId)delete sel[decId];else sel[decId]=optId;
+  G._monthlySelections=sel;
+  render();
 };
 
 function generateClubObjective(){
@@ -247,13 +265,14 @@ function renderClubHub(){
   hideChrome();
   const d=G.clubModeData;
   if(!d){G.screen='clubCreate';render();return;}
+  if(d.dissolved){G.screen='clubDissolved';render();return;}
   const lvl=clubLevelByRep();
   const wages=clubMonthlyWage();
   const annualWages=wages*12;
   const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;
   const staffCost=Object.keys(d.staff||{}).reduce((s,k)=>s+(CLUB_STAFF_TYPES[k]?CLUB_STAFF_TYPES[k].costMonth:0),0)*12;
-  const sponsorIncome=(d.clubSponsors||[]).reduce((s,sp)=>s+(sp.monthlyIncome||0),0)*12;
-  const annualIncome=Math.round(d.socios*25*12*(fil&&fil.socioBonus?fil.socioBonus:1));
+  const sponsorIncome=Math.round((d.clubSponsors||[]).reduce((s,sp)=>s+(sp.monthlyIncome||0),0)*12*CLUB_SPONSOR_SPLIT.base);   // v96: previsión con el 60 % fijo
+  const annualIncome=Math.round(d.socios*CLUB_SOCIO_FEE*12*(fil&&fil.socioBonus?fil.socioBonus:1));
   const annualNet=annualIncome+sponsorIncome-annualWages-staffCost;
   const assigned=Object.values(d.calAssignments||{}).filter(v=>v&&v.length>0).length;
   const allAssigned=d.plantilla.length>0&&assigned>0;
@@ -330,6 +349,7 @@ function renderClubHub(){
       <div class="fin-row"><span>Salarios plantilla</span><span class="minus">−€${annualWages}</span></div>
       ${staffCost>0?`<div class="fin-row"><span>Staff técnico</span><span class="minus">−€${staffCost}</span></div>`:''}
       <div class="fin-row tot"><span>Balance neto</span><span class="${annualNet>=0?'plus':'minus'}">${annualNet>=0?'+':''}€${annualNet}</span></div>
+      ${(d.redSeasons||0)>0?`<div class="danger" style="margin-top:8px;font-size:13px">Números rojos: ${d.redSeasons} de ${CLUB_RED_SEASONS_MAX} temporadas seguidas. ${d.redSeasons>=CLUB_RED_SEASONS_MAX-1?'Si cierras otra en negativo, el club se disuelve.':'A la 3.ª se despide el staff y a la 4.ª se va el corredor más caro.'}</div>`:''}
     </div>
 
     <div class="card" style="margin-bottom:12px">
@@ -357,12 +377,13 @@ function renderClubHub(){
           </div>
         </div>`:''}
        <button class="main" ${!d.monthlyFocus?'style="opacity:0.5"':''} onclick="G.screen='clubCalendar';render()">📅 Asignar equipo a carreras${d.monthlyFocus?` — foco: ${d.monthlyFocus}`:''}</button>
+       ${d.monthlyFocus?`<button class="secondary" style="margin-top:6px;width:100%" onclick="clearClubMonthlyFocus()">Cambiar el foco</button>`:''}
        ${allAssigned?`<button class="main" style="margin-top:6px;background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doClubSimulateSeason()">🏁 Simular temporada →</button>`:''}`}
     <button class="main" style="margin-top:6px" onclick="G.screen='clubPlantilla';render()">👥 Plantilla (${d.plantilla.length}) ${d.cantera&&d.cantera.length>0?`· 🌱 Cantera (${d.cantera.length})`:''}</button>
     <button class="main" style="margin-top:6px" onclick="G.screen='clubStaff';render()">🧑‍⚕️ Staff técnico (${Object.keys(d.staff||{}).length} contratados)</button>
     <button class="main" style="margin-top:6px" onclick="G.screen='clubSponsors';render()">🤝 Sponsors del club (${(d.clubSponsors||[]).length})</button>
     <button class="main" style="margin-top:6px;opacity:0.6" onclick="G.screen='clubRivals';render()">⚔️ Clubes rivales</button>
-    <button class="main" style="margin-top:6px;opacity:0.7" onclick="G.screen='clubMonthly';render()">📅 Decisión mensual del club</button>
+    <button class="main" style="margin-top:6px;opacity:0.7" onclick="G.screen='clubMonthly';render()">📅 Decisión mensual del club${d.monthlyDecisionDone?' · ya decidida esta temporada':''}</button>
     <button class="main" style="margin-top:6px;opacity:0.5" onclick="backToMainMenu()">← Menú principal</button>`;
 }
 
@@ -520,6 +541,7 @@ window.doClubSign=id=>{
   const r=CLUB_RUNNER_POOL.find(x=>x.id===id);if(!r)return;
   const maxSize=d.instalaciones&&d.instalaciones.residencia?8:6;
   if(d.plantilla.length>=maxSize){showToast(`Plantilla completa — máx. ${maxSize}`,'#c07a10');return;}
+  if(d.presupuesto<r.salary*3){showToast('Presupuesto insuficiente','#c0392b');return;}   // v96: la guarda solo estaba en la tarjeta
   d.plantilla.push({...r,stats:{...r.stats},currentSalary:r.salary,role:'normal'});
   d.presupuesto-=r.salary*3;
   showToast(`${r.name} fichado — coste inicial €${r.salary*3}`,'#4a8a2a');
@@ -531,6 +553,7 @@ window.doClubSignYouth=id=>{
   const r=CLUB_YOUTH_POOL.find(x=>x.id===id);if(!r)return;
   if(!d.cantera)d.cantera=[];
   if(d.cantera.length>=3){showToast('Cantera completa — máx. 3','#c07a10');return;}
+  if(d.presupuesto<r.salary*2){showToast('Presupuesto insuficiente','#c0392b');return;}   // v96
   d.cantera.push({...r,stats:{...r.stats},currentSalary:r.salary,role:'promesa'});
   d.presupuesto-=r.salary*2;
   showToast(`🌱 ${r.name} a la cantera — €${r.salary*2}`,'#2d7a2d');
@@ -623,6 +646,21 @@ window.doClubToggleAssign=(raceId,runnerId)=>{
   autoSave();render();
 };
 
+// v96 · Objetivos de los sponsors del club. Estaban escritos en CLUB_SPONSORS_POOL
+// (objKey, duration) y nada los leía: el sponsor pagaba entero y para siempre.
+function clubSponsorObjectiveMet(sp,results,d){
+  const fin=(results||[]).filter(r=>!r.dnf);
+  switch(sp.objKey){
+    case 'top10x3': return fin.filter(r=>r.pos<=10).length>=3;
+    case 'part5':   return (results||[]).length>=5;
+    case 'no_dnf':  return (results||[]).length>0&&results.every(r=>!r.dnf);
+    case 'podio1':  return fin.some(r=>r.pos<=3);
+    case 'top5nat': return fin.some(r=>r.pos<=5&&['nacional','elite'].includes(r.race?.tier));
+    case 'socios50':return (d.socios||0)>=50;
+    default:        return true;
+  }
+}
+
 window.doClubSimulateSeason=()=>{
   const d=G.clubModeData;if(!d)return;
   const results=[];
@@ -676,8 +714,18 @@ window.doClubSimulateSeason=()=>{
     try{d.seasonObjectiveMet=obj.check(d,lvl);}catch(e){d.seasonObjectiveMet=false;}
   }
 
-  // Ingresos de sponsors de club
-  (d.clubSponsors||[]).forEach(sp=>{d.presupuesto+=sp.monthlyIncome*12;});
+  // v96 · Sponsors con objetivo: se cobra el 60 % del contrato de la temporada y el
+  // objetivo se evalúa con los resultados reales. Si se cumple entra el 40 % restante;
+  // si no, −3 de reputación y el sponsor rescinde al cerrar (doClubNextSeason).
+  d.sponsorOutcomes=(d.clubSponsors||[]).map(sp=>{
+    const total=(sp.monthlyIncome||0)*12;
+    const met=clubSponsorObjectiveMet(sp,results,d);
+    const base=Math.round(total*CLUB_SPONSOR_SPLIT.base);
+    const bonus=met?total-base:0;
+    d.presupuesto+=base+bonus;
+    if(!met)d.reputacion=Math.max(0,(d.reputacion||0)-CLUB_SPONSOR_SPLIT.failRep);
+    return {id:sp.id,name:sp.name,objective:sp.objective,met,base,bonus};
+  });
 
   checkAndUnlockAchievements(); // CR-38 (v76)
   autoSave();
@@ -797,7 +845,7 @@ function renderClubSponsors(){
       <h2 style="margin-bottom:0">Sponsors del Club</h2>
       <button onclick="G.screen='clubHub';render()" style="background:none;border:1px solid #e0dfd8;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#888">← Hub</button>
     </div>
-    <p class="sub">Los sponsors del club pagan mensualmente a cambio de objetivos de equipo.</p>
+    <p class="sub">Cada sponsor paga el 60 % de su contrato al simular la temporada y el 40 % restante solo si se cumple su objetivo. Si no se cumple, rescinde.</p>
     ${(d.clubSponsors||[]).length>0?`
     <div class="sec-title-sm" style="margin-bottom:8px">Sponsors activos</div>
     ${(d.clubSponsors||[]).map(sp=>`
@@ -805,7 +853,7 @@ function renderClubSponsors(){
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div>
             <div style="font-size:13px;font-weight:700">${esc(sp.name)}</div>
-            <div style="font-size:12px;color:#888">${sp.objective}</div>
+            <div style="font-size:12px;color:#888">${sp.objective} · ${sp.seasonsLeft||1} temporada${(sp.seasonsLeft||1)!==1?'s':''} de contrato</div>
           </div>
           <span style="font-size:14px;font-weight:700;color:#2d7a2d">+€${sp.monthlyIncome}/mes</span>
         </div>
@@ -818,7 +866,7 @@ function renderClubSponsors(){
           <div style="font-size:13px;font-weight:700">${esc(sp.name)}</div>
           <span style="font-size:14px;font-weight:700;color:#c07a10">+€${sp.monthlyIncome}/mes</span>
         </div>
-        <div style="font-size:12px;color:#888;margin-bottom:6px">Objetivo: ${sp.objective}</div>
+        <div style="font-size:12px;color:#888;margin-bottom:6px">Objetivo: ${sp.objective} · ${sp.duration||1} temporada${(sp.duration||1)!==1?'s':''}</div>
         <button class="main" style="font-size:12px" onclick="doClubAddSponsor('${sp.id}')">Firmar contrato</button>
       </div>`).join('')||'<div class="hint">Sin sponsors disponibles aún. Sube tu reputación para desbloquear más.</div>'}`;
 }
@@ -826,7 +874,7 @@ window.doClubAddSponsor=(id)=>{
   const d=G.clubModeData;if(!d)return;
   const sp=CLUB_SPONSORS_POOL.find(s=>s.id===id);if(!sp)return;
   if(!d.clubSponsors)d.clubSponsors=[];
-  d.clubSponsors.push({...sp});
+  d.clubSponsors.push({...sp,seasonsLeft:sp.duration||1});   // v96: el contrato dura lo que dice
   showToast(`🤝 ${sp.name} — contrato firmado`,'#2d7a2d');
   autoSave();render();
 };
@@ -904,13 +952,13 @@ function renderClubMonthly(){
       <h2 style="margin-bottom:0">Decisión mensual</h2>
       <button onclick="G.screen='clubHub';render()" style="background:none;border:1px solid #e0dfd8;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#888">← Hub</button>
     </div>
-    <p class="sub">Elige una opción en cada área y confirma. Los efectos se aplican inmediatamente.</p>
+    <p class="sub">Elige una opción en cada área y confirma. Nada se aplica hasta confirmar; toca una opción elegida para desmarcarla.${d.monthlyDecisionDone?'<br><strong>Ya has decidido esta temporada.</strong> La siguiente decisión llega con la próxima temporada.':' Una decisión por temporada.'}</p>
     ${decDefs.map(dec=>`
       <div style="margin-bottom:14px">
         <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">${dec.icon} ${dec.label}</div>
         ${dec.options.map(opt=>{
           const isSel=sel[dec.id]===opt.id;
-          return`<div onclick="G._monthlySelections=Object.assign(G._monthlySelections||{},{'${dec.id}':'${opt.id}'});render()" style="cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid ${isSel?'#4a90d9':'#e0dfd8'};background:${isSel?'#f0f6ff':'#fafaf8'};margin-bottom:6px;display:flex;align-items:center;gap:10px">
+          return`<div onclick="clubToggleMonthlySel('${dec.id}','${opt.id}')" style="cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid ${isSel?'#4a90d9':'#e0dfd8'};background:${isSel?'#f0f6ff':'#fafaf8'};margin-bottom:6px;display:flex;align-items:center;gap:10px">
             <span style="font-size:18px">${opt.emoji}</span>
             <div style="flex:1">
               <div style="font-size:13px;font-weight:${isSel?'700':'500'};color:${isSel?'#4a90d9':'#1a1a1a'}">${opt.text}</div>
@@ -920,11 +968,12 @@ function renderClubMonthly(){
           </div>`;
         }).join('')}
       </div>`).join('')}
-    <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a${!allChosen?';opacity:0.4;pointer-events:none':''}" onclick="doClubApplyMonthlyFull()">Confirmar decisiones →</button>`;
+    <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a${(!allChosen||d.monthlyDecisionDone)?';opacity:0.4;pointer-events:none':''}" onclick="doClubApplyMonthlyFull()">Confirmar decisiones →</button>`;
 }
 
 window.doClubApplyMonthlyFull=()=>{
   const d=G.clubModeData;if(!d)return;
+  if(d.monthlyDecisionDone){showToast('Ya has tomado la decisión de esta temporada','#c07a10');return;}   // v96: se confirmaba sin límite y cada vez volvía a sumar
   const sel=G._monthlySelections||{};
   const effects={
     training:{
@@ -952,9 +1001,21 @@ window.doClubApplyMonthlyFull=()=>{
     if(result!==false)msgs.push(optId);
   });
   G._monthlySelections={};
+  d.monthlyDecisionDone=true;
   showToast(`✅ Decisiones aplicadas`,'#2d7a2d');
   autoSave();G.screen='clubHub';render();
 };
+
+// v96 · Recompensa o penalización del objetivo de temporada (CLUB_OBJECTIVES). La calcula
+// la pantalla de balance para enseñarla y la aplica doClubNextSeason() una sola vez.
+// Hasta v96 la pantalla sumaba la reputación al pintarse —cada redibujo, otra vez— y los
+// socios del objetivo se enseñaban pero no se sumaban nunca.
+function clubObjectiveDeltas(d){
+  const obj=d&&d.seasonObjective;
+  if(!obj)return {rep:0,socios:0,cohesion:0};
+  const r=(d.seasonObjectiveMet===true?obj.reward:obj.penalty)||{};
+  return {rep:r.rep||0,socios:r.socios||0,cohesion:r.cohesion||0};
+}
 
 function renderClubSeasonEnd(){
   const el=$main();
@@ -967,27 +1028,26 @@ function renderClubSeasonEnd(){
   const dnfs=results.filter(r=>r.dnf).length;
   const totalPrize=results.reduce((s,r)=>s+(r.prize||0),0);
   const staffCost=Object.keys(d.staff||{}).reduce((s,k)=>s+(CLUB_STAFF_TYPES[k]?CLUB_STAFF_TYPES[k].costMonth*12:0),0);
-  const sponsorIncome=(d.clubSponsors||[]).reduce((s,sp)=>s+(sp.monthlyIncome||0)*12,0);
+  const sponsorOutcomes=d.sponsorOutcomes||[];
+  const sponsorIncome=sponsorOutcomes.reduce((s,o)=>s+(o.base||0)+(o.bonus||0),0);
+  const raceCosts=results.reduce((s,r)=>s+(r.race?.cost||0),0);
   const fil=d.filosofia?CLUB_FILOSOFIAS[d.filosofia]:null;
   const wages=clubMonthlyWage()*12;
-  const socioIncome=Math.round(d.socios*25*12*(fil&&fil.socioBonus?fil.socioBonus:1));
-  const netBalance=socioIncome+totalPrize+sponsorIncome-wages-staffCost;
+  const socioIncome=Math.round(d.socios*CLUB_SOCIO_FEE*12*(fil&&fil.socioBonus?fil.socioBonus:1));
+  // v96: premios, inscripciones y sponsors ya entraron en el presupuesto al simular
+  // (doClubSimulateSeason) y este cierre los volvía a sumar: se cobraban dos veces.
+  // netBalance es el año entero, para enseñarlo; closing es lo que queda por aplicar.
+  const netBalance=socioIncome+totalPrize+sponsorIncome-raceCosts-wages-staffCost;
+  const closing=socioIncome-wages-staffCost;
   const socioGain=Math.round(podiums*4+top10*1.5+(d.reputacion/20));
   const socioLoss=results.length===0?3:0;
-  const newSocios=Math.max(3,d.socios+socioGain-socioLoss);
 
-  // C18 — Resultado del objetivo
+  // C18 — Resultado del objetivo. v96: esta pantalla solo lo ENSEÑA; se aplica una vez en
+  // doClubNextSeason(). Antes la reputación se sumaba aquí, en cada redibujo.
   const obj=d.seasonObjective;
   const objMet=d.seasonObjectiveMet===true;
-  let objRepDelta=0,objSociosDelta=0,objCohesionDelta=0;
-  if(obj){
-    const r=objMet?obj.reward:obj.penalty;
-    objRepDelta=r.rep||0;
-    objSociosDelta=r.socios||0;
-    objCohesionDelta=r.cohesion||0;
-    d.reputacion=Math.max(0,Math.min(100,(d.reputacion||0)+objRepDelta));
-    if(objCohesionDelta)d.cohesion=Math.max(0,Math.min(100,(d.cohesion||50)+objCohesionDelta));
-  }
+  const {rep:objRepDelta,socios:objSociosDelta}=clubObjectiveDeltas(d);
+  const newSocios=Math.max(3,d.socios+socioGain-socioLoss+objSociosDelta);
 
   // C17 — Narrativa de temporada
   const correvelacion=results.filter(r=>!r.dnf).sort((a,b)=>a.pos-b.pos)[0];
@@ -1046,7 +1106,8 @@ function renderClubSeasonEnd(){
       <div class="sec-title-sm">Economía</div>
       <div class="fin-row"><span>Cuotas de socios</span><span class="plus">+€${socioIncome}</span></div>
       <div class="fin-row"><span>Premios en carrera</span><span class="plus">+€${totalPrize}</span></div>
-      ${sponsorIncome>0?`<div class="fin-row"><span>Sponsors del club</span><span class="plus">+€${sponsorIncome}</span></div>`:''}
+      ${sponsorOutcomes.map(o=>`<div class="fin-row"><span>${esc(o.name)} · ${esc(o.objective||'')} ${o.met?'✅':'❌ rescinde'}</span><span class="plus">+€${(o.base||0)+(o.bonus||0)}</span></div>`).join('')}
+      ${raceCosts>0?`<div class="fin-row"><span>Inscripciones</span><span class="minus">−€${raceCosts}</span></div>`:''}
       <div class="fin-row"><span>Salarios plantilla</span><span class="minus">−€${wages}</span></div>
       ${staffCost>0?`<div class="fin-row"><span>Staff técnico</span><span class="minus">−€${staffCost}</span></div>`:''}
       <div class="fin-row tot"><span>Balance neto</span><span class="${netBalance>=0?'plus':'minus'}">${netBalance>=0?'+':''}€${netBalance}</span></div>
@@ -1055,19 +1116,42 @@ function renderClubSeasonEnd(){
     <div class="card" style="margin-bottom:14px">
       <div class="sec-title-sm">Evolución del club</div>
       <div class="fin-row"><span>Socios</span><span>${d.socios} → <strong>${newSocios}</strong> ${socioGain>0?`<span class="plus">(+${socioGain})</span>`:''}</span></div>
-      <div class="fin-row"><span>Reputación</span><span><strong>${d.reputacion}/100</strong>${objRepDelta?` <span class="${objRepDelta>0?'plus':'minus'}">${objRepDelta>0?'+':''}${objRepDelta}</span>`:''}</span></div>
-      <div class="fin-row"><span>Presupuesto final</span><span><strong>€${d.presupuesto}</strong></span></div>
+      <div class="fin-row"><span>Reputación</span><span><strong>${Math.max(0,Math.min(100,(d.reputacion||0)+objRepDelta))}/100</strong>${objRepDelta?` <span class="${objRepDelta>0?'plus':'minus'}">${objRepDelta>0?'+':''}${objRepDelta}</span>`:''}</span></div>
+      <div class="fin-row"><span>Presupuesto final</span><span class="${d.presupuesto+closing<0?'minus':''}"><strong>€${d.presupuesto+closing}</strong></span></div>
+      ${d.presupuesto+closing<0?`<div class="danger" style="margin-top:8px;font-size:13px">Cierras en números rojos: ${(d.redSeasons||0)+1} de ${CLUB_RED_SEASONS_MAX} temporadas seguidas.</div>`:''}
       <div class="fin-row"><span>Cohesión</span><span style="color:${d.cohesion>=70?'#2d7a2d':d.cohesion>=40?'#c07a10':'#c0392b'}"><strong>${d.cohesion}/100</strong></span></div>
     </div>
 
-    <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doClubNextSeason(${socioGain},${socioLoss},${netBalance})">Temporada ${d.temporada+1} →</button>
+    <button class="main" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="doClubNextSeason(${socioGain},${socioLoss},${closing})">Temporada ${d.temporada+1} →</button>
     <button class="main" style="margin-top:6px;opacity:0.5" onclick="backToMainMenu()">← Menú principal</button>`;
+}
+
+// v96 · Fin del Modo Club por quiebra: cinco temporadas seguidas cerrando en rojo.
+function renderClubDissolved(){
+  const el=$main();
+  hideChrome();
+  const d=G.clubModeData;
+  el.innerHTML=`
+    <div style="text-align:center;padding:18px 0 14px">
+      <div style="font-size:32px;margin-bottom:6px">🏚️</div>
+      <h2>El club se disuelve</h2>
+      <p class="sub">${esc(d?.name||'Tu club')}${d?` · ${(d.historial||[]).length} temporadas`:''}</p>
+    </div>
+    <div class="danger" style="margin-bottom:14px">
+      ${CLUB_RED_SEASONS_MAX} temporadas seguidas en números rojos. La junta no encuentra más
+      dinero y el club cierra${d?` con una deuda de <strong>€${Math.abs(Math.min(0,d.presupuesto))}</strong>`:''}.
+    </div>
+    <button class="main" onclick="backToMainMenu()">← Menú principal</button>`;
 }
 
 window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
   const d=G.clubModeData;if(!d)return;
   // CR-38 (v76): contador acumulado de objetivos cumplidos — logro cm_objective_3
   if(d.seasonObjectiveMet===true)G._clubObjectivesMet=(G._clubObjectivesMet||0)+1;
+  // v96: el objetivo se aplica aquí, una sola vez (antes, al pintar el balance)
+  const _obj=clubObjectiveDeltas(d);
+  d.reputacion=Math.max(0,Math.min(100,(d.reputacion||0)+_obj.rep));
+  if(_obj.cohesion)d.cohesion=Math.max(0,Math.min(100,(d.cohesion||50)+_obj.cohesion));
   d.historial.push({
     temporada:d.temporada,socios:d.socios,
     reputacion:d.reputacion,presupuesto:d.presupuesto,
@@ -1076,10 +1160,39 @@ window.doClubNextSeason=(socioGain,socioLoss,netBalance)=>{
     podiums:(d.seasonResults||[]).filter(r=>r.pos<=3&&!r.dnf).length,
   });
   const seasonRes=d.seasonResults||[];
-  d.socios=Math.max(3,d.socios+socioGain-socioLoss);
+  d.socios=Math.max(3,d.socios+socioGain-socioLoss+_obj.socios);   // v96: los socios del objetivo por fin se suman
   // Bonus socios por instalación marketingHQ
   if(d.instalaciones&&d.instalaciones.marketingHQ)d.socios=Math.min(999,d.socios+60);
-  d.presupuesto=Math.max(0,d.presupuesto+netBalance);
+  d.presupuesto=d.presupuesto+netBalance;   // v96: sin suelo en 0. netBalance = cierre pendiente (cuotas − sueldos − staff)
+  // v96 · Sponsors: el que falló su objetivo rescinde; a los evaluados que cumplieron les
+  // baja una temporada de contrato, y al acabar vuelven a la lista de disponibles.
+  const _evaluados=d.sponsorOutcomes||[];
+  d.clubSponsors=(d.clubSponsors||[]).filter(sp=>{
+    const o=_evaluados.find(x=>x.id===sp.id);
+    if(!o)return true;
+    if(!o.met){showToast(`${sp.name} rescinde: objetivo no cumplido`,'#c0392b');return false;}
+    sp.seasonsLeft=(sp.seasonsLeft||sp.duration||1)-1;
+    if(sp.seasonsLeft<=0){showToast(`Termina el contrato con ${sp.name}: puedes volver a firmarlo`,'#888');return false;}
+    return true;
+  });
+  d.sponsorOutcomes=[];d.monthlyDecisionDone=false;
+  // v96 · Quiebra en cinco temporadas (decisión del 2026-09-15). Cuenta el presupuesto
+  // FINAL negativo en temporadas seguidas, no el neto del año: un club que empieza con
+  // capital puede perder dinero sin estar en rojo. 1.ª-2.ª: −10 cohesión · 3.ª: fuera
+  // el staff · 4.ª: se va el corredor más caro · 5.ª: el club se disuelve. Una temporada
+  // cerrada en positivo pone el contador a cero.
+  if(d.presupuesto<0){
+    d.redSeasons=(d.redSeasons||0)+1;
+    if(d.redSeasons>=CLUB_RED_SEASONS_MAX){d.dissolved=true;G.screen='clubDissolved';autoSave();render();return;}
+    d.cohesion=Math.max(0,(d.cohesion||50)-10);
+    if(d.redSeasons>=3&&Object.keys(d.staff||{}).length){d.staff={};showToast('Números rojos: se despide a todo el staff','#c0392b');}
+    if(d.redSeasons===4&&d.plantilla.length>1){
+      const i=d.plantilla.reduce((best,r,j,arr)=>(r.currentSalary||r.salary)>(arr[best].currentSalary||arr[best].salary)?j:best,0);
+      const gone=d.plantilla.splice(i,1)[0];
+      showToast(`Números rojos: ${gone.name} se va del club`,'#c0392b');
+    }
+    if(d.redSeasons<3)showToast(`Números rojos (${d.redSeasons}/${CLUB_RED_SEASONS_MAX}): los sueldos llegan tarde, −10 cohesión`,'#c07a10');
+  } else d.redSeasons=0;
   d.temporada++;
   d.calAssignments={};d.seasonResults=[];d.seasonSimulated=false;
   d.pendingEvent=null;d.seasonObjective=null;d.seasonObjectiveMet=null;

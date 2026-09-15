@@ -885,10 +885,10 @@ window.doPace=p=>{
     G.injuryType=midRaceInjury;
     G.injuryStatus='moderada';
     G.injuryRecoverySeasons=injData.recoverySeasons||1;
-    G.injuryRacesLeft=injData.racesBlocked||0;
-    Object.entries(injData.statPenalty||{}).forEach(([k,v])=>{
-      G.runner.stats[k]=Math.max(10,(G.runner.stats[k]||50)+v);
-    });
+    // v96: la misma cuenta que la lesión post-carrera (fisio y fractura por carreras
+    // restantes) y lo perdido queda como secuela recuperable
+    G.injuryRacesLeft=injuryRacesBlocked(midRaceInjury,hasFisio(),racesLeftAfterCurrent());
+    applyInjuryStatPenalty(midRaceInjury);
     // Record in injury history
     if(!G.injuryHistory)G.injuryHistory=[];
     G.injuryHistory.push({type:midRaceInjury,label:injData.label,race:G.selectedRaces[G.currentRaceIdx]?.name||'',year:G.year,km:Math.round(G.selectedRaces[G.currentRaceIdx]?.km*(G.seg/curSegs().length))});
@@ -901,6 +901,7 @@ window.doPace=p=>{
       G.raceAbandonedCount=(G.raceAbandonedCount||0)+1;
       if(!G._abandonsByYear)G._abandonsByYear={};G._abandonsByYear[G.year]=(G._abandonsByYear[G.year]||0)+1;
       G.bodyLoad=Math.min(100,G.bodyLoad+5);
+      recordDNF(race2,'abandono');   // v96: el abandono forzado no dejaba fila en ningún historial
       el.innerHTML=`
         <h2>Abandono forzado</h2>
         <p class="sub">${race2.name}</p>
@@ -2197,6 +2198,7 @@ window.doAbandonConfirmed=()=>{
   if(!G._abandonsByYear)G._abandonsByYear={};G._abandonsByYear[G.year]=(G._abandonsByYear[G.year]||0)+1;
   if(!G.careerRaceHistory)G.careerRaceHistory={};
     raceHistoryFor(race.id).abandoned++;
+  recordDNF(race,'abandono');   // v96: el abandono no dejaba fila en ningún historial
   if(G.club&&G.club.id!=='none')changeClubRep(-10);
   // Small body load reduction (stopped early)
   G.bodyLoad=Math.max(0,G.bodyLoad-8);
@@ -2391,7 +2393,7 @@ function applyPostRaceTracking(race,res){
     G.zegamaQualNext=true;
     showToast('¡Bajo el corte de Zegama! Clasificado para el año que viene 🏔️','#4a8a2a');
   }
-  G.careerHistory.push({name:race.name,year:G.year,time:G.time,pos,prize,catPos,catTotal,catName:playerCat.label});
+  G.careerHistory.push({name:race.name,year:G.year,time:G.time,pos,dnf:false,prize,catPos,catTotal,catName:playerCat.label});
   G.money+=prize;
 
   // Nemesis tracking
@@ -2462,10 +2464,9 @@ function applyPostRaceTracking(race,res){
     G.injuryRecoverySeasons=injData.recoverySeasons||1;
     // T46 (v88): con el centinela de "resto de temporada" el descuento de fisio
     // lo convertía en 500 carreras — mismo efecto práctico, número sin sentido.
-    // El centinela se respeta tal cual; el descuento solo aplica a bajas reales.
-    const _blocked=injData.racesBlocked||0;
-    G.injuryRacesLeft=(_blocked===INJURY_BLOCK_SEASON||!hasFisio())?_blocked:Math.max(0,Math.round(_blocked*(injData.fisioDiscount||0.5)));
-    Object.entries(injData.statPenalty||{}).forEach(([k,v])=>{G.runner.stats[k]=Math.max(10,(G.runner.stats[k]||50)+v);});
+    // La cuenta vive en injuryRacesBlocked() desde v96, compartida con la ayuda.
+    G.injuryRacesLeft=injuryRacesBlocked(specificInjury,hasFisio(),racesLeftAfterCurrent());
+    applyInjuryStatPenalty(specificInjury);   // v96: secuela recuperable
     if(!G.injuryHistory)G.injuryHistory=[];
     G.injuryHistory.push({type:specificInjury,label:injData.label,race:race.name,year:G.year,km:race.km});
   } else {G.injuryStatus=null;G.injuryType=null;}

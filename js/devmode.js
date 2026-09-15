@@ -402,7 +402,7 @@ window.devSetInjury=(type)=>{
   if(!injData){showToast('DEV: tipo de lesión desconocido','#c0392b');return;}
   G.injuryStatus='moderada';G.injuryType=type;
   G.injuryRecoverySeasons=injData.recoverySeasons||1;
-  G.injuryRacesLeft=injData.racesBlocked||0;
+  G.injuryRacesLeft=injuryRacesBlocked(type,hasFisio(),(G.selectedRaces||[]).length-(G.currentRaceIdx||0));   // v96: con el mismo descuento de fisio que el juego
   showToast('DEV: lesión aplicada — '+(injData.label||type),'#c0392b');
   render();
 };

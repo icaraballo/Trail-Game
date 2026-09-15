@@ -299,7 +299,7 @@ function screenRoutes(){
     clubStaff:renderClubStaff,clubSponsors:renderClubSponsors,clubMonthly:renderClubMonthly,
     clubRivals:renderClubRivals,
     clubPlantilla:renderClubPlantilla,clubCalendar:renderClubCalendar,
-    clubSimulate:renderClubSimulate,clubSeasonEnd:renderClubSeasonEnd,
+    clubSimulate:renderClubSimulate,clubSeasonEnd:renderClubSeasonEnd,clubDissolved:renderClubDissolved,
     clubEvent:renderClubEvent,
     lifeAthleteOffer:renderLifeAthleteOffer,
     overlapHub:renderOverlapHub,
@@ -498,6 +498,10 @@ window.loadSlot=slot=>{
     Object.assign(G,freshState(),data.state);
     G._saveSlot=slot;
     if(G.carreraVida&&G.lifecyclePhase==='overlap'&&G.lifeAthlete){
+      // v96: si se guardó en el lado corredor, «Seguir corriendo» vuelve a esa pantalla
+      // y no al arranque de temporada (ver overlapRunnerScreen en render-temporada.js)
+      const s=G.screen||'';
+      if(!s.startsWith('coach')&&s!=='overlapHub')G.overlapRunnerScreen=s;
       G.screen='overlapHub';
     }
     render();
@@ -888,12 +892,12 @@ const TUTORIAL_CARDS=[
     title:'Lesiones',
     text:`La carga corporal alta aumenta el riesgo. Hay 3 tipos:
     <div style="text-align:left;margin-top:10px;line-height:2.1">
-      <div>🟡 <strong>Tendinitis</strong> — corres, pero con stats reducidos</div>
-      <div>🟠 <strong>Rotura muscular</strong> — 2 carreras bloqueadas</div>
-      <div>🔴 <strong>Fractura</strong> — 4 carreras bloqueadas</div>
+      <div>🟡 <strong>${INJURY_TYPES.tendinitis.label}</strong> — ${injuryBlockText('tendinitis')}</div>
+      <div>🟠 <strong>${INJURY_TYPES.rotura.label}</strong> — ${injuryBlockText('rotura')}</div>
+      <div>🔴 <strong>${INJURY_TYPES.fractura.label}</strong> — ${injuryBlockText('fractura')}</div>
     </div>
     <div style="margin-top:10px;padding:8px 12px;background:#fffbf0;border-left:3px solid #c07a10;border-radius:4px;font-size:13px;color:#8a5a00">
-      💡 Con <strong>fisioterapeuta</strong>, el tiempo de baja se reduce a la mitad.
+      💡 Los stats que quita una lesión se recuperan poco a poco. Con <strong>fisioterapeuta</strong>, las bajas son más cortas y la recuperación más rápida.
     </div>`
   },
   {
